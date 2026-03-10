@@ -1698,6 +1698,9 @@ class ResidentProfilePage extends StatelessWidget {
   const ResidentProfilePage({super.key});
   @override
   Widget build(BuildContext context) {
+    final personalSummary = _residentPersonalSummary();
+    final residenceSummary = _residentLocationSummary();
+
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -1733,25 +1736,29 @@ class ResidentProfilePage extends StatelessWidget {
                   onEdit: () => _openResidentProfilePhotoEditor(context),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Shamira Balandra',
-                        style: TextStyle(
+                        _residentDisplayName(),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 22,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-                      SizedBox(height: 3),
+                      const SizedBox(height: 3),
                       Text(
-                        'RBI-3-7-34-53541212',
-                        style: TextStyle(color: Color(0xFFDDE0FF)),
+                        residenceSummary,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Color(0xFFDDE0FF)),
                       ),
-                      SizedBox(height: 3),
-                      Text(
+                      const SizedBox(height: 3),
+                      const Text(
                         'Tap camera icon to change profile photo',
                         style: TextStyle(
                           color: Color(0xFFD8DCFF),
@@ -1859,13 +1866,13 @@ class ResidentProfilePage extends StatelessWidget {
           _profileInfoCard(
             context,
             title: 'Personal Information',
-            subtitle: 'Full name, birth details, sex, and civil status',
+            subtitle: personalSummary,
             icon: Icons.person_outline,
           ),
           _profileInfoCard(
             context,
             title: 'Residence Details',
-            subtitle: 'House number, street, barangay, city, and province',
+            subtitle: residenceSummary,
             icon: Icons.home_work_outlined,
           ),
           _profileInfoCard(
@@ -4521,9 +4528,9 @@ class ResidentSupportPage extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(14, 16, 14, 16),
           children: [
-            const Text(
-              'Welcome, Shamira',
-              style: TextStyle(
+            Text(
+              'Welcome, ${_residentFirstName()}',
+              style: const TextStyle(
                 color: Color(0xFF2B3047),
                 fontSize: 31,
                 fontWeight: FontWeight.w900,
@@ -5029,6 +5036,10 @@ class _ResidentVerifyProfilePageState extends State<ResidentVerifyProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    final residenceSummary = _residentLocationSummary(
+      fallback: _residentProfileCode(),
+    );
+
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FF),
       appBar: AppBar(
@@ -5074,25 +5085,29 @@ class _ResidentVerifyProfilePageState extends State<ResidentVerifyProfilePage> {
                     onEdit: () => _openResidentProfilePhotoEditor(context),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Shamira Balandra',
-                          style: TextStyle(
+                          _residentDisplayName(),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 21,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-                        SizedBox(height: 3),
+                        const SizedBox(height: 3),
                         Text(
-                          'RBI-3-7-34-84414283',
-                          style: TextStyle(color: Color(0xFFDDE1FF)),
+                          residenceSummary,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Color(0xFFDDE1FF)),
                         ),
-                        SizedBox(height: 6),
-                        Text(
+                        const SizedBox(height: 6),
+                        const Text(
                           'Profile Completion: 78%',
                           style: TextStyle(
                             color: Color(0xFFF2F4FF),

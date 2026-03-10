@@ -214,9 +214,11 @@ class ResidentDrawer extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Shamira Balandra',
-                            style: TextStyle(
+                          Text(
+                            _residentDisplayName(),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
                               fontSize: 30,
                               color: Colors.white,
                               fontWeight: FontWeight.w800,
@@ -224,11 +226,15 @@ class ResidentDrawer extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          const Text(
-                            '9123456702',
-                            style: TextStyle(
+                          Text(
+                            _residentLocationSummary(
+                              fallback: _residentMobileDisplay(),
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
                               color: Color(0xFFDDE3FF),
-                              fontSize: 22,
+                              fontSize: 17,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -521,13 +527,20 @@ class ResidentDrawer extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: FilledButton(
-                    onPressed: () => Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const RoleGatewayScreen(),
-                      ),
-                      (route) => false,
-                    ),
+                    onPressed: () async {
+                      _authToken = null;
+                      _clearResidentSessionProfile();
+                      if (!context.mounted) {
+                        return;
+                      }
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const RoleGatewayScreen(),
+                        ),
+                        (route) => false,
+                      );
+                    },
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF2E35D3),
                     ),
@@ -959,18 +972,21 @@ class ResidentDashboardPage extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Good day, Shamira',
-                          style: TextStyle(
+                        Text(
+                          'Good day, ${_residentFirstName()}',
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 24,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
                         const SizedBox(height: 4),
-                        const Text(
-                          'Everything you need from your barangay in one place.',
-                          style: TextStyle(color: Color(0xFFDDE0FF)),
+                        Text(
+                          _residentLocationSummary(
+                            fallback:
+                                'Everything you need from your barangay in one place.',
+                          ),
+                          style: const TextStyle(color: Color(0xFFDDE0FF)),
                         ),
                         const SizedBox(height: 14),
                         heroActions(),

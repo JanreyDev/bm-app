@@ -105,18 +105,18 @@ class _RbiMyCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  const Text(
-                    'Richard Portacio Perez',
-                    style: TextStyle(
+                  Text(
+                    _residentDisplayName(),
+                    style: const TextStyle(
                       fontSize: 21,
                       fontWeight: FontWeight.w900,
                       color: Color(0xFF1F1A22),
                     ),
                   ),
                   const SizedBox(height: 2),
-                  const Text(
-                    'RBI-3-7-34-87709622',
-                    style: TextStyle(
+                  Text(
+                    _residentProfileCode(),
+                    style: const TextStyle(
                       color: Color(0xFF595569),
                       fontWeight: FontWeight.w700,
                     ),
@@ -137,25 +137,27 @@ class _RbiMyCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 10),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _RbiMiniStat(
+                            const _RbiMiniStat(
                               label: 'Status',
                               value: 'Active',
                               icon: Icons.verified,
                             ),
-                            SizedBox(height: 8),
-                            _RbiMiniStat(
+                            const SizedBox(height: 8),
+                            const _RbiMiniStat(
                               label: 'Updated',
                               value: 'Feb 20, 2026',
                               icon: Icons.update,
                             ),
-                            SizedBox(height: 8),
+                            const SizedBox(height: 8),
                             _RbiMiniStat(
                               label: 'Barangay',
-                              value: 'Old Cabalan',
+                              value: _residentLocationSummary(
+                                fallback: 'Not set',
+                              ),
                               icon: Icons.location_on,
                             ),
                           ],

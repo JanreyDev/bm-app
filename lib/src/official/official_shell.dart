@@ -3315,8 +3315,8 @@ class OfficialLogoutPage extends StatelessWidget {
               width: double.infinity,
               child: FilledButton(
                 onPressed: () async {
-                  await _AuthApi.instance.logout();
                   _authToken = null;
+                  _currentOfficialMobile = null;
                   _officialActivationCompleted = false;
                   if (!context.mounted) return;
                   Navigator.pushAndRemoveUntil(

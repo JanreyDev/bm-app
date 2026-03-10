@@ -4,9 +4,154 @@ enum UserRole { resident, official }
 
 String? _authToken;
 String? _currentOfficialMobile;
+_ResidentSessionProfile? _currentResidentProfile;
+
+class _ResidentSessionProfile {
+  final String name;
+  final String mobile;
+  final String province;
+  final String cityMunicipality;
+  final String barangay;
+  final String middleName;
+  final String suffix;
+  final String religion;
+
+  const _ResidentSessionProfile({
+    required this.name,
+    required this.mobile,
+    required this.province,
+    required this.cityMunicipality,
+    required this.barangay,
+    required this.middleName,
+    required this.suffix,
+    required this.religion,
+  });
+
+  factory _ResidentSessionProfile.fromApiUser(Map<String, dynamic> user) {
+    String read(String key) => (user[key] as String? ?? '').trim();
+
+    return _ResidentSessionProfile(
+      name: read('name'),
+      mobile: read('mobile'),
+      province: read('province'),
+      cityMunicipality: read('city_municipality'),
+      barangay: read('barangay'),
+      middleName: read('middle_name'),
+      suffix: read('suffix'),
+      religion: read('religion'),
+    );
+  }
+
+  String get displayName => name.isNotEmpty ? name : 'Resident';
+
+  String get firstName {
+    final parts = displayName.split(RegExp(r'\s+'));
+    return parts.isNotEmpty ? parts.first : 'Resident';
+  }
+
+  String get locationSummary {
+    final parts = [
+      barangay,
+      cityMunicipality,
+      province,
+    ].where((part) => part.trim().isNotEmpty).toList();
+    return parts.join(', ');
+  }
+
+  String get personalSummary {
+    if (mobile.isEmpty) {
+      return displayName;
+    }
+    return '$displayName • $mobile';
+  }
+
+  String get profileCode {
+    final digits = mobile.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) {
+      return 'Resident Account';
+    }
+    final tail = digits.length > 8 ? digits.substring(digits.length - 8) : digits;
+    return 'RBI-$tail';
+  }
+}
+
+_ResidentSessionProfile _residentSessionProfileFromApiUser(
+  Map<String, dynamic>? user, {
+  required String fallbackMobile,
+}) {
+  final profile = _ResidentSessionProfile.fromApiUser(user ?? const {});
+  if (profile.mobile.isNotEmpty) {
+    return profile;
+  }
+  return _ResidentSessionProfile(
+    name: profile.name,
+    mobile: fallbackMobile.trim(),
+    province: profile.province,
+    cityMunicipality: profile.cityMunicipality,
+    barangay: profile.barangay,
+    middleName: profile.middleName,
+    suffix: profile.suffix,
+    religion: profile.religion,
+  );
+}
+
+void _setResidentSessionProfile(Map<String, dynamic>? user) {
+  if (user == null) {
+    return;
+  }
+  _currentResidentProfile = _ResidentSessionProfile.fromApiUser(user);
+}
+
+void _clearResidentSessionProfile() {
+  _currentResidentProfile = null;
+}
+
+String _residentDisplayName() {
+  return _currentResidentProfile?.displayName ?? 'Resident';
+}
+
+String _residentFirstName() {
+  return _currentResidentProfile?.firstName ?? 'Resident';
+}
+
+String _residentMobileDisplay() {
+  final mobile = _currentResidentProfile?.mobile ?? '';
+  return mobile.isNotEmpty ? mobile : 'No mobile number';
+}
+
+String _residentLocationSummary({
+  String fallback = 'Residence details not added yet.',
+}) {
+  final location = _currentResidentProfile?.locationSummary ?? '';
+  return location.isNotEmpty ? location : fallback;
+}
+
+String _residentPersonalSummary() {
+  return _currentResidentProfile?.personalSummary ??
+      'Complete your profile to show your personal information.';
+}
+
+String _residentProfileCode() {
+  return _currentResidentProfile?.profileCode ?? 'Resident Account';
+}
 
 String _normalizeMobileForKey(String input) {
   return input.replaceAll(RegExp(r'\D'), '');
+}
+
+List<String> _mobileKeyVariants(String input) {
+  final normalized = _normalizeMobileForKey(input);
+  if (normalized.isEmpty) {
+    return const [];
+  }
+  final variants = <String>{normalized};
+  if (normalized.startsWith('0') && normalized.length >= 10) {
+    variants.add('63${normalized.substring(1)}');
+  }
+  if (normalized.startsWith('63') && normalized.length >= 11) {
+    variants.add('0${normalized.substring(2)}');
+  }
+  return variants.toList();
 }
 
 class _LocalActivationStore {
@@ -27,16 +172,422 @@ class _LocalActivationStore {
   }
 }
 
+class _FirstRoleAccessStore {
+  static const String _keyPrefix = 'first_role_access_';
+
+  static String _keyFor(UserRole role) {
+    final roleKey = role == UserRole.resident ? 'resident' : 'official';
+    return '$_keyPrefix$roleKey';
+  }
+
+  static Future<bool> shouldOpenRegister(UserRole role) async {
+    final prefs = await SharedPreferences.getInstance();
+    return !(prefs.getBool(_keyFor(role)) ?? false);
+  }
+
+  static Future<void> markVisited(UserRole role) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyFor(role), true);
+  }
+}
+
+class _ResidentMpinStore {
+  static const String _pinPrefix = 'resident_mpin_';
+  static const String _lastMobileKey = 'resident_mpin_last_mobile';
+
+  static String _keyFor(String mobile) {
+    return '$_pinPrefix${_normalizeMobileForKey(mobile)}';
+  }
+
+  static Future<void> savePin(String mobile, String pin) async {
+    final normalized = _normalizeMobileForKey(mobile);
+    if (normalized.isEmpty || pin.length != 4) {
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyFor(mobile), pin);
+    await prefs.setString(_lastMobileKey, normalized);
+  }
+
+  static Future<bool> hasPin(String mobile) async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final variant in _mobileKeyVariants(mobile)) {
+      final value = prefs.getString(_keyFor(variant));
+      if (value != null && value.length == 4) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static Future<bool> verifyPin(String mobile, String pin) async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final variant in _mobileKeyVariants(mobile)) {
+      if (prefs.getString(_keyFor(variant)) == pin) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static Future<void> rememberMobile(String mobile) async {
+    final normalized = _normalizeMobileForKey(mobile);
+    if (normalized.isEmpty) {
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_lastMobileKey, normalized);
+  }
+
+  static Future<String?> lastMobile() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_lastMobileKey);
+  }
+}
+
+class _ResidentAuthCacheStore {
+  static const String _tokenPrefix = 'resident_session_token_';
+  static const String _namePrefix = 'resident_session_name_';
+  static const String _mobilePrefix = 'resident_session_mobile_';
+  static const String _provincePrefix = 'resident_session_province_';
+  static const String _cityPrefix = 'resident_session_city_';
+  static const String _barangayPrefix = 'resident_session_barangay_';
+  static const String _middleNamePrefix = 'resident_session_middle_name_';
+  static const String _suffixPrefix = 'resident_session_suffix_';
+  static const String _religionPrefix = 'resident_session_religion_';
+
+  static String _key(String prefix, String mobile) {
+    return '$prefix${_normalizeMobileForKey(mobile)}';
+  }
+
+  static Future<void> save({
+    required String token,
+    required String accountMobile,
+    required _ResidentSessionProfile profile,
+  }) async {
+    final normalized = _normalizeMobileForKey(accountMobile);
+    if (normalized.isEmpty || token.isEmpty) {
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_key(_tokenPrefix, accountMobile), token);
+    await prefs.setString(_key(_namePrefix, accountMobile), profile.name);
+    await prefs.setString(_key(_mobilePrefix, accountMobile), normalized);
+    await prefs.setString(_key(_provincePrefix, accountMobile), profile.province);
+    await prefs.setString(
+      _key(_cityPrefix, accountMobile),
+      profile.cityMunicipality,
+    );
+    await prefs.setString(_key(_barangayPrefix, accountMobile), profile.barangay);
+    await prefs.setString(
+      _key(_middleNamePrefix, accountMobile),
+      profile.middleName,
+    );
+    await prefs.setString(_key(_suffixPrefix, accountMobile), profile.suffix);
+    await prefs.setString(_key(_religionPrefix, accountMobile), profile.religion);
+  }
+
+  static Future<bool> restore(String mobile) async {
+    final normalized = _normalizeMobileForKey(mobile);
+    if (normalized.isEmpty) {
+      return false;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    String? keyMobile;
+    String token = '';
+    for (final variant in _mobileKeyVariants(mobile)) {
+      final current = prefs.getString(_key(_tokenPrefix, variant)) ?? '';
+      if (current.isNotEmpty) {
+        keyMobile = variant;
+        token = current;
+        break;
+      }
+    }
+    if (token.isEmpty || keyMobile == null) {
+      return false;
+    }
+    _authToken = token;
+    _currentResidentProfile = _ResidentSessionProfile(
+      name: prefs.getString(_key(_namePrefix, keyMobile)) ?? '',
+      mobile: prefs.getString(_key(_mobilePrefix, keyMobile)) ?? normalized,
+      province: prefs.getString(_key(_provincePrefix, keyMobile)) ?? '',
+      cityMunicipality: prefs.getString(_key(_cityPrefix, keyMobile)) ?? '',
+      barangay: prefs.getString(_key(_barangayPrefix, keyMobile)) ?? '',
+      middleName: prefs.getString(_key(_middleNamePrefix, keyMobile)) ?? '',
+      suffix: prefs.getString(_key(_suffixPrefix, keyMobile)) ?? '',
+      religion: prefs.getString(_key(_religionPrefix, keyMobile)) ?? '',
+    );
+    await _ResidentMpinStore.rememberMobile(normalized);
+    return true;
+  }
+
+  static Future<void> clear(String mobile) async {
+    final normalized = _normalizeMobileForKey(mobile);
+    if (normalized.isEmpty) {
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    for (final variant in _mobileKeyVariants(mobile)) {
+      await prefs.remove(_key(_tokenPrefix, variant));
+      await prefs.remove(_key(_namePrefix, variant));
+      await prefs.remove(_key(_mobilePrefix, variant));
+      await prefs.remove(_key(_provincePrefix, variant));
+      await prefs.remove(_key(_cityPrefix, variant));
+      await prefs.remove(_key(_barangayPrefix, variant));
+      await prefs.remove(_key(_middleNamePrefix, variant));
+      await prefs.remove(_key(_suffixPrefix, variant));
+      await prefs.remove(_key(_religionPrefix, variant));
+    }
+  }
+}
+
+class _OfficialMpinStore {
+  static const String _pinPrefix = 'official_mpin_';
+  static const String _lastMobileKey = 'official_mpin_last_mobile';
+
+  static String _keyFor(String mobile) {
+    return '$_pinPrefix${_normalizeMobileForKey(mobile)}';
+  }
+
+  static Future<void> savePin(String mobile, String pin) async {
+    final normalized = _normalizeMobileForKey(mobile);
+    if (normalized.isEmpty || pin.length != 4) {
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyFor(mobile), pin);
+    await prefs.setString(_lastMobileKey, normalized);
+  }
+
+  static Future<bool> hasPin(String mobile) async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final variant in _mobileKeyVariants(mobile)) {
+      final value = prefs.getString(_keyFor(variant));
+      if (value != null && value.length == 4) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static Future<bool> verifyPin(String mobile, String pin) async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final variant in _mobileKeyVariants(mobile)) {
+      if (prefs.getString(_keyFor(variant)) == pin) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static Future<void> rememberMobile(String mobile) async {
+    final normalized = _normalizeMobileForKey(mobile);
+    if (normalized.isEmpty) {
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_lastMobileKey, normalized);
+  }
+
+  static Future<String?> lastMobile() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_lastMobileKey);
+  }
+}
+
+class _OfficialAuthCacheStore {
+  static const String _tokenPrefix = 'official_session_token_';
+  static const String _mobilePrefix = 'official_session_mobile_';
+  static const String _activationPrefix = 'official_session_activation_';
+
+  static String _key(String prefix, String mobile) {
+    return '$prefix${_normalizeMobileForKey(mobile)}';
+  }
+
+  static Future<void> save({
+    required String token,
+    required String mobile,
+    required bool activationCompleted,
+  }) async {
+    final normalized = _normalizeMobileForKey(mobile);
+    if (normalized.isEmpty || token.isEmpty) {
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_key(_tokenPrefix, mobile), token);
+    await prefs.setString(_key(_mobilePrefix, mobile), normalized);
+    await prefs.setBool(_key(_activationPrefix, mobile), activationCompleted);
+  }
+
+  static Future<bool> restore(String mobile) async {
+    final normalized = _normalizeMobileForKey(mobile);
+    if (normalized.isEmpty) {
+      return false;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    String? keyMobile;
+    String token = '';
+    for (final variant in _mobileKeyVariants(mobile)) {
+      final current = prefs.getString(_key(_tokenPrefix, variant)) ?? '';
+      if (current.isNotEmpty) {
+        keyMobile = variant;
+        token = current;
+        break;
+      }
+    }
+    if (token.isEmpty || keyMobile == null) {
+      return false;
+    }
+    final storedActivation =
+        prefs.getBool(_key(_activationPrefix, keyMobile)) ?? false;
+    final localCompleted = await _LocalActivationStore.isCompleted(normalized);
+    _authToken = token;
+    _currentOfficialMobile = normalized;
+    _officialActivationCompleted = storedActivation || localCompleted;
+    await _OfficialMpinStore.rememberMobile(normalized);
+    return true;
+  }
+
+  static Future<void> clear(String mobile) async {
+    final normalized = _normalizeMobileForKey(mobile);
+    if (normalized.isEmpty) {
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    for (final variant in _mobileKeyVariants(mobile)) {
+      await prefs.remove(_key(_tokenPrefix, variant));
+      await prefs.remove(_key(_mobilePrefix, variant));
+      await prefs.remove(_key(_activationPrefix, variant));
+    }
+  }
+}
+
+Widget _officialHomeForSession() {
+  return _officialActivationCompleted
+      ? const HomeShell()
+      : const ActivationFlow();
+}
+
+Future<void> _completeResidentSignIn(
+  BuildContext context, {
+  required String mobile,
+  required String token,
+  Map<String, dynamic>? user,
+}) async {
+  final profile = _residentSessionProfileFromApiUser(
+    user,
+    fallbackMobile: mobile,
+  );
+  final normalizedMobile = _normalizeMobileForKey(mobile);
+  _currentResidentProfile = _ResidentSessionProfile(
+    name: profile.name,
+    mobile: normalizedMobile,
+    province: profile.province,
+    cityMunicipality: profile.cityMunicipality,
+    barangay: profile.barangay,
+    middleName: profile.middleName,
+    suffix: profile.suffix,
+    religion: profile.religion,
+  );
+  await _ResidentAuthCacheStore.save(
+    token: token,
+    accountMobile: mobile,
+    profile: _currentResidentProfile!,
+  );
+  await _ResidentMpinStore.rememberMobile(mobile);
+  if (!context.mounted) {
+    return;
+  }
+  final hasMpin = await _ResidentMpinStore.hasPin(mobile);
+  if (!context.mounted) {
+    return;
+  }
+  Navigator.pushAndRemoveUntil(
+    context,
+    MaterialPageRoute(
+      builder: (_) => hasMpin
+          ? const ResidentHomeShell()
+          : ResidentMpinSetupPage(mobile: _normalizeMobileForKey(mobile)),
+    ),
+    (route) => false,
+  );
+}
+
+Future<void> _completeOfficialSignIn(
+  BuildContext context, {
+  required String mobile,
+  required String token,
+  required bool activationCompleted,
+}) async {
+  final normalized = _normalizeMobileForKey(mobile);
+  if (normalized.isEmpty) {
+    return;
+  }
+  _clearResidentSessionProfile();
+  final localCompleted = await _LocalActivationStore.isCompleted(normalized);
+  _currentOfficialMobile = normalized;
+  _officialActivationCompleted = activationCompleted || localCompleted;
+  await _OfficialAuthCacheStore.save(
+    token: token,
+    mobile: normalized,
+    activationCompleted: _officialActivationCompleted,
+  );
+  await _OfficialMpinStore.rememberMobile(normalized);
+  if (!context.mounted) {
+    return;
+  }
+  final hasMpin = await _OfficialMpinStore.hasPin(normalized);
+  if (!context.mounted) {
+    return;
+  }
+  Navigator.pushAndRemoveUntil(
+    context,
+    MaterialPageRoute(
+      builder: (_) => hasMpin
+          ? _officialHomeForSession()
+          : OfficialMpinSetupPage(mobile: normalized),
+    ),
+    (route) => false,
+  );
+}
+
+Widget _loginPageForRole(UserRole role, {String? prefilledMobile}) {
+  if (role == UserRole.resident) {
+    return ResidentAccessPage(prefilledMobile: prefilledMobile);
+  }
+  return OfficialAccessPage(prefilledMobile: prefilledMobile);
+}
+
 class _AuthApiResult {
   final bool success;
   final String message;
   final String? token;
+  final Map<String, dynamic>? user;
+  final bool otpRequired;
+  final String? otpDebugCode;
   final bool activationCompleted;
   const _AuthApiResult({
     required this.success,
     required this.message,
     this.token,
+    this.user,
+    this.otpRequired = false,
+    this.otpDebugCode,
     this.activationCompleted = false,
+  });
+}
+
+class _AuthRequestOutcome {
+  final http.Response? response;
+  final Map<String, dynamic> body;
+  final bool sawTimeout;
+  final bool sawConnectionError;
+
+  const _AuthRequestOutcome({
+    required this.response,
+    required this.body,
+    required this.sawTimeout,
+    required this.sawConnectionError,
   });
 }
 
@@ -44,39 +595,134 @@ class _AuthApi {
   _AuthApi._();
   static final _AuthApi instance = _AuthApi._();
 
-  static const String _liveBaseUrl = 'https://api.barangaymo.com/';
-  static const String baseUrl = bool.fromEnvironment('dart.vm.product')
-      ? _liveBaseUrl
-      : String.fromEnvironment(
-          'API_BASE_URL',
-          defaultValue: _liveBaseUrl,
-        );
+  static const String _liveBaseUrl = 'https://api.barangaymo.com';
+  static const String _configuredBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: '',
+  );
   static const Duration _requestTimeout = Duration(seconds: 15);
 
   String _normalizeMobile(String input) {
     return input.replaceAll(RegExp(r'\D'), '');
   }
 
-  Uri _endpoint(String path) {
-    final trimmedBase = baseUrl.endsWith('/')
-        ? baseUrl.substring(0, baseUrl.length - 1)
-        : baseUrl;
-    return Uri.parse('$trimmedBase/$path');
+  String _trimTrailingSlash(String input) {
+    return input.endsWith('/') ? input.substring(0, input.length - 1) : input;
+  }
+
+  List<String> _baseUrlCandidates() {
+    final out = <String>[];
+
+    void add(String baseUrl) {
+      final trimmed = _trimTrailingSlash(baseUrl.trim());
+      if (trimmed.isNotEmpty && !out.contains(trimmed)) {
+        out.add(trimmed);
+      }
+    }
+
+    if (_configuredBaseUrl.trim().isNotEmpty) {
+      add(_configuredBaseUrl);
+      return out;
+    }
+
+    if (!bool.fromEnvironment('dart.vm.product')) {
+      if (kIsWeb) {
+        add('http://127.0.0.1:8000');
+        add('http://localhost:8000');
+      } else {
+        switch (defaultTargetPlatform) {
+          case TargetPlatform.android:
+            add('http://10.0.2.2:8000');
+            break;
+          case TargetPlatform.iOS:
+          case TargetPlatform.macOS:
+          case TargetPlatform.windows:
+          case TargetPlatform.linux:
+            add('http://127.0.0.1:8000');
+            add('http://localhost:8000');
+            break;
+          case TargetPlatform.fuchsia:
+            break;
+        }
+      }
+    }
+
+    add(_liveBaseUrl);
+    return out;
+  }
+
+  Uri _endpoint(String baseUrl, String path) {
+    final normalizedPath = path.startsWith('/') ? path.substring(1) : path;
+    return Uri.parse('${_trimTrailingSlash(baseUrl)}/$normalizedPath');
   }
 
   List<Uri> _endpointCandidates(String path) {
     final out = <Uri>[];
 
-    void add(String p) {
-      final uri = _endpoint(p);
-      if (!out.any((u) => u.toString() == uri.toString())) {
+    void add(String baseUrl, String currentPath) {
+      final uri = _endpoint(baseUrl, currentPath);
+      if (!out.any((existing) => existing.toString() == uri.toString())) {
         out.add(uri);
       }
     }
 
-    add(path);
-    add('api/$path');
+    for (final baseUrl in _baseUrlCandidates()) {
+      if (baseUrl.toLowerCase().endsWith('/api')) {
+        add(baseUrl, path);
+      } else {
+        add(baseUrl, 'api/$path');
+        add(baseUrl, path);
+      }
+    }
+
     return out;
+  }
+
+  bool _isRouteNotFound(
+    http.Response response,
+    Map<String, dynamic> decodedBody,
+  ) {
+    final message = ((decodedBody['message'] as String?) ?? '').toLowerCase();
+    return response.statusCode == 404 ||
+        (message.contains('route') && message.contains('not be found'));
+  }
+
+  Future<_AuthRequestOutcome> _postToEndpointCandidates({
+    required String path,
+    required Map<String, String> headers,
+    Object? body,
+  }) async {
+    http.Response? response;
+    Map<String, dynamic> decodedBody = <String, dynamic>{};
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    final endpoints = _endpointCandidates(path);
+
+    for (var i = 0; i < endpoints.length; i++) {
+      try {
+        final current = await http
+            .post(endpoints[i], headers: headers, body: body)
+            .timeout(_requestTimeout);
+        final decoded = _decodeResponseBody(current.body);
+        if (i < endpoints.length - 1 && _isRouteNotFound(current, decoded)) {
+          continue;
+        }
+        response = current;
+        decodedBody = decoded;
+        break;
+      } on TimeoutException {
+        sawTimeout = true;
+      } catch (_) {
+        sawConnectionError = true;
+      }
+    }
+
+    return _AuthRequestOutcome(
+      response: response,
+      body: decodedBody,
+      sawTimeout: sawTimeout,
+      sawConnectionError: sawConnectionError,
+    );
   }
 
   Future<_AuthApiResult> register({
@@ -102,101 +748,79 @@ class _AuthApi {
     if (password.length < 6) {
       return const _AuthApiResult(
         success: false,
-        message: 'Password must be at least 6 characters.',
+        message: 'PIN must be at least 6 characters.',
       );
     }
     if (password != confirmPassword) {
       return const _AuthApiResult(
         success: false,
-        message: 'Passwords do not match.',
+        message: 'PINs do not match.',
       );
     }
 
-    try {
-      http.Response? response;
-      Map<String, dynamic> body = <String, dynamic>{};
-      final endpoints = _endpointCandidates('register');
-      for (var i = 0; i < endpoints.length; i++) {
-        final current = await http
-            .post(
-              endpoints[i],
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-              },
-              body: jsonEncode({
-                'name': name.trim(),
-                'mobile': normalizedMobile,
-                'role': role.name,
-                'password': password,
-                'password_confirmation': confirmPassword,
-                if (province != null && province.isNotEmpty)
-                  'province': province,
-                if (cityMunicipality != null && cityMunicipality.isNotEmpty)
-                  'city_municipality': cityMunicipality,
-                if (barangay != null && barangay.isNotEmpty)
-                  'barangay': barangay,
-                if (middleName != null && middleName.isNotEmpty)
-                  'middle_name': middleName,
-                if (suffix != null && suffix.isNotEmpty) 'suffix': suffix,
-                if (religion != null && religion.isNotEmpty)
-                  'religion': religion,
-              }),
-            )
-            .timeout(_requestTimeout);
-        final decoded = _decodeResponseBody(current.body);
-        final shouldFallback =
-            i < endpoints.length - 1 &&
-            (current.statusCode == 404 ||
-                ((decoded['message'] as String?) ?? '').toLowerCase().contains(
-                      'route',
-                    ) &&
-                    ((decoded['message'] as String?) ?? '')
-                        .toLowerCase()
-                        .contains('not be found'));
-        if (shouldFallback) {
-          continue;
-        }
-        response = current;
-        body = decoded;
-        break;
+    final outcome = await _postToEndpointCandidates(
+      path: 'register',
+      headers: const {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode({
+        'name': name.trim(),
+        'mobile': normalizedMobile,
+        'role': role.name,
+        'password': password,
+        'password_confirmation': confirmPassword,
+        if (province != null && province.isNotEmpty) 'province': province,
+        if (cityMunicipality != null && cityMunicipality.isNotEmpty)
+          'city_municipality': cityMunicipality,
+        if (barangay != null && barangay.isNotEmpty) 'barangay': barangay,
+        if (middleName != null && middleName.isNotEmpty)
+          'middle_name': middleName,
+        if (suffix != null && suffix.isNotEmpty) 'suffix': suffix,
+        if (religion != null && religion.isNotEmpty) 'religion': religion,
+      }),
+    );
+    final response = outcome.response;
+    final body = outcome.body;
+
+    if (response == null) {
+      if (outcome.sawTimeout) {
+        return const _AuthApiResult(
+          success: false,
+          message:
+              'Server is taking too long to respond. Please check backend and try again.',
+        );
       }
-      if (response == null) {
+      if (outcome.sawConnectionError) {
         return const _AuthApiResult(
           success: false,
           message:
               'Cannot connect to server. Check backend URL and if Laravel is running.',
         );
       }
-
-      if (response.statusCode == 201) {
-        final user = body['user'];
-        return _AuthApiResult(
-          success: true,
-          message:
-              (body['message'] as String?) ?? 'Account created successfully.',
-          token: body['token'] as String?,
-          activationCompleted: _extractActivationCompleted(user),
-        );
-      }
-
-      return _AuthApiResult(
-        success: false,
-        message: _extractMessage(body, fallback: 'Registration failed.'),
-      );
-    } on TimeoutException {
       return const _AuthApiResult(
         success: false,
-        message:
-            'Server is taking too long to respond. Please check backend and try again.',
-      );
-    } catch (_) {
-      return const _AuthApiResult(
-        success: false,
-        message:
-            'Cannot connect to server. Check backend URL and if Laravel is running.',
+        message: 'Registration failed.',
       );
     }
+
+    if (response.statusCode == 201) {
+      final user = _extractUserValue(body);
+      return _AuthApiResult(
+        success: true,
+        message: (body['message'] as String?) ?? 'Account created successfully.',
+        token: _extractTokenValue(body),
+        user: user,
+        otpRequired: _toBool(body['otp_required']),
+        otpDebugCode: body['otp_debug_code'] as String?,
+        activationCompleted: _extractActivationCompleted(user),
+      );
+    }
+
+    return _AuthApiResult(
+      success: false,
+      message: _extractMessage(body, fallback: 'Registration failed.'),
+    );
   }
 
   Future<_AuthApiResult> login({
@@ -205,77 +829,169 @@ class _AuthApi {
     required String password,
   }) async {
     final normalizedMobile = _normalizeMobile(mobile);
-    try {
-      http.Response? response;
-      Map<String, dynamic> body = <String, dynamic>{};
-      final endpoints = _endpointCandidates('login');
-      for (var i = 0; i < endpoints.length; i++) {
-        final current = await http
-            .post(
-              endpoints[i],
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-              },
-              body: jsonEncode({
-                'mobile': normalizedMobile,
-                'role': role.name,
-                'password': password,
-              }),
-            )
-            .timeout(_requestTimeout);
-        final decoded = _decodeResponseBody(current.body);
-        final shouldFallback =
-            i < endpoints.length - 1 &&
-            (current.statusCode == 404 ||
-                ((decoded['message'] as String?) ?? '').toLowerCase().contains(
-                      'route',
-                    ) &&
-                    ((decoded['message'] as String?) ?? '')
-                        .toLowerCase()
-                        .contains('not be found'));
-        if (shouldFallback) {
-          continue;
-        }
-        response = current;
-        body = decoded;
-        break;
+    final outcome = await _postToEndpointCandidates(
+      path: 'login',
+      headers: const {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode({
+        'mobile': normalizedMobile,
+        'role': role.name,
+        'password': password,
+      }),
+    );
+    final response = outcome.response;
+    final body = outcome.body;
+
+    if (response == null) {
+      if (outcome.sawTimeout) {
+        return const _AuthApiResult(
+          success: false,
+          message:
+              'Server is taking too long to respond. Please check backend and try again.',
+        );
       }
-      if (response == null) {
+      if (outcome.sawConnectionError) {
         return const _AuthApiResult(
           success: false,
           message:
               'Cannot connect to server. Check backend URL and if Laravel is running.',
         );
       }
-
-      if (response.statusCode == 200) {
-        final user = body['user'];
-        return _AuthApiResult(
-          success: true,
-          message: (body['message'] as String?) ?? 'Login successful.',
-          token: body['token'] as String?,
-          activationCompleted: _extractActivationCompleted(user),
-        );
-      }
-
-      return _AuthApiResult(
-        success: false,
-        message: _extractMessage(body, fallback: 'Invalid credentials.'),
-      );
-    } on TimeoutException {
       return const _AuthApiResult(
         success: false,
-        message:
-            'Server is taking too long to respond. Please check backend and try again.',
+        message: 'Invalid credentials.',
       );
-    } catch (_) {
+    }
+
+    if (response.statusCode == 200) {
+      final user = _extractUserValue(body);
+      return _AuthApiResult(
+        success: true,
+        message: (body['message'] as String?) ?? 'Login successful.',
+        token: _extractTokenValue(body),
+        user: user,
+        otpRequired: _toBool(body['otp_required']),
+        otpDebugCode: body['otp_debug_code'] as String?,
+        activationCompleted: _extractActivationCompleted(user),
+      );
+    }
+
+    if (response.statusCode == 403 && _toBool(body['otp_required'])) {
+      return _AuthApiResult(
+        success: false,
+        message: _extractMessage(
+          body,
+          fallback: 'Verify your OTP before logging in.',
+        ),
+        otpRequired: true,
+        otpDebugCode: body['otp_debug_code'] as String?,
+        user: _extractUserValue(body),
+      );
+    }
+
+    return _AuthApiResult(
+      success: false,
+      message: _extractMessage(body, fallback: 'Invalid credentials.'),
+    );
+  }
+
+  Future<_AuthApiResult> verifyOtp({
+    required UserRole role,
+    required String mobile,
+    required String otp,
+  }) async {
+    final normalizedMobile = _normalizeMobile(mobile);
+    final outcome = await _postToEndpointCandidates(
+      path: 'verify-otp',
+      headers: const {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode({
+        'mobile': normalizedMobile,
+        'role': role.name,
+        'otp': otp.trim(),
+      }),
+    );
+    final response = outcome.response;
+    final body = outcome.body;
+
+    if (response == null) {
+      if (outcome.sawTimeout) {
+        return const _AuthApiResult(
+          success: false,
+          message:
+              'Server is taking too long to respond. Please check backend and try again.',
+        );
+      }
       return const _AuthApiResult(
         success: false,
         message:
             'Cannot connect to server. Check backend URL and if Laravel is running.',
       );
     }
+
+    if (response.statusCode == 200) {
+      final user = _extractUserValue(body);
+      return _AuthApiResult(
+        success: true,
+        message: (body['message'] as String?) ?? 'OTP verified successfully.',
+        token: _extractTokenValue(body),
+        user: user,
+        activationCompleted: _extractActivationCompleted(user),
+      );
+    }
+
+    return _AuthApiResult(
+      success: false,
+      message: _extractMessage(body, fallback: 'OTP verification failed.'),
+      otpRequired: _toBool(body['otp_required']),
+      otpDebugCode: body['otp_debug_code'] as String?,
+    );
+  }
+
+  Future<_AuthApiResult> resendOtp({
+    required UserRole role,
+    required String mobile,
+  }) async {
+    final normalizedMobile = _normalizeMobile(mobile);
+    final outcome = await _postToEndpointCandidates(
+      path: 'resend-otp',
+      headers: const {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode({
+        'mobile': normalizedMobile,
+        'role': role.name,
+      }),
+    );
+    final response = outcome.response;
+    final body = outcome.body;
+
+    if (response == null) {
+      if (outcome.sawTimeout) {
+        return const _AuthApiResult(
+          success: false,
+          message:
+              'Server is taking too long to respond. Please check backend and try again.',
+        );
+      }
+      return const _AuthApiResult(
+        success: false,
+        message:
+            'Cannot connect to server. Check backend URL and if Laravel is running.',
+      );
+    }
+
+    return _AuthApiResult(
+      success: response.statusCode >= 200 && response.statusCode < 300,
+      message: _extractMessage(body, fallback: 'OTP request failed.'),
+      otpRequired: _toBool(body['otp_required']),
+      otpDebugCode: body['otp_debug_code'] as String?,
+    );
   }
 
   Future<_AuthApiResult> completeOfficialActivation({
@@ -288,98 +1004,76 @@ class _AuthApi {
       );
     }
 
-    try {
-      http.Response? response;
-      Map<String, dynamic> body = <String, dynamic>{};
-      final endpoints = _endpointCandidates('activation/complete');
-      for (var i = 0; i < endpoints.length; i++) {
-        final current = await http
-            .post(
-              endpoints[i],
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Authorization': 'Bearer $_authToken',
-              },
-              body: jsonEncode(payload),
-            )
-            .timeout(_requestTimeout);
-        final decoded = _decodeResponseBody(current.body);
-        final shouldFallback =
-            i < endpoints.length - 1 &&
-            (current.statusCode == 404 ||
-                ((decoded['message'] as String?) ?? '').toLowerCase().contains(
-                      'route',
-                    ) &&
-                    ((decoded['message'] as String?) ?? '')
-                        .toLowerCase()
-                        .contains('not be found'));
-        if (shouldFallback) {
-          continue;
-        }
-        response = current;
-        body = decoded;
-        break;
-      }
+    final outcome = await _postToEndpointCandidates(
+      path: 'activation/complete',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $_authToken',
+      },
+      body: jsonEncode(payload),
+    );
+    final response = outcome.response;
+    final body = outcome.body;
 
-      if (response == null) {
+    if (response == null) {
+      if (outcome.sawTimeout) {
+        return const _AuthApiResult(
+          success: false,
+          message:
+              'Server is taking too long to respond. Please check backend and try again.',
+        );
+      }
+      if (outcome.sawConnectionError) {
         return const _AuthApiResult(
           success: false,
           message:
               'Cannot connect to server. Check backend URL and if Laravel is running.',
         );
       }
-
-      if (response.statusCode == 200) {
-        return _AuthApiResult(
-          success: true,
-          message:
-              (body['message'] as String?) ?? 'Activation details saved.',
-          activationCompleted: true,
-        );
-      }
-
-      if (response.statusCode == 404 &&
-          ((body['message'] as String?) ?? '')
-              .toLowerCase()
-              .contains('could not be found')) {
-        return const _AuthApiResult(
-          success: true,
-          message:
-              'Server activation endpoint is not available yet. Activation is saved on this device.',
-          activationCompleted: true,
-        );
-      }
-
-      return _AuthApiResult(
-        success: false,
-        message: _extractMessage(
-          body,
-          fallback: 'Could not save activation data. Please try again.',
-        ),
-      );
-    } on TimeoutException {
       return const _AuthApiResult(
         success: false,
-        message:
-            'Server is taking too long to respond. Please check backend and try again.',
-      );
-    } catch (_) {
-      return const _AuthApiResult(
-        success: false,
-        message:
-            'Cannot connect to server. Check backend URL and if Laravel is running.',
+        message: 'Could not save activation data. Please try again.',
       );
     }
+
+    if (response.statusCode == 200) {
+      return _AuthApiResult(
+        success: true,
+        message: (body['message'] as String?) ?? 'Activation details saved.',
+        activationCompleted: true,
+      );
+    }
+
+    if (response.statusCode == 404 &&
+        ((body['message'] as String?) ?? '')
+            .toLowerCase()
+            .contains('could not be found')) {
+      return const _AuthApiResult(
+        success: true,
+        message:
+            'Server activation endpoint is not available yet. Activation is saved on this device.',
+        activationCompleted: true,
+      );
+    }
+
+    return _AuthApiResult(
+      success: false,
+      message: _extractMessage(
+        body,
+        fallback: 'Could not save activation data. Please try again.',
+      ),
+    );
   }
 
   Future<void> logout() async {
     if (_authToken == null || _authToken!.isEmpty) {
       return;
     }
-    try {
-      final endpoints = _endpointCandidates('logout');
-      for (var i = 0; i < endpoints.length; i++) {
+
+    final endpoints = _endpointCandidates('logout');
+    for (var i = 0; i < endpoints.length; i++) {
+      try {
         final current = await http
             .post(
               endpoints[i],
@@ -392,8 +1086,12 @@ class _AuthApi {
         if (current.statusCode != 404) {
           break;
         }
+      } catch (_) {
+        if (i == endpoints.length - 1) {
+          break;
+        }
       }
-    } catch (_) {}
+    }
   }
 
   bool _extractActivationCompleted(dynamic user) {
@@ -415,6 +1113,51 @@ class _AuthApi {
       return normalized == '1' || normalized == 'true' || normalized == 'yes';
     }
     return false;
+  }
+
+  String? _extractTokenValue(Map<String, dynamic> body) {
+    final directCandidates = [
+      body['token'],
+      body['access_token'],
+      body['plainTextToken'],
+      body['auth_token'],
+    ];
+    for (final candidate in directCandidates) {
+      if (candidate is String && candidate.trim().isNotEmpty) {
+        return candidate.trim();
+      }
+    }
+
+    final data = body['data'];
+    if (data is Map<String, dynamic>) {
+      final nestedCandidates = [
+        data['token'],
+        data['access_token'],
+        data['plainTextToken'],
+        data['auth_token'],
+      ];
+      for (final candidate in nestedCandidates) {
+        if (candidate is String && candidate.trim().isNotEmpty) {
+          return candidate.trim();
+        }
+      }
+    }
+
+    return null;
+  }
+
+  Map<String, dynamic>? _extractUserValue(Map<String, dynamic> body) {
+    final user = body['user'];
+    if (user is Map<String, dynamic>) {
+      return user;
+    }
+
+    final data = body['data'];
+    if (data is Map<String, dynamic> && data['user'] is Map<String, dynamic>) {
+      return data['user'] as Map<String, dynamic>;
+    }
+
+    return null;
   }
 
   String _extractMessage(
@@ -452,6 +1195,28 @@ class _AuthApi {
 
 class RoleGatewayScreen extends StatelessWidget {
   const RoleGatewayScreen({super.key});
+
+  Future<void> _openRoleEntry(BuildContext context, UserRole role) async {
+    final openRegister = await _FirstRoleAccessStore.shouldOpenRegister(role);
+    if (!context.mounted) {
+      return;
+    }
+    if (openRegister) {
+      await _FirstRoleAccessStore.markVisited(role);
+      if (!context.mounted) {
+        return;
+      }
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => AuthRegisterPage(role: role)),
+      );
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => RoleAuthChoicePage(role: role)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -541,10 +1306,7 @@ class RoleGatewayScreen extends StatelessWidget {
     return Expanded(
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => RoleAuthChoicePage(role: role)),
-        ),
+        onTap: () => _openRoleEntry(context, role),
         child: Container(
           width: double.infinity,
           decoration: BoxDecoration(
@@ -680,7 +1442,7 @@ class RoleAuthChoicePage extends StatelessWidget {
             OutlinedButton(
               onPressed: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => AuthLoginPage(role: role)),
+                MaterialPageRoute(builder: (_) => _loginPageForRole(role)),
               ),
               child: const Text('Log In'),
             ),
@@ -697,7 +1459,7 @@ class OfficialLoginPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const AuthLoginPage(role: UserRole.official);
+      const OfficialAccessPage();
 }
 
 class AuthRegisterPage extends StatefulWidget {
@@ -726,16 +1488,281 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
 
   static const Map<String, Map<String, List<String>>> _locationDirectory = {
     'Zambales': {
-      'City of Olongapo': [
-        'Old Cabalan',
-        'Banicain',
-        'Kalaklan',
-        'West Tapinac',
-        'East Tapinac',
+      'Botolan': [
+        'Bancal',
+        'Bangan',
+        'Batonlapoc',
+        'Belbel',
+        'Beneg',
+        'Binuclutan',
+        'Burgos',
+        'Cabatuan',
+        'Capayawan',
+        'Carael',
+        'Danacbunga',
+        'Maguisguis',
+        'Malomboy',
+        'Mambog',
+        'Moraza',
+        'Nacolcol',
+        'Owaog-Nibloc',
+        'Paco',
+        'Palis',
+        'Panan',
+        'Parel',
+        'Paudpod',
+        'Poonbato',
+        'Porac',
+        'San Isidro',
+        'San Juan',
+        'San Miguel',
+        'Santiago',
+        'Tampo',
+        'Taugtog',
+        'Villar',
       ],
-      'Subic': ['Calapacuan', 'Baraca-Camachile', 'Wawandue', 'Matain'],
-      'Castillejos': ['San Agustin', 'San Juan', 'Looc', 'Nagbayanan'],
-      'Iba': ['Bangantalinga', 'Palanginan', 'Sto. Rosario', 'Dirita'],
+      'Cabangan': [
+        'Anonang',
+        'Apo-apo',
+        'Arew',
+        'Banuambayo',
+        'Cadmang-Reserva',
+        'Camiling',
+        'Casabaan',
+        'Del Carmen',
+        'Dolores',
+        'Felmida-Diaz',
+        'Laoag',
+        'Lomboy',
+        'Longos',
+        'Mabanglit',
+        'New San Juan',
+        'San Antonio',
+        'San Isidro',
+        'San Juan',
+        'San Rafael',
+        'Santa Rita',
+        'Santo Nino',
+        'Tondo',
+      ],
+      'Candelaria': [
+        'Babancal',
+        'Binabalian',
+        'Catol',
+        'Dampay',
+        'Lauis',
+        'Libertador',
+        'Malabon',
+        'Malimanga',
+        'Pamibian',
+        'Panayonan',
+        'Pinagrealan',
+        'Poblacion',
+        'Sinabacan',
+        'Taposo',
+        'Uacon',
+        'Yamot',
+      ],
+      'Castillejos': [
+        'Balaybay',
+        'Buenavista',
+        'Del Pilar',
+        'Looc',
+        'Magsaysay',
+        'Nagbayan',
+        'Nagbunga',
+        'San Agustin',
+        'San Jose',
+        'San Juan',
+        'San Nicolas',
+        'San Pablo',
+        'San Roque',
+        'Santa Maria',
+      ],
+      'City of Olongapo': [
+        'Asinan',
+        'Banicain',
+        'Barretto',
+        'East Bajac-bajac',
+        'East Tapinac',
+        'Gordon Heights',
+        'Kalaklan',
+        'New Kalalake',
+        'Mabayuan',
+        'New Cabalan',
+        'New Ilalim',
+        'New Kababae',
+        'Pag-asa',
+        'Santa Rita',
+        'West Bajac-bajac',
+        'West Tapinac',
+        'Old Cabalan',
+      ],
+      'Iba': [
+        'Amungan',
+        'Bangantalinga',
+        'Dirita-Baloguen',
+        'Lipay-Dingin-Panibuatan',
+        'Palanginan',
+        'San Agustin',
+        'Santa Barbara',
+        'Santo Rosario',
+        'Zone 1 Poblacion',
+        'Zone 2 Poblacion',
+        'Zone 3 Poblacion',
+        'Zone 4 Poblacion',
+        'Zone 5 Poblacion',
+        'Zone 6 Poblacion',
+      ],
+      'Masinloc': [
+        'Baloganon',
+        'Bamban',
+        'Bani',
+        'Collat',
+        'Inhobol',
+        'North Poblacion',
+        'San Lorenzo',
+        'San Salvador',
+        'Santa Rita',
+        'Santo Rosario',
+        'South Poblacion',
+        'Taltal',
+        'Tapuac',
+      ],
+      'Palauig': [
+        'Alwa',
+        'Bato',
+        'Bulawen',
+        'Cauyan',
+        'East Poblacion',
+        'Garreta',
+        'Libaba',
+        'Liozon',
+        'Lipay',
+        'Locloc',
+        'Macarang',
+        'Magalawa',
+        'Pangolingan',
+        'Salaza',
+        'San Juan',
+        'Santo Nino',
+        'Santo Tomas',
+        'Tition',
+        'West Poblacion',
+      ],
+      'San Antonio': [
+        'Angeles',
+        'Antipolo',
+        'Burgos',
+        'East Dirita',
+        'Luna',
+        'Pundaquit',
+        'Rizal',
+        'San Esteban',
+        'San Gregorio',
+        'San Juan',
+        'San Miguel',
+        'San Nicolas',
+        'Santiago',
+        'West Dirita',
+      ],
+      'San Felipe': [
+        'Amagna',
+        'Apostol',
+        'Balincaguing',
+        'Faranal',
+        'Feria',
+        'Maloma',
+        'Manglicmot',
+        'Rosete',
+        'San Rafael',
+        'Santo Nino',
+        'Sindol',
+      ],
+      'San Marcelino': [
+        'Aglao',
+        'Buhawen',
+        'Burgos',
+        'Central',
+        'Consuelo Norte',
+        'Consuelo Sur',
+        'La Paz',
+        'Laoag',
+        'Linasin',
+        'Linusungan',
+        'Lucero',
+        'Nagbunga',
+        'Rabanes',
+        'Rizal',
+        'San Guillermo',
+        'San Isidro',
+        'San Rafael',
+        'Santa Fe',
+      ],
+      'San Narciso': [
+        'Alusiis',
+        'Beddeng',
+        'Candelaria',
+        'Dallipawen',
+        'Grullo',
+        'La Paz',
+        'Libertad',
+        'Namatacan',
+        'Natividad',
+        'Omaya',
+        'Paite',
+        'Patrocinio',
+        'San Jose',
+        'San Juan',
+        'San Pascual',
+        'San Rafael',
+        'Siminublan',
+      ],
+      'Santa Cruz': [
+        'Babuyan',
+        'Bangcol',
+        'Bayto',
+        'Biay',
+        'Bolitoc',
+        'Bulawon',
+        'Canaynayan',
+        'Gama',
+        'Guinabon',
+        'Guisguis',
+        'Lipay',
+        'Lomboy',
+        'Lucapon North',
+        'Lucapon South',
+        'Malabago',
+        'Naulo',
+        'Pagatpat',
+        'Pamonoran',
+        'Poblacion North',
+        'Poblacion South',
+        'Sabang',
+        'San Fernando',
+        'Tabalong',
+        'Tubotubo North',
+        'Tubotubo South',
+      ],
+      'Subic': [
+        'Aningway Sacatihan',
+        'Asinan Poblacion',
+        'Asinan Proper',
+        'Baraca-Camachile',
+        'Batiawan',
+        'Calapacuan',
+        'Calapandayan',
+        'Cawag',
+        'Ilwas',
+        'Mangan-Vaca',
+        'Matain',
+        'Naugsol',
+        'Pamatawan',
+        'San Isidro',
+        'Santo Tomas',
+        'Wawandue',
+      ],
     },
     'Bataan': {
       'Balanga City': ['Bagumbayan', 'Cupang Proper', 'Poblacion', 'Tuyo'],
@@ -895,9 +1922,10 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => AuthLoginPage(
+        builder: (_) => AuthOtpVerificationPage(
           role: widget.role,
-          prefilledMobile: _mobileController.text,
+          mobile: _mobileController.text,
+          debugOtpCode: result.otpDebugCode,
         ),
       ),
     );
@@ -1166,10 +2194,10 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
                     TextFormField(
                       controller: _passwordController,
                       obscureText: true,
-                      decoration: _fieldDecoration('Password'),
+                      decoration: _fieldDecoration('PIN'),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Password is required.';
+                          return 'PIN is required.';
                         }
                         if (value.length < 6) {
                           return 'Minimum 6 characters.';
@@ -1181,10 +2209,10 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
                     TextFormField(
                       controller: _confirmPasswordController,
                       obscureText: true,
-                      decoration: _fieldDecoration('Confirm Password'),
+                      decoration: _fieldDecoration('Confirm PIN'),
                       validator: (value) {
                         if (value != _passwordController.text) {
-                          return 'Passwords do not match.';
+                          return 'PINs do not match.';
                         }
                         return null;
                       },
@@ -1210,7 +2238,7 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
                       : () => Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => AuthLoginPage(role: widget.role),
+                            builder: (_) => _loginPageForRole(widget.role),
                           ),
                         ),
                   child: Text(
@@ -1224,6 +2252,232 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AuthOtpVerificationPage extends StatefulWidget {
+  final UserRole role;
+  final String mobile;
+  final String? debugOtpCode;
+
+  const AuthOtpVerificationPage({
+    super.key,
+    required this.role,
+    required this.mobile,
+    this.debugOtpCode,
+  });
+
+  @override
+  State<AuthOtpVerificationPage> createState() => _AuthOtpVerificationPageState();
+}
+
+class _AuthOtpVerificationPageState extends State<AuthOtpVerificationPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _otpController = TextEditingController();
+  bool _submitting = false;
+  bool _resending = false;
+  String? _debugOtpCode;
+
+  bool get _isResident => widget.role == UserRole.resident;
+
+  Color get _primaryColor =>
+      _isResident ? const Color(0xFF2E35D3) : const Color(0xFFD70000);
+
+  Widget _homeForRole() {
+    if (_isResident) {
+      return const ResidentHomeShell();
+    }
+    return _officialActivationCompleted
+        ? const HomeShell()
+        : const ActivationFlow();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _debugOtpCode = widget.debugOtpCode;
+  }
+
+  @override
+  void dispose() {
+    _otpController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _verify() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() => _submitting = true);
+    final result = await _AuthApi.instance.verifyOtp(
+      role: widget.role,
+      mobile: widget.mobile,
+      otp: _otpController.text,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _submitting = false;
+      if (result.otpDebugCode != null) {
+        _debugOtpCode = result.otpDebugCode;
+      }
+    });
+
+    if (!result.success || result.token == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.message)));
+      return;
+    }
+
+    _authToken = result.token;
+    if (_isResident) {
+      await _completeResidentSignIn(
+        context,
+        mobile: widget.mobile,
+        token: result.token!,
+        user: result.user,
+      );
+      return;
+    } else {
+      await _completeOfficialSignIn(
+        context,
+        mobile: widget.mobile,
+        token: result.token!,
+        activationCompleted: result.activationCompleted,
+      );
+      return;
+    }
+  }
+
+  Future<void> _resendOtp() async {
+    setState(() => _resending = true);
+    final result = await _AuthApi.instance.resendOtp(
+      role: widget.role,
+      mobile: widget.mobile,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _resending = false;
+      _debugOtpCode = result.otpDebugCode;
+    });
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mobileLabel = widget.mobile.replaceAll(RegExp(r'\D'), '');
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Verify OTP')),
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Icon(Icons.lock_clock_outlined, color: _primaryColor, size: 72),
+              const SizedBox(height: 16),
+              Text(
+                'Enter the 6-digit OTP for $mobileLabel',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Use the OTP generated for this new account before logging in.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Color(0xFF666B86)),
+              ),
+              if (_debugOtpCode != null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF2F5FF),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFD9E1FF)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Local Debug OTP',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF33409C),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _debugOtpCode!,
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _otpController,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                decoration: const InputDecoration(
+                  labelText: 'OTP Code',
+                  counterText: '',
+                ),
+                validator: (value) {
+                  final normalized = value?.trim() ?? '';
+                  if (normalized.length != 6) {
+                    return 'Enter the 6-digit OTP.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: _submitting ? null : _verify,
+                style: FilledButton.styleFrom(backgroundColor: _primaryColor),
+                child: Text(_submitting ? 'Verifying...' : 'Verify OTP'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton(
+                onPressed: _resending || _submitting ? null : _resendOtp,
+                child: Text(_resending ? 'Sending...' : 'Resend OTP'),
+              ),
+              TextButton(
+                onPressed: _submitting
+                    ? null
+                    : () => Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => _loginPageForRole(
+                            widget.role,
+                            prefilledMobile: widget.mobile,
+                          ),
+                        ),
+                        (route) => false,
+                      ),
+                child: const Text('Back to Login'),
+              ),
+            ],
           ),
         ),
       ),
@@ -1292,6 +2546,22 @@ class _AuthLoginPageState extends State<AuthLoginPage> {
     setState(() => _submitting = false);
 
     if (!result.success) {
+      if (result.otpRequired) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(result.message)));
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AuthOtpVerificationPage(
+              role: widget.role,
+              mobile: _mobileController.text,
+              debugOtpCode: result.otpDebugCode,
+            ),
+          ),
+        );
+        return;
+      }
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(result.message)));
@@ -1299,22 +2569,23 @@ class _AuthLoginPageState extends State<AuthLoginPage> {
     }
 
     _authToken = result.token;
-    if (!_isResident) {
-      final localCompleted = await _LocalActivationStore.isCompleted(
-        _mobileController.text,
+    if (_isResident) {
+      await _completeResidentSignIn(
+        context,
+        mobile: _mobileController.text,
+        token: result.token ?? '',
+        user: result.user,
       );
-      if (!mounted) {
-        return;
-      }
-      _officialActivationCompleted = result.activationCompleted || localCompleted;
-      _currentOfficialMobile = _normalizeMobileForKey(_mobileController.text);
+      return;
+    } else {
+      await _completeOfficialSignIn(
+        context,
+        mobile: _mobileController.text,
+        token: result.token ?? '',
+        activationCompleted: result.activationCompleted,
+      );
+      return;
     }
-
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => _homeForRole()),
-      (route) => false,
-    );
   }
 
   @override
@@ -1866,6 +3137,1212 @@ class _ResidentMpinLoginPageState extends State<ResidentMpinLoginPage> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class ResidentAccessPage extends StatefulWidget {
+  final String? prefilledMobile;
+
+  const ResidentAccessPage({super.key, this.prefilledMobile});
+
+  @override
+  State<ResidentAccessPage> createState() => _ResidentAccessPageState();
+}
+
+class _ResidentAccessPageState extends State<ResidentAccessPage> {
+  final _mobileController = TextEditingController();
+  bool _loadingLastMobile = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _mobileController.text = widget.prefilledMobile?.trim() ?? '';
+    _loadLastMobile();
+  }
+
+  @override
+  void dispose() {
+    _mobileController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadLastMobile() async {
+    final lastMobile = await _ResidentMpinStore.lastMobile();
+    if (!mounted) {
+      return;
+    }
+    if (_mobileController.text.trim().isEmpty && lastMobile != null) {
+      _mobileController.text = lastMobile;
+    }
+    setState(() => _loadingLastMobile = false);
+  }
+
+  String get _normalizedMobile =>
+      _mobileController.text.replaceAll(RegExp(r'\D'), '');
+
+  bool get _hasValidMobile => _normalizedMobile.length >= 10;
+
+  void _continueWithPassword() {
+    if (!_hasValidMobile) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid mobile number first.')),
+      );
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AuthLoginPage(
+          role: UserRole.resident,
+          prefilledMobile: _mobileController.text.trim(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openMpinLogin() async {
+    final mobile = _hasValidMobile
+        ? _mobileController.text.trim()
+        : await _ResidentMpinStore.lastMobile();
+    if (!mounted) {
+      return;
+    }
+    if (mobile == null || mobile.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter your mobile number or sign in once to set MPIN.'),
+        ),
+      );
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ResidentMpinUnlockPage(mobile: mobile)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const primary = Color(0xFF2E35D3);
+    const background = Color(0xFFF3F1FF);
+
+    return Scaffold(
+      backgroundColor: background,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(24, 18, 24, 32),
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.arrow_back, color: Colors.black87),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              height: 130,
+              child: Image.asset('public/barangaymo.png', fit: BoxFit.contain),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              '"Ang unang sandigan ng mamamayan!"',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Color(0xFF1E2235),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 78),
+            const Text(
+              'Continue with Mobile',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Color(0xFF3D4158),
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE9E8FF),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x14000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      '+63',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF2D3458),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: _mobileController,
+                      keyboardType: TextInputType.phone,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _continueWithPassword(),
+                      decoration: const InputDecoration(
+                        hintText: 'Enter mobile number...',
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _loadingLastMobile ? null : _continueWithPassword,
+                style: FilledButton.styleFrom(
+                  backgroundColor: primary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: Text(
+                  _loadingLastMobile ? 'Loading...' : 'Continue with Password',
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'or',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Color(0xFF474B66),
+                fontSize: 22,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Center(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: _openMpinLogin,
+                child: Ink(
+                  width: 132,
+                  height: 132,
+                  decoration: BoxDecoration(
+                    color: primary,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x22000000),
+                        blurRadius: 16,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.dialpad_rounded, color: Colors.white, size: 44),
+                      SizedBox(height: 10),
+                      Text(
+                        'MPIN Login',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 22),
+            TextButton(
+              onPressed: () => Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const AuthRegisterPage(role: UserRole.resident),
+                ),
+              ),
+              child: const Text('Create a new resident account'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class ResidentMpinSetupPage extends StatefulWidget {
+  final String mobile;
+
+  const ResidentMpinSetupPage({super.key, required this.mobile});
+
+  @override
+  State<ResidentMpinSetupPage> createState() => _ResidentMpinSetupPageState();
+}
+
+class _ResidentMpinSetupPageState extends State<ResidentMpinSetupPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _pinController = TextEditingController();
+  final _confirmPinController = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _pinController.dispose();
+    _confirmPinController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveMpin() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    setState(() => _saving = true);
+    await _ResidentMpinStore.savePin(widget.mobile, _pinController.text.trim());
+    if (!mounted) {
+      return;
+    }
+    setState(() => _saving = false);
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const ResidentHomeShell()),
+      (route) => false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF3F1FF),
+      appBar: AppBar(
+        title: const Text('Set MPIN'),
+        backgroundColor: Colors.transparent,
+      ),
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              const Icon(
+                Icons.lock_person_rounded,
+                size: 72,
+                color: Color(0xFF2E35D3),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Create your 4-digit MPIN',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Use this MPIN for faster resident login on this device for ${widget.mobile}.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFF5B6079)),
+              ),
+              const SizedBox(height: 28),
+              TextFormField(
+                controller: _pinController,
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 4,
+                decoration: const InputDecoration(
+                  labelText: '4-digit MPIN',
+                  counterText: '',
+                ),
+                validator: (value) {
+                  final normalized = value?.trim() ?? '';
+                  if (normalized.length != 4 || int.tryParse(normalized) == null) {
+                    return 'Enter a 4-digit MPIN.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _confirmPinController,
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Confirm MPIN',
+                  counterText: '',
+                ),
+                validator: (value) {
+                  if ((value?.trim() ?? '') != _pinController.text.trim()) {
+                    return 'MPIN does not match.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 18),
+              FilledButton(
+                onPressed: _saving ? null : _saveMpin,
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF2E35D3),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: Text(_saving ? 'Saving...' : 'Save MPIN'),
+              ),
+              TextButton(
+                onPressed: _saving
+                    ? null
+                    : () => Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ResidentHomeShell(),
+                        ),
+                        (route) => false,
+                      ),
+                child: const Text('Skip for now'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class ResidentMpinUnlockPage extends StatefulWidget {
+  final String? mobile;
+
+  const ResidentMpinUnlockPage({super.key, this.mobile});
+
+  @override
+  State<ResidentMpinUnlockPage> createState() => _ResidentMpinUnlockPageState();
+}
+
+class _ResidentMpinUnlockPageState extends State<ResidentMpinUnlockPage> {
+  static const _keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '<'];
+
+  String _pin = '';
+  String _mobile = '';
+  bool _loadingMobile = true;
+  bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMobile();
+  }
+
+  Future<void> _loadMobile() async {
+    final storedMobile = widget.mobile?.trim();
+    final fallbackMobile = await _ResidentMpinStore.lastMobile();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _mobile = (storedMobile != null && storedMobile.isNotEmpty)
+          ? storedMobile
+          : (fallbackMobile ?? '');
+      _loadingMobile = false;
+    });
+  }
+
+  void _tapKey(String value) {
+    if (_submitting) {
+      return;
+    }
+    if (value == 'C') {
+      setState(() => _pin = '');
+      return;
+    }
+    if (value == '<') {
+      if (_pin.isNotEmpty) {
+        setState(() => _pin = _pin.substring(0, _pin.length - 1));
+      }
+      return;
+    }
+    if (_pin.length < 4) {
+      setState(() => _pin += value);
+    }
+  }
+
+  Future<void> _submitMpin() async {
+    if (_mobile.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No resident mobile number found for MPIN login.'),
+        ),
+      );
+      return;
+    }
+    setState(() => _submitting = true);
+    final hasPin = await _ResidentMpinStore.hasPin(_mobile);
+    final isValid = hasPin && await _ResidentMpinStore.verifyPin(_mobile, _pin);
+    if (!mounted) {
+      return;
+    }
+    if (!isValid) {
+      setState(() {
+        _submitting = false;
+        _pin = '';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            hasPin
+                ? 'Incorrect MPIN. Try again.'
+                : 'No MPIN found for this account. Log in with password first.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final restored = await _ResidentAuthCacheStore.restore(_mobile);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _submitting = false);
+    if (!restored) {
+      setState(() => _pin = '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Saved session expired. Log in with password first.'),
+        ),
+      );
+      return;
+    }
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const ResidentHomeShell()),
+      (route) => false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF3F1FF),
+      appBar: AppBar(
+        title: const Text('MPIN Login'),
+        backgroundColor: Colors.transparent,
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              const Text(
+                'Enter your 4-digit MPIN',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                _loadingMobile
+                    ? 'Loading account...'
+                    : (_mobile.isEmpty ? 'Resident account not found' : _mobile),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFF666B86),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  4,
+                  (index) => Container(
+                    width: 18,
+                    height: 18,
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: index < _pin.length
+                          ? const Color(0xFF2E35D3)
+                          : Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFF2E35D3)),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 26),
+              Expanded(
+                child: GridView.count(
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 3,
+                  mainAxisSpacing: 14,
+                  crossAxisSpacing: 14,
+                  childAspectRatio: 1.25,
+                  children: _keys
+                      .map(
+                        (key) => FilledButton(
+                          onPressed: () => _tapKey(key),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: key == 'C' || key == '<'
+                                ? const Color(0xFFE4E6FF)
+                                : Colors.white,
+                            foregroundColor: const Color(0xFF243082),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              side: const BorderSide(
+                                color: Color(0xFFD7DBFF),
+                              ),
+                            ),
+                          ),
+                          child: key == '<'
+                              ? const Icon(Icons.backspace_outlined)
+                              : Text(
+                                  key,
+                                  style: const TextStyle(
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _pin.length == 4 && !_submitting ? _submitMpin : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF2E35D3),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: Text(_submitting ? 'Checking...' : 'Continue'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class OfficialAccessPage extends StatefulWidget {
+  final String? prefilledMobile;
+
+  const OfficialAccessPage({super.key, this.prefilledMobile});
+
+  @override
+  State<OfficialAccessPage> createState() => _OfficialAccessPageState();
+}
+
+class _OfficialAccessPageState extends State<OfficialAccessPage> {
+  final _mobileController = TextEditingController();
+  bool _loadingLastMobile = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _mobileController.text = widget.prefilledMobile?.trim() ?? '';
+    _loadLastMobile();
+  }
+
+  @override
+  void dispose() {
+    _mobileController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadLastMobile() async {
+    final lastMobile = await _OfficialMpinStore.lastMobile();
+    if (!mounted) {
+      return;
+    }
+    if (_mobileController.text.trim().isEmpty && lastMobile != null) {
+      _mobileController.text = lastMobile;
+    }
+    setState(() => _loadingLastMobile = false);
+  }
+
+  String get _normalizedMobile =>
+      _mobileController.text.replaceAll(RegExp(r'\D'), '');
+
+  bool get _hasValidMobile => _normalizedMobile.length >= 10;
+
+  void _continueWithPassword() {
+    if (!_hasValidMobile) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid mobile number first.')),
+      );
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AuthLoginPage(
+          role: UserRole.official,
+          prefilledMobile: _mobileController.text.trim(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openMpinLogin() async {
+    final mobile = _hasValidMobile
+        ? _mobileController.text.trim()
+        : await _OfficialMpinStore.lastMobile();
+    if (!mounted) {
+      return;
+    }
+    if (mobile == null || mobile.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter your mobile number or sign in once to set MPIN.'),
+        ),
+      );
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => OfficialMpinUnlockPage(mobile: mobile)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const primary = Color(0xFFD70000);
+    const background = Color(0xFFFFF4F4);
+
+    return Scaffold(
+      backgroundColor: background,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(24, 18, 24, 32),
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.arrow_back, color: Colors.black87),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              height: 130,
+              child: Image.asset('public/barangaymo.png', fit: BoxFit.contain),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              '"Ang unang sandigan ng mamamayan!"',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Color(0xFF3A2222),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 78),
+            const Text(
+              'Official Access',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Color(0xFF593535),
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFEAEA),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x14000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      '+63',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF5A2B2B),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: _mobileController,
+                      keyboardType: TextInputType.phone,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _continueWithPassword(),
+                      decoration: const InputDecoration(
+                        hintText: 'Enter mobile number...',
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _loadingLastMobile ? null : _continueWithPassword,
+                style: FilledButton.styleFrom(
+                  backgroundColor: primary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: Text(
+                  _loadingLastMobile ? 'Loading...' : 'Continue with Password',
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'or',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Color(0xFF735757),
+                fontSize: 22,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Center(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: _openMpinLogin,
+                child: Ink(
+                  width: 132,
+                  height: 132,
+                  decoration: BoxDecoration(
+                    color: primary,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x22000000),
+                        blurRadius: 16,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.dialpad_rounded, color: Colors.white, size: 44),
+                      SizedBox(height: 10),
+                      Text(
+                        'MPIN Login',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 22),
+            TextButton(
+              onPressed: () => Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const AuthRegisterPage(role: UserRole.official),
+                ),
+              ),
+              child: const Text('Create a new official account'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class OfficialMpinSetupPage extends StatefulWidget {
+  final String mobile;
+
+  const OfficialMpinSetupPage({super.key, required this.mobile});
+
+  @override
+  State<OfficialMpinSetupPage> createState() => _OfficialMpinSetupPageState();
+}
+
+class _OfficialMpinSetupPageState extends State<OfficialMpinSetupPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _pinController = TextEditingController();
+  final _confirmPinController = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _pinController.dispose();
+    _confirmPinController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveMpin() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    setState(() => _saving = true);
+    await _OfficialMpinStore.savePin(widget.mobile, _pinController.text.trim());
+    if (!mounted) {
+      return;
+    }
+    setState(() => _saving = false);
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => _officialHomeForSession()),
+      (route) => false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFFFF4F4),
+      appBar: AppBar(
+        title: const Text('Set MPIN'),
+        backgroundColor: Colors.transparent,
+      ),
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              const Icon(
+                Icons.admin_panel_settings_rounded,
+                size: 72,
+                color: Color(0xFFD70000),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Create your 4-digit MPIN',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Use this MPIN for faster official login on this device for ${widget.mobile}.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFF7A5959)),
+              ),
+              const SizedBox(height: 28),
+              TextFormField(
+                controller: _pinController,
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 4,
+                decoration: const InputDecoration(
+                  labelText: '4-digit MPIN',
+                  counterText: '',
+                ),
+                validator: (value) {
+                  final normalized = value?.trim() ?? '';
+                  if (normalized.length != 4 || int.tryParse(normalized) == null) {
+                    return 'Enter a 4-digit MPIN.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _confirmPinController,
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Confirm MPIN',
+                  counterText: '',
+                ),
+                validator: (value) {
+                  if ((value?.trim() ?? '') != _pinController.text.trim()) {
+                    return 'MPIN does not match.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 18),
+              FilledButton(
+                onPressed: _saving ? null : _saveMpin,
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFD70000),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: Text(_saving ? 'Saving...' : 'Save MPIN'),
+              ),
+              TextButton(
+                onPressed: _saving
+                    ? null
+                    : () => Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => _officialHomeForSession(),
+                        ),
+                        (route) => false,
+                      ),
+                child: const Text('Skip for now'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class OfficialMpinUnlockPage extends StatefulWidget {
+  final String? mobile;
+
+  const OfficialMpinUnlockPage({super.key, this.mobile});
+
+  @override
+  State<OfficialMpinUnlockPage> createState() => _OfficialMpinUnlockPageState();
+}
+
+class _OfficialMpinUnlockPageState extends State<OfficialMpinUnlockPage> {
+  static const _keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '<'];
+
+  String _pin = '';
+  String _mobile = '';
+  bool _loadingMobile = true;
+  bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMobile();
+  }
+
+  Future<void> _loadMobile() async {
+    final storedMobile = widget.mobile?.trim();
+    final fallbackMobile = await _OfficialMpinStore.lastMobile();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _mobile = (storedMobile != null && storedMobile.isNotEmpty)
+          ? storedMobile
+          : (fallbackMobile ?? '');
+      _loadingMobile = false;
+    });
+  }
+
+  void _tapKey(String value) {
+    if (_submitting) {
+      return;
+    }
+    if (value == 'C') {
+      setState(() => _pin = '');
+      return;
+    }
+    if (value == '<') {
+      if (_pin.isNotEmpty) {
+        setState(() => _pin = _pin.substring(0, _pin.length - 1));
+      }
+      return;
+    }
+    if (_pin.length < 4) {
+      setState(() => _pin += value);
+    }
+  }
+
+  Future<void> _submitMpin() async {
+    if (_mobile.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No official mobile number found for MPIN login.'),
+        ),
+      );
+      return;
+    }
+    setState(() => _submitting = true);
+    final hasPin = await _OfficialMpinStore.hasPin(_mobile);
+    final isValid = hasPin && await _OfficialMpinStore.verifyPin(_mobile, _pin);
+    if (!mounted) {
+      return;
+    }
+    if (!isValid) {
+      setState(() {
+        _submitting = false;
+        _pin = '';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            hasPin
+                ? 'Incorrect MPIN. Try again.'
+                : 'No MPIN found for this account. Log in with password first.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final restored = await _OfficialAuthCacheStore.restore(_mobile);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _submitting = false);
+    if (!restored) {
+      setState(() => _pin = '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Saved session expired. Log in with password first.'),
+        ),
+      );
+      return;
+    }
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => _officialHomeForSession()),
+      (route) => false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFFFF4F4),
+      appBar: AppBar(
+        title: const Text('MPIN Login'),
+        backgroundColor: Colors.transparent,
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              const Text(
+                'Enter your 4-digit MPIN',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                _loadingMobile
+                    ? 'Loading account...'
+                    : (_mobile.isEmpty ? 'Official account not found' : _mobile),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFF7A5959),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  4,
+                  (index) => Container(
+                    width: 18,
+                    height: 18,
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: index < _pin.length
+                          ? const Color(0xFFD70000)
+                          : Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFFD70000)),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 26),
+              Expanded(
+                child: GridView.count(
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 3,
+                  mainAxisSpacing: 14,
+                  crossAxisSpacing: 14,
+                  childAspectRatio: 1.25,
+                  children: _keys
+                      .map(
+                        (key) => FilledButton(
+                          onPressed: () => _tapKey(key),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: key == 'C' || key == '<'
+                                ? const Color(0xFFFFE5E5)
+                                : Colors.white,
+                            foregroundColor: const Color(0xFF8A2424),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              side: const BorderSide(
+                                color: Color(0xFFFFCFCF),
+                              ),
+                            ),
+                          ),
+                          child: key == '<'
+                              ? const Icon(Icons.backspace_outlined)
+                              : Text(
+                                  key,
+                                  style: const TextStyle(
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _pin.length == 4 && !_submitting ? _submitMpin : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFD70000),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: Text(_submitting ? 'Checking...' : 'Continue'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
