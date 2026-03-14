@@ -1335,6 +1335,75 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
   }
 }
 
+const _residentMarketplaceProducts = [
+  _ResidentProductData(
+    title: 'Lenovo IdeaPad 15.6"',
+    seller: 'L. Nadong Electronics',
+    price: 14999,
+    originalPrice: 16999,
+    icon: Icons.laptop_mac,
+    imageAsset: 'public/item-laptop.jpg',
+    description:
+        'Reliable laptop for school, online work, and barangay office tasks. Includes charger and 6-month local warranty.',
+    category: 'Electronics',
+    rating: 4.8,
+    reviews: 214,
+    sold: 430,
+    stock: 7,
+    eta: 'Same-day in Old Cabalan',
+    verified: true,
+  ),
+  _ResidentProductData(
+    title: 'Epson EcoTank L3210',
+    seller: 'Cabalan Office Depot',
+    price: 8290,
+    originalPrice: 8990,
+    icon: Icons.print,
+    imageAsset: 'public/item-printer.jpg',
+    description:
+        'High-yield printer ideal for document printing and certificate forms. Compatible with refill ink bottles.',
+    category: 'Electronics',
+    rating: 4.7,
+    reviews: 168,
+    sold: 292,
+    stock: 12,
+    eta: 'Ships within 24 hours',
+    verified: true,
+  ),
+  _ResidentProductData(
+    title: 'Foldable Study Table',
+    seller: 'R. Dela Cruz Furnitures',
+    price: 2499,
+    originalPrice: 2999,
+    icon: Icons.table_restaurant,
+    imageAsset: 'public/item-table.jpg',
+    description:
+        'Space-saving foldable table for home study and small work areas with powder-coated steel frame.',
+    category: 'Furniture',
+    rating: 4.6,
+    reviews: 96,
+    sold: 205,
+    stock: 18,
+    eta: 'Pickup or 1-2 days delivery',
+  ),
+  _ResidentProductData(
+    title: 'Emergency Go Bag',
+    seller: 'Barangay Safety Co-op',
+    price: 1250,
+    originalPrice: 1450,
+    icon: Icons.backpack,
+    imageAsset: 'public/item-gobag.jpg',
+    description:
+        'Preparedness bag with first aid basics, flashlight, whistle, and waterproof storage pouches.',
+    category: 'Emergency',
+    rating: 4.9,
+    reviews: 302,
+    sold: 920,
+    stock: 30,
+    eta: 'Ready to deliver today',
+  ),
+];
+
 class ResidentMarketPage extends StatefulWidget {
   const ResidentMarketPage({super.key});
 
@@ -1343,74 +1412,6 @@ class ResidentMarketPage extends StatefulWidget {
 }
 
 class _ResidentMarketPageState extends State<ResidentMarketPage> {
-  static const _products = [
-    _ResidentProductData(
-      title: 'Lenovo IdeaPad 15.6"',
-      seller: 'L. Nadong Electronics',
-      price: 14999,
-      originalPrice: 16999,
-      icon: Icons.laptop_mac,
-      imageAsset: 'public/item-laptop.jpg',
-      description:
-          'Reliable laptop for school, online work, and barangay office tasks. Includes charger and 6-month local warranty.',
-      category: 'Electronics',
-      rating: 4.8,
-      reviews: 214,
-      sold: 430,
-      stock: 7,
-      eta: 'Same-day in Old Cabalan',
-      verified: true,
-    ),
-    _ResidentProductData(
-      title: 'Epson EcoTank L3210',
-      seller: 'Cabalan Office Depot',
-      price: 8290,
-      originalPrice: 8990,
-      icon: Icons.print,
-      imageAsset: 'public/item-printer.jpg',
-      description:
-          'High-yield printer ideal for document printing and certificate forms. Compatible with refill ink bottles.',
-      category: 'Electronics',
-      rating: 4.7,
-      reviews: 168,
-      sold: 292,
-      stock: 12,
-      eta: 'Ships within 24 hours',
-      verified: true,
-    ),
-    _ResidentProductData(
-      title: 'Foldable Study Table',
-      seller: 'R. Dela Cruz Furnitures',
-      price: 2499,
-      originalPrice: 2999,
-      icon: Icons.table_restaurant,
-      imageAsset: 'public/item-table.jpg',
-      description:
-          'Space-saving foldable table for home study and small work areas with powder-coated steel frame.',
-      category: 'Furniture',
-      rating: 4.6,
-      reviews: 96,
-      sold: 205,
-      stock: 18,
-      eta: 'Pickup or 1-2 days delivery',
-    ),
-    _ResidentProductData(
-      title: 'Emergency Go Bag',
-      seller: 'Barangay Safety Co-op',
-      price: 1250,
-      originalPrice: 1450,
-      icon: Icons.backpack,
-      imageAsset: 'public/item-gobag.jpg',
-      description:
-          'Preparedness bag with first aid basics, flashlight, whistle, and waterproof storage pouches.',
-      category: 'Emergency',
-      rating: 4.9,
-      reviews: 302,
-      sold: 920,
-      stock: 30,
-      eta: 'Ready to deliver today',
-    ),
-  ];
 
   static const _sortOptions = [
     'Popular',
@@ -1441,7 +1442,7 @@ class _ResidentMarketPageState extends State<ResidentMarketPage> {
 
   List<String> get _categories {
     final values = <String>{'All'};
-    for (final item in _products) {
+    for (final item in _residentMarketplaceProducts) {
       values.add(item.category);
     }
     return values.toList();
@@ -1449,7 +1450,7 @@ class _ResidentMarketPageState extends State<ResidentMarketPage> {
 
   List<_ResidentProductData> get _visibleProducts {
     final query = _searchController.text.trim().toLowerCase();
-    final filtered = _products.where((item) {
+    final filtered = _residentMarketplaceProducts.where((item) {
       final matchesCategory =
           _selectedCategory == 'All' || item.category == _selectedCategory;
       final haystack =

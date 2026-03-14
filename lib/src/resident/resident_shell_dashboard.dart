@@ -506,50 +506,58 @@ class ResidentDrawer extends StatelessWidget {
   void _openLogoutSheet(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Are you sure you want to log out?',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: () async {
-                      _authToken = null;
-                      _clearResidentSessionProfile();
-                      if (!context.mounted) {
-                        return;
-                      }
-                      Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const RoleGatewayScreen(),
-                        ),
-                        (route) => false,
-                      );
-                    },
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF2E35D3),
+      builder: (sheetContext) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            16 + MediaQuery.of(sheetContext).padding.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Are you sure you want to log out?',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(sheetContext),
+                      child: const Text('Cancel'),
                     ),
-                    child: const Text('Yes, Log out'),
                   ),
-                ),
-              ],
-            ),
-          ],
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () async {
+                        _authToken = null;
+                        _clearResidentSessionProfile();
+                        if (!context.mounted) {
+                          return;
+                        }
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const RoleGatewayScreen(),
+                          ),
+                          (route) => false,
+                        );
+                      },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF2E35D3),
+                      ),
+                      child: const Text('Yes, Log out'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -788,63 +796,18 @@ class ResidentDashboardPage extends StatelessWidget {
           _sectionHeader(
             context,
             'Community Highlights',
-            'View All',
+            'Open Feed',
             onAction: () => Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (_) => _ResidentHighlightsPage(
-                  title: 'Community Highlights',
-                  items: _communityHighlights,
-                  openToMarket: false,
-                ),
-              ),
+              MaterialPageRoute(builder: (_) => const CommunityPage()),
             ),
           ),
           const SizedBox(height: 8),
-          SizedBox(
-            height: 198,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _communityHighlights.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 10),
-              itemBuilder: (_, i) {
-                final item = _communityHighlights[i];
-                return _highlightCard(
-                  context,
-                  item,
-                  onTap: () {
-                    if (item.isSocialConnect) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => _ResidentSocialConnectPage(
-                            platform: item.socialPlatform!,
-                            icon: item.icon,
-                            start: item.start,
-                            end: item.end,
-                          ),
-                        ),
-                      );
-                      return;
-                    }
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => _ResidentHighlightDetailPage(
-                          data: item,
-                          openToMarket: false,
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
+          const _DashboardCommunityFeedPreview(),
           const SizedBox(height: 14),
           _sectionHeader(
             context,
-            'Marketplace Picks',
+            'Marketplace',
             'Open Market',
             onAction: () => Navigator.push(
               context,
@@ -852,27 +815,7 @@ class ResidentDashboardPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          SizedBox(
-            height: 198,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _marketHighlights.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 10),
-              itemBuilder: (_, i) => _highlightCard(
-                context,
-                _marketHighlights[i],
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => _ResidentHighlightDetailPage(
-                      data: _marketHighlights[i],
-                      openToMarket: true,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
+          const _DashboardMarketplacePreview(),
         ],
       ),
     );
@@ -1387,6 +1330,578 @@ class ResidentDashboardPage extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+List<_CommunityPost> _dashboardCommunitySeedPosts() {
+  return [
+    _CommunityPost(
+      author: 'Barangay West Tapinac',
+      message:
+          'Clean-up drive this Saturday at 7:00 AM. Bring gloves, water, and meet at the covered court. Volunteers will receive meal packs after the activity.',
+      postedAt: DateTime.now().subtract(const Duration(minutes: 26)),
+      hasPhoto: true,
+      likes: 38,
+      likedByMe: false,
+      comments: 6,
+      isOfficial: true,
+    ),
+    _CommunityPost(
+      author: 'Youth Council',
+      message:
+          'Basketball league registration is now open. Submit your team roster before Friday, 5:00 PM at the SK office.',
+      postedAt: DateTime.now().subtract(const Duration(hours: 2, minutes: 15)),
+      hasPhoto: false,
+      likes: 21,
+      likedByMe: false,
+      comments: 4,
+      isOfficial: false,
+    ),
+  ];
+}
+
+class _DashboardCommunityFeedPreview extends StatefulWidget {
+  const _DashboardCommunityFeedPreview();
+
+  @override
+  State<_DashboardCommunityFeedPreview> createState() =>
+      _DashboardCommunityFeedPreviewState();
+}
+
+class _DashboardCommunityFeedPreviewState
+    extends State<_DashboardCommunityFeedPreview> {
+  late final List<_CommunityPost> _posts;
+
+  @override
+  void initState() {
+    super.initState();
+    _posts = _dashboardCommunitySeedPosts();
+  }
+
+  Future<void> _createPost() async {
+    final createdPost = await Navigator.push<_CommunityPost>(
+      context,
+      MaterialPageRoute(builder: (_) => const CommunityCreatePostPage()),
+    );
+    if (createdPost == null || !mounted) {
+      return;
+    }
+    setState(() => _posts.insert(0, createdPost));
+    _showFeature(context, 'Post published to community feed.');
+  }
+
+  Future<void> _openPost(_CommunityPost post) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => _CommunityPostDetailPage(post: post)),
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
+  }
+
+  void _toggleLike(_CommunityPost post) {
+    setState(() => post.toggleLike());
+  }
+
+  Future<void> _addComment(_CommunityPost post) async {
+    final comment = await _promptCommunityComment(context);
+    if (comment == null || !mounted) {
+      return;
+    }
+    setState(() => post.addComment(comment));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final previewPosts = _posts.take(2).toList();
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFE3E6EF)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x10000000),
+                blurRadius: 10,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  const CircleAvatar(
+                    radius: 22,
+                    backgroundColor: Color(0xFFFFEAEA),
+                    child: Icon(
+                      Icons.person,
+                      color: Color(0xFFCB1010),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(999),
+                      onTap: _createPost,
+                      child: Ink(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF5F6FA),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: const Color(0xFFE3E6EF)),
+                        ),
+                        child: Text(
+                          "What's happening in ${_residentFirstName()}'s barangay?",
+                          style: const TextStyle(
+                            color: Color(0xFF6A7088),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              const Divider(height: 1),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _feedComposerAction(
+                      icon: Icons.edit_rounded,
+                      label: 'Post',
+                      color: const Color(0xFF1877F2),
+                      onTap: _createPost,
+                    ),
+                  ),
+                  Expanded(
+                    child: _feedComposerAction(
+                      icon: Icons.photo_library_rounded,
+                      label: 'Photo',
+                      color: const Color(0xFF17A34A),
+                      onTap: _createPost,
+                    ),
+                  ),
+                  Expanded(
+                    child: _feedComposerAction(
+                      icon: Icons.event_rounded,
+                      label: 'Event',
+                      color: const Color(0xFFE46A17),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const CommunityPage()),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        ...previewPosts.map(
+          (post) => _CommunityFeedCard(
+            post: post,
+            onOpen: () => _openPost(post),
+            onToggleLike: () => _toggleLike(post),
+            onAddComment: () => _addComment(post),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _feedComposerAction({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 18),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF47506B),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardMarketplacePreview extends StatelessWidget {
+  const _DashboardMarketplacePreview();
+
+  String _currency(double amount) => 'PHP ${amount.toStringAsFixed(0)}';
+
+  String _compactCount(int value) {
+    if (value >= 1000) {
+      return '${(value / 1000).toStringAsFixed(value >= 10000 ? 0 : 1)}k';
+    }
+    return '$value';
+  }
+
+  int _discountPercent(_ResidentProductData item) {
+    final original = item.originalPrice;
+    if (original == null || original <= item.price) {
+      return 0;
+    }
+    return ((original - item.price) / original * 100).round();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final products = _residentMarketplaceProducts.take(4).toList();
+    final categories = <String>{
+      for (final item in _residentMarketplaceProducts) item.category,
+    }.toList();
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF1877F2), Color(0xFF4B9BFF)],
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x241877F2),
+                blurRadius: 14,
+                offset: Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Browse like a real marketplace',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Verified sellers, visible prices, ratings, and quick add-to-cart actions.',
+                      style: TextStyle(
+                        color: Color(0xFFDDEBFF),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    FilledButton(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ResidentMarketPage(),
+                        ),
+                      ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF1869D2),
+                      ),
+                      child: const Text('Shop Now'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                width: 62,
+                height: 62,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Icon(
+                  Icons.storefront_rounded,
+                  color: Colors.white,
+                  size: 34,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 36,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: categories.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (_, i) => Chip(
+              label: Text(categories[i]),
+              backgroundColor: Colors.white,
+              side: const BorderSide(color: Color(0xFFDDE3F0)),
+              labelStyle: const TextStyle(
+                color: Color(0xFF49506C),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: products.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 0.64,
+          ),
+          itemBuilder: (_, i) => _productCard(context, products[i]),
+        ),
+      ],
+    );
+  }
+
+  Widget _productCard(BuildContext context, _ResidentProductData item) {
+    final discount = _discountPercent(item);
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => _ResidentProductPreviewPage(item: item),
+        ),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE4E7F2)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x10000000),
+              blurRadius: 9,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              children: [
+                Container(
+                  height: 112,
+                  margin: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    color: const Color(0xFFF0F4FF),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: Image.asset(
+                      item.imageAsset,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Icon(
+                        item.icon,
+                        size: 46,
+                        color: const Color(0xFF3F4EB5),
+                      ),
+                    ),
+                  ),
+                ),
+                if (discount > 0)
+                  Positioned(
+                    top: 14,
+                    left: 14,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE84D3C),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '-$discount%',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                Positioned(
+                  right: 14,
+                  bottom: 14,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.52),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      item.eta,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF2F3348),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item.seller,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF6A7088),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      if (item.verified)
+                        const Icon(
+                          Icons.verified_rounded,
+                          size: 14,
+                          color: Color(0xFF1877F2),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _currency(item.price),
+                    style: const TextStyle(
+                      color: Color(0xFF1877F2),
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                    ),
+                  ),
+                  if (item.originalPrice != null)
+                    Text(
+                      _currency(item.originalPrice!),
+                      style: const TextStyle(
+                        color: Color(0xFF949AAF),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        decoration: TextDecoration.lineThrough,
+                      ),
+                    ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.star_rounded,
+                        size: 16,
+                        color: Color(0xFFF4B133),
+                      ),
+                      const SizedBox(width: 3),
+                      Text(
+                        '${item.rating.toStringAsFixed(1)} (${item.reviews})',
+                        style: const TextStyle(
+                          color: Color(0xFF5F6680),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${_compactCount(item.sold)} sold',
+                          style: const TextStyle(
+                            color: Color(0xFF7A8198),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: () {
+                          _ResidentCartHub.addProduct(item, qty: 1);
+                          _showFeature(context, '${item.title} added to cart.');
+                        },
+                        child: Ink(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE7F1FF),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.add_shopping_cart_rounded,
+                            size: 17,
+                            color: Color(0xFF1877F2),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

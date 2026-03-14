@@ -6,6 +6,9 @@ const _officialSurface = Color(0xFFF5F6FB);
 const _officialCardBorder = Color(0xFFE4E7F1);
 const _officialText = Color(0xFF252A3D);
 const _officialSubtext = Color(0xFF636A82);
+const _officialSoftAccent = Color(0xFFFFEAEA);
+const _officialSurfaceBlend = Color(0xFFF3ECEC);
+const _officialHeroSubtext = Color(0xFFFFD8D8);
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -80,120 +83,123 @@ class _HomeShellState extends State<HomeShell> {
       ),
       drawer: Drawer(
         backgroundColor: const Color(0xFFFCFCFF),
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            const DrawerHeader(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [_officialHeaderStart, _officialHeaderEnd],
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _BarangayMoLogo(width: 150),
-                  SizedBox(height: 10),
-                  Text(
-                    'Barangay Officials',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Administrative tools and governance controls',
-                    style: TextStyle(
-                      color: Color(0xFFFDE5E5),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
+        child: Builder(
+          builder: (drawerContext) => ListView(
+            padding: EdgeInsets.only(
+              bottom: 12 + MediaQuery.of(drawerContext).padding.bottom,
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
-              child: Container(
+            children: [
+              const DrawerHeader(
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: _officialCardBorder),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x14000000),
-                      blurRadius: 8,
-                      offset: Offset(0, 4),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [_officialHeaderStart, _officialHeaderEnd],
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _BarangayMoLogo(width: 150),
+                    SizedBox(height: 10),
+                    Text(
+                      'Barangay Officials',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Administrative tools and governance controls',
+                      style: TextStyle(
+                        color: Color(0xFFFDE5E5),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ],
                 ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                  leading: Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFEFEA),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(
-                      Icons.location_city,
-                      color: _officialHeaderStart,
-                    ),
-                  ),
-                  title: const Text(
-                    'West Tapinac Barangay Profile',
-                    style: TextStyle(
-                      color: _officialText,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  subtitle: const Text(
-                    'City of Olongapo, Zambales',
-                    style: TextStyle(
-                      color: _officialSubtext,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const OfficialBarangayProfilePage(),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: _officialCardBorder),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x14000000),
+                        blurRadius: 8,
+                        offset: Offset(0, 4),
                       ),
-                    );
-                  },
+                    ],
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                    leading: Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFEFEA),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(
+                        Icons.location_city,
+                        color: _officialHeaderStart,
+                      ),
+                    ),
+                    title: const Text(
+                      'West Tapinac Barangay Profile',
+                      style: TextStyle(
+                        color: _officialText,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      'City of Olongapo, Zambales',
+                      style: TextStyle(
+                        color: _officialSubtext,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const OfficialBarangayProfilePage(),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
-            ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(14, 2, 14, 6),
-              child: Text(
-                'Menu',
-                style: TextStyle(
-                  color: _officialSubtext,
-                  fontWeight: FontWeight.w700,
+              const Padding(
+                padding: EdgeInsets.fromLTRB(14, 2, 14, 6),
+                child: Text(
+                  'Menu',
+                  style: TextStyle(
+                    color: _officialSubtext,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-            ),
-            _m(context, 'Barangay Profile'),
-            _m(context, 'Barangay Activation'),
-            _m(context, 'Settings'),
-            _m(context, 'RBI Records'),
-            _m(context, 'FAQs'),
-            _m(context, 'Notifications'),
-            _m(context, 'Support'),
-            _m(context, 'Bug Report'),
-            _m(context, 'Terms & Policies'),
-            _m(context, 'Log out'),
-            _m(context, 'Delete Account', color: const Color(0xFFCD3D3D)),
-          ],
+              _m(context, 'Barangay Activation'),
+              _m(context, 'Settings'),
+              _m(context, 'RBI Records'),
+              _m(context, 'FAQs'),
+              _m(context, 'Notifications'),
+              _m(context, 'Support'),
+              _m(context, 'Bug Report'),
+              _m(context, 'Terms & Policies'),
+              _m(context, 'Log out'),
+              _m(context, 'Delete Account', color: const Color(0xFFCD3D3D)),
+            ],
+          ),
         ),
       ),
       body: pages[tab],
@@ -412,7 +418,7 @@ class _OfficialHomePage extends StatelessWidget {
           child: const Text(
             'View All',
             style: TextStyle(
-              color: Color(0xFFB42828),
+              color: _officialHeaderEnd,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -447,7 +453,7 @@ class _OfficialHomePage extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, size: 15, color: const Color(0xFF9A4B4B)),
+              Icon(icon, size: 15, color: _officialSubtext),
               const SizedBox(width: 6),
               Text(
                 label,
@@ -463,7 +469,7 @@ class _OfficialHomePage extends StatelessWidget {
           Text(
             value,
             style: const TextStyle(
-              color: Color(0xFFB01D1D),
+              color: _officialHeaderStart,
               fontWeight: FontWeight.w900,
               fontSize: 34,
             ),
@@ -530,13 +536,13 @@ class _OfficialHomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFFF7F8FC), Color(0xFFF3ECEC)],
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFF7F8FC), _officialSurfaceBlend],
+          ),
         ),
-      ),
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
         children: [
@@ -1463,31 +1469,31 @@ class _SimplePalette {
     final t = title.toLowerCase();
     if (t == 'market') {
       return const _SimplePalette(
-        heroStart: Color(0xFF9A3412),
-        heroEnd: Color(0xFFEA580C),
-        bgStart: Color(0xFFFFFAF5),
-        bgEnd: Color(0xFFFFF1E8),
-        accent: Color(0xFFC2410C),
-        softAccent: Color(0xFFFFF1E5),
+        heroStart: Color(0xFF9F1A1A),
+        heroEnd: Color(0xFFD73B3B),
+        bgStart: Color(0xFFFFF7F7),
+        bgEnd: Color(0xFFF7ECEC),
+        accent: Color(0xFFC92A2A),
+        softAccent: Color(0xFFFFEAEA),
       );
     }
     if (t == 'profile') {
       return const _SimplePalette(
-        heroStart: Color(0xFF1F3A5F),
-        heroEnd: Color(0xFF2E5A8B),
-        bgStart: Color(0xFFF5F8FC),
-        bgEnd: Color(0xFFEAF1F8),
-        accent: Color(0xFF254B76),
-        softAccent: Color(0xFFE7EEF8),
+        heroStart: Color(0xFF8E1717),
+        heroEnd: Color(0xFFC92A2A),
+        bgStart: Color(0xFFFFF8F8),
+        bgEnd: Color(0xFFF5ECEC),
+        accent: Color(0xFFB82323),
+        softAccent: Color(0xFFFFEEEE),
       );
     }
     return const _SimplePalette(
       heroStart: _officialHeaderStart,
       heroEnd: _officialHeaderEnd,
       bgStart: Color(0xFFF7F8FC),
-      bgEnd: Color(0xFFF3ECEC),
+      bgEnd: _officialSurfaceBlend,
       accent: _officialHeaderStart,
-      softAccent: Color(0xFFFFEFEA),
+      softAccent: _officialSoftAccent,
     );
   }
 }
@@ -1994,11 +2000,11 @@ class _OfficialRbiRecordsPageState extends State<OfficialRbiRecordsPage> {
       ),
       selected: selected,
       onSelected: (_) => setState(() => _selectedTab = label),
-      selectedColor: const Color(0xFFCD1212),
+      selectedColor: _officialHeaderStart,
       backgroundColor: const Color(0xFFF0F2F6),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
       side: BorderSide(
-        color: selected ? const Color(0xFFCD1212) : Colors.transparent,
+        color: selected ? _officialHeaderStart : Colors.transparent,
       ),
       showCheckmark: false,
     );
@@ -2710,7 +2716,7 @@ class _OfficialNotificationsPageState extends State<OfficialNotificationsPage> {
               border: Border.all(
                 color: item['read'] as bool
                     ? _officialCardBorder
-                    : const Color(0xFFFFD0D0),
+                    : _officialSoftAccent,
               ),
             ),
             child: ListTile(
@@ -2882,7 +2888,7 @@ class OfficialSharePage extends StatelessWidget {
       label: Text(label),
       style: OutlinedButton.styleFrom(
         foregroundColor: _officialHeaderStart,
-        side: const BorderSide(color: Color(0xFFF2CACA)),
+        side: const BorderSide(color: _officialCardBorder),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),
     );
@@ -2937,7 +2943,7 @@ class OfficialSharePage extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: const Color(0xFFF1D7D7)),
+                      border: Border.all(color: _officialCardBorder),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(12),
@@ -2951,7 +2957,7 @@ class OfficialSharePage extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFF1DCDC)),
+                    border: Border.all(color: _officialCardBorder),
                     boxShadow: const [
                       BoxShadow(
                         color: Color(0x10000000),
@@ -3008,7 +3014,7 @@ class OfficialSharePage extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFF1DCDC)),
+                    border: Border.all(color: _officialCardBorder),
                   ),
                   child: Column(
                     children: [
@@ -4085,37 +4091,115 @@ class _OfficialBarangayProfilePageState
           padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
           child: Column(
             children: [
-              SizedBox(
+              Container(
                 height: 215,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: FlutterMap(
-                    options: const MapOptions(
-                      initialCenter: _mapCenter,
-                      initialZoom: 14.9,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: _profileCardBorder),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x12000000),
+                      blurRadius: 8,
+                      offset: Offset(0, 4),
                     ),
-                    children: [
-                      TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.example.barangaymo_app',
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  children: [
+                    FlutterMap(
+                      options: const MapOptions(
+                        initialCenter: _mapCenter,
+                        initialZoom: 14.9,
+                        interactionOptions: InteractionOptions(
+                          flags:
+                              InteractiveFlag.drag | InteractiveFlag.pinchZoom,
+                        ),
                       ),
-                      const MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: _mapCenter,
-                            width: 42,
-                            height: 42,
-                            child: Icon(
-                              Icons.location_on,
-                              color: _officialHeaderStart,
-                              size: 34,
+                      children: [
+                        TileLayer(
+                          urlTemplate:
+                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName: 'com.example.barangaymo_app',
+                        ),
+                        const MarkerLayer(
+                          markers: [
+                            Marker(
+                              point: _mapCenter,
+                              width: 44,
+                              height: 44,
+                              child: Icon(
+                                Icons.location_on,
+                                color: _officialHeaderStart,
+                                size: 36,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
+                      ],
+                    ),
+                    Positioned(
+                      left: 12,
+                      right: 12,
+                      bottom: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.96),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: _profileCardBorder),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.place_rounded,
+                              color: _officialHeaderStart,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'West Tapinac, City of Olongapo, Zambales',
+                                style: TextStyle(
+                                  color: _officialText,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const _FullscreenMapPage(
+                                    title: 'Barangay Address Map',
+                                    initialCenter: _mapCenter,
+                                    initialZoom: 16,
+                                    pins: [
+                                      _MapPin(
+                                        point: _mapCenter,
+                                        icon: Icons.location_on,
+                                        color: _officialHeaderStart,
+                                        label:
+                                            'West Tapinac, City of Olongapo, Zambales',
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              child: const Text(
+                                'Full View',
+                                style: TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 10),
@@ -4401,7 +4485,7 @@ class SerbilisServicesPage extends StatelessWidget {
           ),
           bottom: const TabBar(
             labelColor: Colors.white,
-            unselectedLabelColor: Color(0xFFFFD8D8),
+            unselectedLabelColor: _officialHeroSubtext,
             indicatorColor: Colors.white,
             indicatorWeight: 3,
             labelStyle: TextStyle(fontWeight: FontWeight.w800),
@@ -4412,13 +4496,13 @@ class SerbilisServicesPage extends StatelessWidget {
           ),
         ),
         body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFFF7F8FC), Color(0xFFF3ECEC)],
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFFF7F8FC), _officialSurfaceBlend],
+              ),
             ),
-          ),
           child: TabBarView(
             children: [
               _serviceGrid(context, _brgyServices),
@@ -4480,7 +4564,7 @@ class SerbilisServicesPage extends StatelessWidget {
                     Text(
                       'Run barangay workflows and track resident-facing service modules.',
                       style: TextStyle(
-                        color: Color(0xFFFFE5E5),
+                        color: _officialHeroSubtext,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -4567,6 +4651,407 @@ class SerbilisServicesPage extends StatelessWidget {
   }
 }
 
+class OfficialGovAgenciesPage extends StatelessWidget {
+  const OfficialGovAgenciesPage({super.key});
+
+  static const _agencies = [
+    _OfficialAgencyInfo(
+      label: 'DFA',
+      displayName: 'Department of Foreign Affairs',
+      website: 'https://dfa.gov.ph',
+      accent: Color(0xFF154A99),
+      icon: Icons.public_rounded,
+    ),
+    _OfficialAgencyInfo(
+      label: 'DILG',
+      displayName: 'Department of the Interior and Local Government',
+      website: 'https://dilg.gov.ph',
+      accent: Color(0xFFC68B0D),
+      icon: Icons.account_balance_rounded,
+    ),
+    _OfficialAgencyInfo(
+      label: 'DOLE',
+      displayName: 'Department of Labor and Employment',
+      website: 'https://www.dole.gov.ph',
+      accent: Color(0xFF2659B8),
+      icon: Icons.work_outline_rounded,
+    ),
+    _OfficialAgencyInfo(
+      label: 'DPWH',
+      displayName: 'Department of Public Works and Highways',
+      website: 'https://www.dpwh.gov.ph',
+      accent: Color(0xFF324D93),
+      icon: Icons.foundation_rounded,
+    ),
+    _OfficialAgencyInfo(
+      label: 'DSWD',
+      displayName: 'Department of Social Welfare and Development',
+      website: 'https://www.dswd.gov.ph',
+      accent: Color(0xFF6B6E77),
+      icon: Icons.volunteer_activism_rounded,
+    ),
+    _OfficialAgencyInfo(
+      label: 'LTO',
+      displayName: 'Land Transportation Office',
+      website: 'https://lto.gov.ph',
+      accent: Color(0xFF1F4FA2),
+      icon: Icons.directions_car_filled_rounded,
+    ),
+    _OfficialAgencyInfo(
+      label: 'OP',
+      displayName: 'Office of the President',
+      website: 'https://op-proper.gov.ph',
+      accent: Color(0xFF4F7FB1),
+      icon: Icons.flag_circle_rounded,
+    ),
+    _OfficialAgencyInfo(
+      label: 'OLG',
+      displayName: 'City Government of Olongapo',
+      website: 'https://www.olongapocity.gov.ph',
+      accent: Color(0xFF5B8872),
+      icon: Icons.location_city_rounded,
+    ),
+    _OfficialAgencyInfo(
+      label: 'PNP',
+      displayName: 'Philippine National Police',
+      website: 'https://pnp.gov.ph',
+      accent: Color(0xFFB43434),
+      icon: Icons.local_police_rounded,
+    ),
+    _OfficialAgencyInfo(
+      label: 'SEN',
+      displayName: 'Senate of the Philippines',
+      website: 'https://legacy.senate.gov.ph',
+      accent: Color(0xFFC39B2C),
+      icon: Icons.how_to_vote_rounded,
+    ),
+    _OfficialAgencyInfo(
+      label: 'CSC',
+      displayName: 'Civil Service Commission',
+      website: 'https://csc.gov.ph',
+      accent: Color(0xFF4A59A8),
+      icon: Icons.badge_rounded,
+    ),
+    _OfficialAgencyInfo(
+      label: 'TESDA',
+      displayName: 'Technical Education and Skills Development Authority',
+      website: 'https://www.tesda.gov.ph',
+      accent: Color(0xFF3E7C86),
+      icon: Icons.school_rounded,
+    ),
+  ];
+
+  Future<void> _showLeaveDialog(
+    BuildContext context,
+    _OfficialAgencyInfo agency,
+  ) {
+    return showDialog<void>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(24, 26, 24, 20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 110,
+                  height: 110,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF6F6F6),
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                  child: const Icon(
+                    Icons.logout_rounded,
+                    size: 68,
+                    color: Color(0xFFBEBEBE),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'You are leaving BarangayMo',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFF2B2D3A),
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Are you sure you want to visit ${agency.displayName}\'s website?',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Color(0xFF666B82),
+                    fontWeight: FontWeight.w600,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFFE7E7E7),
+                          foregroundColor: const Color(0xFF353535),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        child: const Text('Stay here'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () {
+                          Navigator.pop(dialogContext);
+                          _showFeature(
+                            context,
+                            'Open this website in your browser: ${agency.website}',
+                          );
+                        },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFFD70000),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        child: const Text('Continue'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _agencyTile(BuildContext context, _OfficialAgencyInfo agency) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: () => _showLeaveDialog(context, agency),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 86,
+            height: 86,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white,
+              border: Border.all(color: const Color(0xFFE8E8E8)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x12000000),
+                  blurRadius: 8,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Center(
+              child: Container(
+                width: 62,
+                height: 62,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: agency.accent.withValues(alpha: 0.12),
+                  border: Border.all(
+                    color: agency.accent.withValues(alpha: 0.28),
+                    width: 2,
+                  ),
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Icon(agency.icon, color: agency.accent, size: 24),
+                    Positioned(
+                      bottom: 9,
+                      child: Text(
+                        agency.label,
+                        style: TextStyle(
+                          color: agency.accent,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 10,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            agency.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFF2F3248),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5),
+      appBar: AppBar(
+        title: const Text('Government\nAgencies'),
+        backgroundColor: const Color(0xFFD70000),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        toolbarHeight: 82,
+        actions: [
+          IconButton(
+            onPressed: () => _showFeature(context, 'No new notifications.'),
+            icon: const Icon(Icons.notifications_none_rounded),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 18),
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(color: const Color(0xFFE8E8E8)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x12000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _agencies.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    mainAxisSpacing: 14,
+                    crossAxisSpacing: 10,
+                    childAspectRatio: 0.8,
+                  ),
+                  itemBuilder: (_, index) =>
+                      _agencyTile(context, _agencies[index]),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFFB80F0F), Color(0xFFD73232)],
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x22B11212),
+                        blurRadius: 10,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'REGISTRY OF BARANGAY',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 12,
+                              ),
+                            ),
+                            Text(
+                              'INHABITANTS (RBI)',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 12,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            Text(
+                              'Avail services by registering your barangay.',
+                              style: TextStyle(
+                                color: Color(0xFFFFE5E5),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        width: 76,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.14),
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.badge_rounded,
+                          color: Colors.white,
+                          size: 34,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OfficialAgencyInfo {
+  final String label;
+  final String displayName;
+  final String website;
+  final Color accent;
+  final IconData icon;
+
+  const _OfficialAgencyInfo({
+    required this.label,
+    required this.displayName,
+    required this.website,
+    required this.accent,
+    required this.icon,
+  });
+}
+
 class _ServiceAction {
   final String name;
   final IconData icon;
@@ -4585,7 +5070,16 @@ const _brgyServices = [
     Icons.menu_book,
     SimpleSerbilisPage(title: 'Education', isOfficial: true),
   ),
-  _ServiceAction('Provincial Gov', Icons.account_balance, GovAgenciesPage()),
+  _ServiceAction(
+    'Provincial Govt',
+    Icons.apartment_rounded,
+    GovAgenciesPage(),
+  ),
+  _ServiceAction(
+    'Gov Agencies',
+    Icons.account_balance,
+    const OfficialGovAgenciesPage(),
+  ),
   _ServiceAction('Health', Icons.health_and_safety, HealthPage()),
   _ServiceAction(
     'Other Barangay',
@@ -4670,11 +5164,11 @@ class SimpleSerbilisPage extends StatelessWidget {
     final appBarBg = isOfficial ? const Color(0xFFF7F8FC) : residentAppBarBg;
     final fg = isOfficial ? const Color(0xFF2F3248) : residentFg;
     final bgStart = isOfficial ? const Color(0xFFF7F8FC) : residentBgStart;
-    final bgEnd = isOfficial ? const Color(0xFFF3ECEC) : residentBgEnd;
+    final bgEnd = isOfficial ? _officialSurfaceBlend : residentBgEnd;
     final heroStart = isOfficial ? _officialHeaderStart : residentHeroStart;
     final heroEnd = isOfficial ? _officialHeaderEnd : residentHeroEnd;
     final heroSubtext = isOfficial
-        ? const Color(0xFFFFD8D8)
+        ? _officialHeroSubtext
         : const Color(0xFFDDE3FF);
     return Scaffold(
       appBar: AppBar(
@@ -5061,10 +5555,10 @@ class _SerbilisModuleScreenState extends State<_SerbilisModuleScreen> {
         ? const Color(0xFFF7F8FC)
         : const Color(0xFFF5F7FF);
     final bgEnd = widget.isOfficial
-        ? const Color(0xFFF3ECEC)
+        ? _officialSurfaceBlend
         : const Color(0xFFF0F3FF);
     final heroSubtext = widget.isOfficial
-        ? const Color(0xFFFFD8D8)
+        ? _officialHeroSubtext
         : const Color(0xFFDDE3FF);
     return Scaffold(
       appBar: AppBar(

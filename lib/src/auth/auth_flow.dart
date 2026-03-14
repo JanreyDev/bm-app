@@ -2,6 +2,19 @@ part of barangaymo_app;
 
 enum UserRole { resident, official }
 
+const int _appPinLength = 6;
+const _officialThemePrimary = Color(0xFFD70000);
+const _officialThemeSecondary = Color(0xFFB22727);
+const _officialThemeBackground = Color(0xFFFFF4F4);
+const _officialThemeSurfaceWarm = Color(0xFFFFF6F6);
+const _officialThemeSurfaceCool = Color(0xFFFFEFEF);
+const _officialThemeSurfaceAlt = Color(0xFFFFEAEA);
+const _officialThemeBorder = Color(0xFFF0D1D1);
+const _officialThemeText = Color(0xFF5A2B2B);
+const _officialThemeSubtext = Color(0xFF7A5959);
+
+bool _isValidAppPin(String value) => RegExp(r'^\d{6}$').hasMatch(value);
+
 String? _authToken;
 String? _currentOfficialMobile;
 _ResidentSessionProfile? _currentResidentProfile;
@@ -180,14 +193,22 @@ class _FirstRoleAccessStore {
     return '$_keyPrefix$roleKey';
   }
 
-  static Future<bool> shouldOpenRegister(UserRole role) async {
+  static Future<bool> hasRegistered(UserRole role) async {
     final prefs = await SharedPreferences.getInstance();
-    return !(prefs.getBool(_keyFor(role)) ?? false);
+    return prefs.getBool(_keyFor(role)) ?? false;
+  }
+
+  static Future<bool> shouldOpenRegister(UserRole role) async {
+    return !(await hasRegistered(role));
+  }
+
+  static Future<void> markRegistered(UserRole role) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyFor(role), true);
   }
 
   static Future<void> markVisited(UserRole role) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_keyFor(role), true);
+    await markRegistered(role);
   }
 }
 
@@ -201,7 +222,7 @@ class _ResidentMpinStore {
 
   static Future<void> savePin(String mobile, String pin) async {
     final normalized = _normalizeMobileForKey(mobile);
-    if (normalized.isEmpty || pin.length != 4) {
+    if (normalized.isEmpty || !_isValidAppPin(pin)) {
       return;
     }
     final prefs = await SharedPreferences.getInstance();
@@ -213,7 +234,7 @@ class _ResidentMpinStore {
     final prefs = await SharedPreferences.getInstance();
     for (final variant in _mobileKeyVariants(mobile)) {
       final value = prefs.getString(_keyFor(variant));
-      if (value != null && value.length == 4) {
+      if (value != null && _isValidAppPin(value)) {
         return true;
       }
     }
@@ -351,7 +372,7 @@ class _OfficialMpinStore {
 
   static Future<void> savePin(String mobile, String pin) async {
     final normalized = _normalizeMobileForKey(mobile);
-    if (normalized.isEmpty || pin.length != 4) {
+    if (normalized.isEmpty || !_isValidAppPin(pin)) {
       return;
     }
     final prefs = await SharedPreferences.getInstance();
@@ -363,7 +384,7 @@ class _OfficialMpinStore {
     final prefs = await SharedPreferences.getInstance();
     for (final variant in _mobileKeyVariants(mobile)) {
       final value = prefs.getString(_keyFor(variant));
-      if (value != null && value.length == 4) {
+      if (value != null && _isValidAppPin(value)) {
         return true;
       }
     }
@@ -473,6 +494,7 @@ Future<void> _completeResidentSignIn(
   required String mobile,
   required String token,
   Map<String, dynamic>? user,
+  String? pin,
 }) async {
   final profile = _residentSessionProfileFromApiUser(
     user,
@@ -494,21 +516,17 @@ Future<void> _completeResidentSignIn(
     accountMobile: mobile,
     profile: _currentResidentProfile!,
   );
-  await _ResidentMpinStore.rememberMobile(mobile);
-  if (!context.mounted) {
-    return;
+  if (pin != null && _isValidAppPin(pin)) {
+    await _ResidentMpinStore.savePin(mobile, pin);
   }
-  final hasMpin = await _ResidentMpinStore.hasPin(mobile);
+  await _ResidentMpinStore.rememberMobile(mobile);
+  await _FirstRoleAccessStore.markRegistered(UserRole.resident);
   if (!context.mounted) {
     return;
   }
   Navigator.pushAndRemoveUntil(
     context,
-    MaterialPageRoute(
-      builder: (_) => hasMpin
-          ? const ResidentHomeShell()
-          : ResidentMpinSetupPage(mobile: _normalizeMobileForKey(mobile)),
-    ),
+    MaterialPageRoute(builder: (_) => const ResidentHomeShell()),
     (route) => false,
   );
 }
@@ -518,6 +536,7 @@ Future<void> _completeOfficialSignIn(
   required String mobile,
   required String token,
   required bool activationCompleted,
+  String? pin,
 }) async {
   final normalized = _normalizeMobileForKey(mobile);
   if (normalized.isEmpty) {
@@ -532,21 +551,17 @@ Future<void> _completeOfficialSignIn(
     mobile: normalized,
     activationCompleted: _officialActivationCompleted,
   );
-  await _OfficialMpinStore.rememberMobile(normalized);
-  if (!context.mounted) {
-    return;
+  if (pin != null && _isValidAppPin(pin)) {
+    await _OfficialMpinStore.savePin(normalized, pin);
   }
-  final hasMpin = await _OfficialMpinStore.hasPin(normalized);
+  await _OfficialMpinStore.rememberMobile(normalized);
+  await _FirstRoleAccessStore.markRegistered(UserRole.official);
   if (!context.mounted) {
     return;
   }
   Navigator.pushAndRemoveUntil(
     context,
-    MaterialPageRoute(
-      builder: (_) => hasMpin
-          ? _officialHomeForSession()
-          : OfficialMpinSetupPage(mobile: normalized),
-    ),
+    MaterialPageRoute(builder: (_) => _officialHomeForSession()),
     (route) => false,
   );
 }
@@ -596,11 +611,12 @@ class _AuthApi {
   static final _AuthApi instance = _AuthApi._();
 
   static const String _liveBaseUrl = 'https://api.barangaymo.com';
+  static const String _detectedLanBaseUrl = 'http://10.100.150.96:8000';
   static const String _configuredBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: '',
   );
-  static const Duration _requestTimeout = Duration(seconds: 15);
+  static const Duration _requestTimeout = Duration(seconds: 5);
 
   String _normalizeMobile(String input) {
     return input.replaceAll(RegExp(r'\D'), '');
@@ -632,7 +648,10 @@ class _AuthApi {
       } else {
         switch (defaultTargetPlatform) {
           case TargetPlatform.android:
+            add(_detectedLanBaseUrl);
             add('http://10.0.2.2:8000');
+            add('http://127.0.0.1:8000');
+            add('http://localhost:8000');
             break;
           case TargetPlatform.iOS:
           case TargetPlatform.macOS:
@@ -645,6 +664,7 @@ class _AuthApi {
             break;
         }
       }
+      return out;
     }
 
     add(_liveBaseUrl);
@@ -658,6 +678,11 @@ class _AuthApi {
 
   List<Uri> _endpointCandidates(String path) {
     final out = <Uri>[];
+    final normalizedPath = path.startsWith('/') ? path.substring(1) : path;
+    final pathVariants = <String>[
+      normalizedPath,
+      if (!normalizedPath.startsWith('auth/')) 'auth/$normalizedPath',
+    ];
 
     void add(String baseUrl, String currentPath) {
       final uri = _endpoint(baseUrl, currentPath);
@@ -668,10 +693,16 @@ class _AuthApi {
 
     for (final baseUrl in _baseUrlCandidates()) {
       if (baseUrl.toLowerCase().endsWith('/api')) {
-        add(baseUrl, path);
+        for (final variant in pathVariants) {
+          add(baseUrl, variant);
+        }
       } else {
-        add(baseUrl, 'api/$path');
-        add(baseUrl, path);
+        for (final variant in pathVariants) {
+          add(baseUrl, 'api/$variant');
+        }
+        for (final variant in pathVariants) {
+          add(baseUrl, variant);
+        }
       }
     }
 
@@ -685,6 +716,15 @@ class _AuthApi {
     final message = ((decodedBody['message'] as String?) ?? '').toLowerCase();
     return response.statusCode == 404 ||
         (message.contains('route') && message.contains('not be found'));
+  }
+
+  String _connectionHelpMessage() {
+    if (!bool.fromEnvironment('dart.vm.product') &&
+        !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android) {
+      return 'Cannot connect to local Laravel backend. Run `php artisan serve --host=0.0.0.0 --port=8000`, then use `flutter run --dart-define=API_BASE_URL=$_detectedLanBaseUrl`, or use `adb reverse tcp:8000 tcp:8000` over USB.';
+    }
+    return 'Cannot connect to server. Check backend URL and if Laravel is running.';
   }
 
   Future<_AuthRequestOutcome> _postToEndpointCandidates({
@@ -745,10 +785,10 @@ class _AuthApi {
         message: 'Please enter a valid mobile number.',
       );
     }
-    if (password.length < 6) {
+    if (!_isValidAppPin(password)) {
       return const _AuthApiResult(
         success: false,
-        message: 'PIN must be at least 6 characters.',
+        message: 'PIN must be 6 digits.',
       );
     }
     if (password != confirmPassword) {
@@ -785,17 +825,15 @@ class _AuthApi {
 
     if (response == null) {
       if (outcome.sawTimeout) {
-        return const _AuthApiResult(
+        return _AuthApiResult(
           success: false,
-          message:
-              'Server is taking too long to respond. Please check backend and try again.',
+          message: _connectionHelpMessage(),
         );
       }
       if (outcome.sawConnectionError) {
-        return const _AuthApiResult(
+        return _AuthApiResult(
           success: false,
-          message:
-              'Cannot connect to server. Check backend URL and if Laravel is running.',
+          message: _connectionHelpMessage(),
         );
       }
       return const _AuthApiResult(
@@ -846,17 +884,15 @@ class _AuthApi {
 
     if (response == null) {
       if (outcome.sawTimeout) {
-        return const _AuthApiResult(
+        return _AuthApiResult(
           success: false,
-          message:
-              'Server is taking too long to respond. Please check backend and try again.',
+          message: _connectionHelpMessage(),
         );
       }
       if (outcome.sawConnectionError) {
-        return const _AuthApiResult(
+        return _AuthApiResult(
           success: false,
-          message:
-              'Cannot connect to server. Check backend URL and if Laravel is running.',
+          message: _connectionHelpMessage(),
         );
       }
       return const _AuthApiResult(
@@ -920,16 +956,14 @@ class _AuthApi {
 
     if (response == null) {
       if (outcome.sawTimeout) {
-        return const _AuthApiResult(
+        return _AuthApiResult(
           success: false,
-          message:
-              'Server is taking too long to respond. Please check backend and try again.',
+          message: _connectionHelpMessage(),
         );
       }
-      return const _AuthApiResult(
+      return _AuthApiResult(
         success: false,
-        message:
-            'Cannot connect to server. Check backend URL and if Laravel is running.',
+        message: _connectionHelpMessage(),
       );
     }
 
@@ -973,16 +1007,14 @@ class _AuthApi {
 
     if (response == null) {
       if (outcome.sawTimeout) {
-        return const _AuthApiResult(
+        return _AuthApiResult(
           success: false,
-          message:
-              'Server is taking too long to respond. Please check backend and try again.',
+          message: _connectionHelpMessage(),
         );
       }
-      return const _AuthApiResult(
+      return _AuthApiResult(
         success: false,
-        message:
-            'Cannot connect to server. Check backend URL and if Laravel is running.',
+        message: _connectionHelpMessage(),
       );
     }
 
@@ -1018,17 +1050,15 @@ class _AuthApi {
 
     if (response == null) {
       if (outcome.sawTimeout) {
-        return const _AuthApiResult(
+        return _AuthApiResult(
           success: false,
-          message:
-              'Server is taking too long to respond. Please check backend and try again.',
+          message: _connectionHelpMessage(),
         );
       }
       if (outcome.sawConnectionError) {
-        return const _AuthApiResult(
+        return _AuthApiResult(
           success: false,
-          message:
-              'Cannot connect to server. Check backend URL and if Laravel is running.',
+          message: _connectionHelpMessage(),
         );
       }
       return const _AuthApiResult(
@@ -1197,15 +1227,11 @@ class RoleGatewayScreen extends StatelessWidget {
   const RoleGatewayScreen({super.key});
 
   Future<void> _openRoleEntry(BuildContext context, UserRole role) async {
-    final openRegister = await _FirstRoleAccessStore.shouldOpenRegister(role);
+    final hasRegistered = await _FirstRoleAccessStore.hasRegistered(role);
     if (!context.mounted) {
       return;
     }
-    if (openRegister) {
-      await _FirstRoleAccessStore.markVisited(role);
-      if (!context.mounted) {
-        return;
-      }
+    if (!hasRegistered) {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => AuthRegisterPage(role: role)),
@@ -1214,7 +1240,7 @@ class RoleGatewayScreen extends StatelessWidget {
     }
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => RoleAuthChoicePage(role: role)),
+      MaterialPageRoute(builder: (_) => _loginPageForRole(role)),
     );
   }
 
@@ -1297,7 +1323,7 @@ class RoleGatewayScreen extends StatelessWidget {
     final isResident = role == UserRole.resident;
     final accent = isResident
         ? const Color(0xFF2E35D3)
-        : const Color(0xFFD70000);
+        : _officialThemePrimary;
     final logoAsset = isResident
         ? 'public/bm-residents.png'
         : 'public/bm-officials.png';
@@ -1421,7 +1447,7 @@ class RoleAuthChoicePage extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              isResident ? 'Resident Access' : 'Official Access',
+              isResident ? 'Resident Log In' : 'Official Log In',
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
             ),
@@ -1434,7 +1460,7 @@ class RoleAuthChoicePage extends StatelessWidget {
               style: FilledButton.styleFrom(
                 backgroundColor: isResident
                     ? const Color(0xFF2E35D3)
-                    : const Color(0xFFD70000),
+                    : _officialThemePrimary,
               ),
               child: const Text('Register'),
             ),
@@ -1803,28 +1829,28 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
   bool get _isResident => widget.role == UserRole.resident;
 
   Color get _primaryColor =>
-      _isResident ? const Color(0xFF2E35D3) : const Color(0xFFD70000);
+      _isResident ? const Color(0xFF2E35D3) : _officialThemePrimary;
 
   String get _title =>
       _isResident ? 'Resident Registration' : 'Official Registration';
 
   Color get _surfaceStart =>
-      _isResident ? const Color(0xFFF4F7FF) : const Color(0xFFFFF6F6);
+      _isResident ? const Color(0xFFF4F7FF) : _officialThemeSurfaceWarm;
 
   Color get _surfaceEnd =>
-      _isResident ? const Color(0xFFEFF3FF) : const Color(0xFFFFEFEF);
+      _isResident ? const Color(0xFFEFF3FF) : _officialThemeSurfaceCool;
 
   Color get _fieldBorderColor =>
-      _isResident ? const Color(0xFFC6D1FA) : const Color(0xFFF0C8C8);
+      _isResident ? const Color(0xFFC6D1FA) : _officialThemeBorder;
 
   Color get _cardColor =>
-      _isResident ? const Color(0xFFFBFCFF) : const Color(0xFFFFFCFC);
+      _isResident ? const Color(0xFFFBFCFF) : const Color(0xFFFFFCF8);
 
   Color get _titleColor =>
-      _isResident ? const Color(0xFF26305F) : const Color(0xFF5A2424);
+      _isResident ? const Color(0xFF26305F) : _officialThemeText;
 
   Color get _labelColor =>
-      _isResident ? const Color(0xFF5D6788) : const Color(0xFF775B5B);
+      _isResident ? const Color(0xFF5D6788) : _officialThemeSubtext;
 
   OutlineInputBorder _inputBorder(Color color, {double width = 1}) {
     return OutlineInputBorder(
@@ -1926,6 +1952,7 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
           role: widget.role,
           mobile: _mobileController.text,
           debugOtpCode: result.otpDebugCode,
+          pin: _passwordController.text.trim(),
         ),
       ),
     );
@@ -2189,18 +2216,20 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
                   const SizedBox(height: 10),
                 ],
                 _sectionCard(
-                  title: 'Security',
+                  title: 'Security PIN',
                   children: [
                     TextFormField(
                       controller: _passwordController,
+                      keyboardType: TextInputType.number,
                       obscureText: true,
-                      decoration: _fieldDecoration('PIN'),
+                      maxLength: _appPinLength,
+                      decoration: _fieldDecoration('6-digit PIN').copyWith(
+                        counterText: '',
+                      ),
                       validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'PIN is required.';
-                        }
-                        if (value.length < 6) {
-                          return 'Minimum 6 characters.';
+                        final normalized = value?.trim() ?? '';
+                        if (!_isValidAppPin(normalized)) {
+                          return 'Enter a 6-digit PIN.';
                         }
                         return null;
                       },
@@ -2208,10 +2237,15 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
                     const SizedBox(height: 10),
                     TextFormField(
                       controller: _confirmPasswordController,
+                      keyboardType: TextInputType.number,
                       obscureText: true,
-                      decoration: _fieldDecoration('Confirm PIN'),
+                      maxLength: _appPinLength,
+                      decoration: _fieldDecoration(
+                        'Confirm 6-digit PIN',
+                      ).copyWith(counterText: ''),
                       validator: (value) {
-                        if (value != _passwordController.text) {
+                        if ((value?.trim() ?? '') !=
+                            _passwordController.text.trim()) {
                           return 'PINs do not match.';
                         }
                         return null;
@@ -2235,18 +2269,13 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
                 TextButton(
                   onPressed: _submitting
                       ? null
-                      : () => Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => _loginPageForRole(widget.role),
-                          ),
-                        ),
+                      : () => Navigator.pop(context),
                   child: Text(
-                    'Already have an account? Log in',
+                    'Back',
                     style: TextStyle(
                       color: _isResident
                           ? const Color(0xFF303A8D)
-                          : const Color(0xFFB22727),
+                          : _officialThemeSecondary,
                     ),
                   ),
                 ),
@@ -2263,12 +2292,14 @@ class AuthOtpVerificationPage extends StatefulWidget {
   final UserRole role;
   final String mobile;
   final String? debugOtpCode;
+  final String? pin;
 
   const AuthOtpVerificationPage({
     super.key,
     required this.role,
     required this.mobile,
     this.debugOtpCode,
+    this.pin,
   });
 
   @override
@@ -2285,7 +2316,7 @@ class _AuthOtpVerificationPageState extends State<AuthOtpVerificationPage> {
   bool get _isResident => widget.role == UserRole.resident;
 
   Color get _primaryColor =>
-      _isResident ? const Color(0xFF2E35D3) : const Color(0xFFD70000);
+      _isResident ? const Color(0xFF2E35D3) : _officialThemePrimary;
 
   Widget _homeForRole() {
     if (_isResident) {
@@ -2343,6 +2374,7 @@ class _AuthOtpVerificationPageState extends State<AuthOtpVerificationPage> {
         mobile: widget.mobile,
         token: result.token!,
         user: result.user,
+        pin: widget.pin,
       );
       return;
     } else {
@@ -2351,6 +2383,7 @@ class _AuthOtpVerificationPageState extends State<AuthOtpVerificationPage> {
         mobile: widget.mobile,
         token: result.token!,
         activationCompleted: result.activationCompleted,
+        pin: widget.pin,
       );
       return;
     }
@@ -2475,7 +2508,7 @@ class _AuthOtpVerificationPageState extends State<AuthOtpVerificationPage> {
                         ),
                         (route) => false,
                       ),
-                child: const Text('Back to Login'),
+                child: const Text('Back to PIN Login'),
               ),
             ],
           ),
@@ -2497,13 +2530,13 @@ class AuthLoginPage extends StatefulWidget {
 class _AuthLoginPageState extends State<AuthLoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _mobileController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final _pinController = TextEditingController();
   bool _submitting = false;
 
   bool get _isResident => widget.role == UserRole.resident;
 
   Color get _primaryColor =>
-      _isResident ? const Color(0xFF2E35D3) : const Color(0xFFD70000);
+      _isResident ? const Color(0xFF2E35D3) : _officialThemePrimary;
 
   String get _title => _isResident ? 'Resident Login' : 'Official Login';
 
@@ -2525,7 +2558,7 @@ class _AuthLoginPageState extends State<AuthLoginPage> {
   @override
   void dispose() {
     _mobileController.dispose();
-    _passwordController.dispose();
+    _pinController.dispose();
     super.dispose();
   }
 
@@ -2538,7 +2571,7 @@ class _AuthLoginPageState extends State<AuthLoginPage> {
     final result = await _AuthApi.instance.login(
       role: widget.role,
       mobile: _mobileController.text,
-      password: _passwordController.text,
+      password: _pinController.text.trim(),
     );
     if (!mounted) {
       return;
@@ -2557,6 +2590,7 @@ class _AuthLoginPageState extends State<AuthLoginPage> {
               role: widget.role,
               mobile: _mobileController.text,
               debugOtpCode: result.otpDebugCode,
+              pin: _pinController.text.trim(),
             ),
           ),
         );
@@ -2575,6 +2609,7 @@ class _AuthLoginPageState extends State<AuthLoginPage> {
         mobile: _mobileController.text,
         token: result.token ?? '',
         user: result.user,
+        pin: _pinController.text.trim(),
       );
       return;
     } else {
@@ -2583,6 +2618,7 @@ class _AuthLoginPageState extends State<AuthLoginPage> {
         mobile: _mobileController.text,
         token: result.token ?? '',
         activationCompleted: result.activationCompleted,
+        pin: _pinController.text.trim(),
       );
       return;
     }
@@ -2631,12 +2667,18 @@ class _AuthLoginPageState extends State<AuthLoginPage> {
               ),
               const SizedBox(height: 10),
               TextFormField(
-                controller: _passwordController,
+                controller: _pinController,
+                keyboardType: TextInputType.number,
                 obscureText: true,
-                decoration: const InputDecoration(labelText: 'Password'),
+                maxLength: _appPinLength,
+                decoration: const InputDecoration(
+                  labelText: '6-digit PIN',
+                  counterText: '',
+                ),
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Password is required.';
+                  final normalized = value?.trim() ?? '';
+                  if (!_isValidAppPin(normalized)) {
+                    return 'Enter a 6-digit PIN.';
                   }
                   return null;
                 },
@@ -2741,7 +2783,7 @@ class _ResidentRegisterFlowState extends State<ResidentRegisterFlow> {
   final steps = const [
     'Register with Mobile',
     'OTP Verification',
-    'Set MPIN',
+    'Set PIN',
     'Address',
     'Details',
     'Photo',
@@ -2816,14 +2858,14 @@ class _ResidentRegisterFlowState extends State<ResidentRegisterFlow> {
                     TextField(
                       obscureText: true,
                       decoration: InputDecoration(
-                        labelText: 'Type 4-digit MPIN',
+                        labelText: 'Type 6-digit PIN',
                       ),
                     ),
                     SizedBox(height: 10),
                     TextField(
                       obscureText: true,
                       decoration: InputDecoration(
-                        labelText: 'Confirm 4-digit MPIN',
+                        labelText: 'Confirm 6-digit PIN',
                       ),
                     ),
                   ],
@@ -3086,13 +3128,13 @@ class _ResidentMpinLoginPageState extends State<ResidentMpinLoginPage> {
   Widget build(BuildContext context) {
     const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '<'];
     return Scaffold(
-      appBar: AppBar(title: const Text('MPIN Login')),
+      appBar: AppBar(title: const Text('PIN Login')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             const Text(
-              'Enter your 4-digit MPIN',
+              'Enter your 6-digit PIN',
               style: TextStyle(fontSize: 30, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 10),
@@ -3143,6 +3185,155 @@ class _ResidentMpinLoginPageState extends State<ResidentMpinLoginPage> {
   }
 }
 
+Future<String?> _showPinEntrySheet(
+  BuildContext context, {
+  required String title,
+  required Color accentColor,
+  String initialPin = '',
+}) {
+  return showModalBottomSheet<String>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (sheetContext) {
+      var pin = initialPin;
+      const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '<'];
+      return StatefulBuilder(
+        builder: (context, setModalState) {
+          void tapKey(String value) {
+            if (value == 'C') {
+              setModalState(() => pin = '');
+              return;
+            }
+            if (value == '<') {
+              if (pin.isNotEmpty) {
+                setModalState(() => pin = pin.substring(0, pin.length - 1));
+              }
+              return;
+            }
+            if (pin.length < _appPinLength) {
+              setModalState(() => pin += value);
+            }
+          }
+
+          return SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                18,
+                20,
+                20 + MediaQuery.of(sheetContext).viewInsets.bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD8DCE8),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Enter your $_appPinLength-digit PIN',
+                    style: const TextStyle(
+                      color: Color(0xFF6D738B),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(
+                      _appPinLength,
+                      (index) => Container(
+                        width: 16,
+                        height: 16,
+                        margin: const EdgeInsets.symmetric(horizontal: 7),
+                        decoration: BoxDecoration(
+                          color: index < pin.length ? accentColor : Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: accentColor, width: 1.4),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: 3,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 1.3,
+                    children: keys
+                        .map(
+                          (key) => FilledButton(
+                            onPressed: () => tapKey(key),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: key == 'C' || key == '<'
+                                  ? accentColor.withValues(alpha: 0.12)
+                                  : Colors.white,
+                              foregroundColor: accentColor,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                                side: BorderSide(
+                                  color: accentColor.withValues(alpha: 0.2),
+                                ),
+                              ),
+                            ),
+                            child: key == '<'
+                                ? const Icon(Icons.backspace_outlined)
+                                : Text(
+                                    key,
+                                    style: const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: pin.length == _appPinLength
+                          ? () => Navigator.pop(sheetContext, pin)
+                          : null,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: accentColor,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text('Use PIN'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
 class ResidentAccessPage extends StatefulWidget {
   final String? prefilledMobile;
 
@@ -3154,7 +3345,9 @@ class ResidentAccessPage extends StatefulWidget {
 
 class _ResidentAccessPageState extends State<ResidentAccessPage> {
   final _mobileController = TextEditingController();
+  String _pin = '';
   bool _loadingLastMobile = true;
+  bool _submitting = false;
 
   @override
   void initState() {
@@ -3185,42 +3378,91 @@ class _ResidentAccessPageState extends State<ResidentAccessPage> {
 
   bool get _hasValidMobile => _normalizedMobile.length >= 10;
 
-  void _continueWithPassword() {
+  Future<void> _openPinPad() async {
+    final pin = await _showPinEntrySheet(
+      context,
+      title: 'Resident PIN',
+      accentColor: const Color(0xFF2E35D3),
+      initialPin: _pin,
+    );
+    if (pin == null || !mounted) {
+      return;
+    }
+    setState(() => _pin = pin);
+  }
+
+  Future<void> _submitPinLogin() async {
     if (!_hasValidMobile) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Enter a valid mobile number first.')),
       );
       return;
     }
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AuthLoginPage(
-          role: UserRole.resident,
-          prefilledMobile: _mobileController.text.trim(),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _openMpinLogin() async {
-    final mobile = _hasValidMobile
-        ? _mobileController.text.trim()
-        : await _ResidentMpinStore.lastMobile();
-    if (!mounted) {
-      return;
-    }
-    if (mobile == null || mobile.isEmpty) {
+    if (!_isValidAppPin(_pin)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Enter your mobile number or sign in once to set MPIN.'),
+          content: Text('Enter your 6-digit PIN.'),
         ),
       );
       return;
     }
-    Navigator.push(
+    setState(() => _submitting = true);
+    final mobile = _mobileController.text.trim();
+    final hasLocalPin = await _ResidentMpinStore.hasPin(mobile);
+    final localPinValid = hasLocalPin && await _ResidentMpinStore.verifyPin(mobile, _pin);
+    if (localPinValid) {
+      final restored = await _ResidentAuthCacheStore.restore(mobile);
+      if (!mounted) {
+        return;
+      }
+      if (restored) {
+        setState(() => _submitting = false);
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const ResidentHomeShell()),
+          (route) => false,
+        );
+        return;
+      }
+    }
+
+    final result = await _AuthApi.instance.login(
+      role: UserRole.resident,
+      mobile: mobile,
+      password: _pin,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() => _submitting = false);
+    if (!result.success) {
+      if (result.otpRequired) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AuthOtpVerificationPage(
+              role: UserRole.resident,
+              mobile: mobile,
+              debugOtpCode: result.otpDebugCode,
+              pin: _pin,
+            ),
+          ),
+        );
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message)),
+      );
+      return;
+    }
+
+    _authToken = result.token;
+    await _completeResidentSignIn(
       context,
-      MaterialPageRoute(builder: (_) => ResidentMpinUnlockPage(mobile: mobile)),
+      mobile: mobile,
+      token: result.token ?? '',
+      user: result.user,
+      pin: _pin,
     );
   }
 
@@ -3259,7 +3501,7 @@ class _ResidentAccessPageState extends State<ResidentAccessPage> {
             ),
             const SizedBox(height: 78),
             const Text(
-              'Continue with Mobile',
+              'Resident Log In',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Color(0xFF3D4158),
@@ -3305,7 +3547,7 @@ class _ResidentAccessPageState extends State<ResidentAccessPage> {
                       controller: _mobileController,
                       keyboardType: TextInputType.phone,
                       textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => _continueWithPassword(),
+                      onSubmitted: (_) => _submitPinLogin(),
                       decoration: const InputDecoration(
                         hintText: 'Enter mobile number...',
                         border: InputBorder.none,
@@ -3318,8 +3560,50 @@ class _ResidentAccessPageState extends State<ResidentAccessPage> {
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
+              child: OutlinedButton(
+                onPressed: _loadingLastMobile || _submitting ? null : _openPinPad,
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xFF2D3458),
+                  side: const BorderSide(color: Color(0xFFD5D9F0)),
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.dialpad_rounded, color: primary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _pin.isEmpty
+                            ? 'Tap to enter $_appPinLength-digit PIN'
+                            : ('•' * _pin.length),
+                        textAlign: TextAlign.left,
+                        style: TextStyle(
+                          color: _pin.isEmpty
+                              ? const Color(0xFF676D86)
+                              : const Color(0xFF2D3458),
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: _pin.isEmpty ? 0 : 4,
+                        ),
+                      ),
+                    ),
+                    if (_pin.isNotEmpty)
+                      IconButton(
+                        onPressed: _submitting ? null : () => setState(() => _pin = ''),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
               child: FilledButton(
-                onPressed: _loadingLastMobile ? null : _continueWithPassword,
+                onPressed: _loadingLastMobile || _submitting ? null : _submitPinLogin,
                 style: FilledButton.styleFrom(
                   backgroundColor: primary,
                   padding: const EdgeInsets.symmetric(vertical: 14),
@@ -3328,65 +3612,20 @@ class _ResidentAccessPageState extends State<ResidentAccessPage> {
                   ),
                 ),
                 child: Text(
-                  _loadingLastMobile ? 'Loading...' : 'Continue with Password',
+                  _loadingLastMobile
+                      ? 'Loading...'
+                      : (_submitting ? 'Checking PIN...' : 'Log In with PIN'),
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
             const Text(
-              'or',
+              'Registered users can log in here using their mobile number and 6-digit PIN.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Color(0xFF474B66),
-                fontSize: 22,
-                fontWeight: FontWeight.w500,
+                color: Color(0xFF666B86),
+                fontWeight: FontWeight.w600,
               ),
-            ),
-            const SizedBox(height: 20),
-            Center(
-              child: InkWell(
-                borderRadius: BorderRadius.circular(18),
-                onTap: _openMpinLogin,
-                child: Ink(
-                  width: 132,
-                  height: 132,
-                  decoration: BoxDecoration(
-                    color: primary,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x22000000),
-                        blurRadius: 16,
-                        offset: Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.dialpad_rounded, color: Colors.white, size: 44),
-                      SizedBox(height: 10),
-                      Text(
-                        'MPIN Login',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 22),
-            TextButton(
-              onPressed: () => Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const AuthRegisterPage(role: UserRole.resident),
-                ),
-              ),
-              child: const Text('Create a new resident account'),
             ),
           ],
         ),
@@ -3439,7 +3678,7 @@ class _ResidentMpinSetupPageState extends State<ResidentMpinSetupPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF3F1FF),
       appBar: AppBar(
-        title: const Text('Set MPIN'),
+        title: const Text('Set PIN'),
         backgroundColor: Colors.transparent,
       ),
       body: SafeArea(
@@ -3455,13 +3694,13 @@ class _ResidentMpinSetupPageState extends State<ResidentMpinSetupPage> {
               ),
               const SizedBox(height: 18),
               const Text(
-                'Create your 4-digit MPIN',
+                'Create your 6-digit PIN',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 10),
               Text(
-                'Use this MPIN for faster resident login on this device for ${widget.mobile}.',
+                'Use this PIN for faster resident login on this device for ${widget.mobile}.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Color(0xFF5B6079)),
               ),
@@ -3470,15 +3709,15 @@ class _ResidentMpinSetupPageState extends State<ResidentMpinSetupPage> {
                 controller: _pinController,
                 keyboardType: TextInputType.number,
                 obscureText: true,
-                maxLength: 4,
+                maxLength: _appPinLength,
                 decoration: const InputDecoration(
-                  labelText: '4-digit MPIN',
+                  labelText: '6-digit PIN',
                   counterText: '',
                 ),
                 validator: (value) {
                   final normalized = value?.trim() ?? '';
-                  if (normalized.length != 4 || int.tryParse(normalized) == null) {
-                    return 'Enter a 4-digit MPIN.';
+                  if (!_isValidAppPin(normalized)) {
+                    return 'Enter a 6-digit PIN.';
                   }
                   return null;
                 },
@@ -3488,14 +3727,14 @@ class _ResidentMpinSetupPageState extends State<ResidentMpinSetupPage> {
                 controller: _confirmPinController,
                 keyboardType: TextInputType.number,
                 obscureText: true,
-                maxLength: 4,
+                maxLength: _appPinLength,
                 decoration: const InputDecoration(
-                  labelText: 'Confirm MPIN',
+                  labelText: 'Confirm PIN',
                   counterText: '',
                 ),
                 validator: (value) {
                   if ((value?.trim() ?? '') != _pinController.text.trim()) {
-                    return 'MPIN does not match.';
+                    return 'PIN does not match.';
                   }
                   return null;
                 },
@@ -3507,7 +3746,7 @@ class _ResidentMpinSetupPageState extends State<ResidentMpinSetupPage> {
                   backgroundColor: const Color(0xFF2E35D3),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-                child: Text(_saving ? 'Saving...' : 'Save MPIN'),
+                child: Text(_saving ? 'Saving...' : 'Save PIN'),
               ),
               TextButton(
                 onPressed: _saving
@@ -3580,7 +3819,7 @@ class _ResidentMpinUnlockPageState extends State<ResidentMpinUnlockPage> {
       }
       return;
     }
-    if (_pin.length < 4) {
+    if (_pin.length < _appPinLength) {
       setState(() => _pin += value);
     }
   }
@@ -3589,7 +3828,7 @@ class _ResidentMpinUnlockPageState extends State<ResidentMpinUnlockPage> {
     if (_mobile.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No resident mobile number found for MPIN login.'),
+          content: Text('No resident mobile number found for PIN login.'),
         ),
       );
       return;
@@ -3609,8 +3848,8 @@ class _ResidentMpinUnlockPageState extends State<ResidentMpinUnlockPage> {
         SnackBar(
           content: Text(
             hasPin
-                ? 'Incorrect MPIN. Try again.'
-                : 'No MPIN found for this account. Log in with password first.',
+                ? 'Incorrect PIN. Try again.'
+                : 'No PIN found for this account. Log in on the access page.',
           ),
         ),
       );
@@ -3626,7 +3865,7 @@ class _ResidentMpinUnlockPageState extends State<ResidentMpinUnlockPage> {
       setState(() => _pin = '');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Saved session expired. Log in with password first.'),
+          content: Text('Saved session expired. Log in again on the access page.'),
         ),
       );
       return;
@@ -3644,7 +3883,7 @@ class _ResidentMpinUnlockPageState extends State<ResidentMpinUnlockPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF3F1FF),
       appBar: AppBar(
-        title: const Text('MPIN Login'),
+        title: const Text('PIN Login'),
         backgroundColor: Colors.transparent,
       ),
       body: SafeArea(
@@ -3654,7 +3893,7 @@ class _ResidentMpinUnlockPageState extends State<ResidentMpinUnlockPage> {
             children: [
               const SizedBox(height: 12),
               const Text(
-                'Enter your 4-digit MPIN',
+                'Enter your 6-digit PIN',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
               ),
@@ -3673,7 +3912,7 @@ class _ResidentMpinUnlockPageState extends State<ResidentMpinUnlockPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: List.generate(
-                  4,
+                  _appPinLength,
                   (index) => Container(
                     width: 18,
                     height: 18,
@@ -3730,7 +3969,9 @@ class _ResidentMpinUnlockPageState extends State<ResidentMpinUnlockPage> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: _pin.length == 4 && !_submitting ? _submitMpin : null,
+                  onPressed: _pin.length == _appPinLength && !_submitting
+                      ? _submitMpin
+                      : null,
                   style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xFF2E35D3),
                     padding: const EdgeInsets.symmetric(vertical: 14),
@@ -3757,7 +3998,9 @@ class OfficialAccessPage extends StatefulWidget {
 
 class _OfficialAccessPageState extends State<OfficialAccessPage> {
   final _mobileController = TextEditingController();
+  String _pin = '';
   bool _loadingLastMobile = true;
+  bool _submitting = false;
 
   @override
   void initState() {
@@ -3788,49 +4031,98 @@ class _OfficialAccessPageState extends State<OfficialAccessPage> {
 
   bool get _hasValidMobile => _normalizedMobile.length >= 10;
 
-  void _continueWithPassword() {
+  Future<void> _openPinPad() async {
+    final pin = await _showPinEntrySheet(
+      context,
+      title: 'Official PIN',
+      accentColor: _officialThemePrimary,
+      initialPin: _pin,
+    );
+    if (pin == null || !mounted) {
+      return;
+    }
+    setState(() => _pin = pin);
+  }
+
+  Future<void> _submitPinLogin() async {
     if (!_hasValidMobile) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Enter a valid mobile number first.')),
       );
       return;
     }
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AuthLoginPage(
-          role: UserRole.official,
-          prefilledMobile: _mobileController.text.trim(),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _openMpinLogin() async {
-    final mobile = _hasValidMobile
-        ? _mobileController.text.trim()
-        : await _OfficialMpinStore.lastMobile();
-    if (!mounted) {
-      return;
-    }
-    if (mobile == null || mobile.isEmpty) {
+    if (!_isValidAppPin(_pin)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Enter your mobile number or sign in once to set MPIN.'),
+          content: Text('Enter your 6-digit PIN.'),
         ),
       );
       return;
     }
-    Navigator.push(
+    setState(() => _submitting = true);
+    final mobile = _mobileController.text.trim();
+    final hasLocalPin = await _OfficialMpinStore.hasPin(mobile);
+    final localPinValid = hasLocalPin && await _OfficialMpinStore.verifyPin(mobile, _pin);
+    if (localPinValid) {
+      final restored = await _OfficialAuthCacheStore.restore(mobile);
+      if (!mounted) {
+        return;
+      }
+      if (restored) {
+        setState(() => _submitting = false);
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => _officialHomeForSession()),
+          (route) => false,
+        );
+        return;
+      }
+    }
+
+    final result = await _AuthApi.instance.login(
+      role: UserRole.official,
+      mobile: mobile,
+      password: _pin,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() => _submitting = false);
+    if (!result.success) {
+      if (result.otpRequired) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AuthOtpVerificationPage(
+              role: UserRole.official,
+              mobile: mobile,
+              debugOtpCode: result.otpDebugCode,
+              pin: _pin,
+            ),
+          ),
+        );
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message)),
+      );
+      return;
+    }
+
+    _authToken = result.token;
+    await _completeOfficialSignIn(
       context,
-      MaterialPageRoute(builder: (_) => OfficialMpinUnlockPage(mobile: mobile)),
+      mobile: mobile,
+      token: result.token ?? '',
+      activationCompleted: result.activationCompleted,
+      pin: _pin,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    const primary = Color(0xFFD70000);
-    const background = Color(0xFFFFF4F4);
+    const primary = _officialThemePrimary;
+    const background = _officialThemeBackground;
 
     return Scaffold(
       backgroundColor: background,
@@ -3855,17 +4147,17 @@ class _OfficialAccessPageState extends State<OfficialAccessPage> {
               '"Ang unang sandigan ng mamamayan!"',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Color(0xFF3A2222),
+                color: _officialThemeText,
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
             ),
             const SizedBox(height: 78),
             const Text(
-              'Official Access',
+              'Official Log In',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Color(0xFF593535),
+                color: _officialThemeText,
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
               ),
@@ -3874,7 +4166,7 @@ class _OfficialAccessPageState extends State<OfficialAccessPage> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFEAEA),
+                color: _officialThemeSurfaceAlt,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: const [
                   BoxShadow(
@@ -3898,7 +4190,7 @@ class _OfficialAccessPageState extends State<OfficialAccessPage> {
                       '+63',
                       style: TextStyle(
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF5A2B2B),
+                        color: _officialThemeText,
                       ),
                     ),
                   ),
@@ -3908,7 +4200,7 @@ class _OfficialAccessPageState extends State<OfficialAccessPage> {
                       controller: _mobileController,
                       keyboardType: TextInputType.phone,
                       textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => _continueWithPassword(),
+                      onSubmitted: (_) => _submitPinLogin(),
                       decoration: const InputDecoration(
                         hintText: 'Enter mobile number...',
                         border: InputBorder.none,
@@ -3921,8 +4213,50 @@ class _OfficialAccessPageState extends State<OfficialAccessPage> {
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
+              child: OutlinedButton(
+                onPressed: _loadingLastMobile || _submitting ? null : _openPinPad,
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: _officialThemeText,
+                  side: const BorderSide(color: _officialThemeBorder),
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.dialpad_rounded, color: primary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _pin.isEmpty
+                            ? 'Tap to enter $_appPinLength-digit PIN'
+                            : ('•' * _pin.length),
+                        textAlign: TextAlign.left,
+                        style: TextStyle(
+                          color: _pin.isEmpty
+                              ? _officialThemeSubtext
+                              : _officialThemeText,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: _pin.isEmpty ? 0 : 4,
+                        ),
+                      ),
+                    ),
+                    if (_pin.isNotEmpty)
+                      IconButton(
+                        onPressed: _submitting ? null : () => setState(() => _pin = ''),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
               child: FilledButton(
-                onPressed: _loadingLastMobile ? null : _continueWithPassword,
+                onPressed: _loadingLastMobile || _submitting ? null : _submitPinLogin,
                 style: FilledButton.styleFrom(
                   backgroundColor: primary,
                   padding: const EdgeInsets.symmetric(vertical: 14),
@@ -3931,65 +4265,20 @@ class _OfficialAccessPageState extends State<OfficialAccessPage> {
                   ),
                 ),
                 child: Text(
-                  _loadingLastMobile ? 'Loading...' : 'Continue with Password',
+                  _loadingLastMobile
+                      ? 'Loading...'
+                      : (_submitting ? 'Checking PIN...' : 'Log In with PIN'),
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
             const Text(
-              'or',
+              'Registered officials can log in here using their mobile number and 6-digit PIN.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Color(0xFF735757),
-                fontSize: 22,
-                fontWeight: FontWeight.w500,
+                color: _officialThemeSubtext,
+                fontWeight: FontWeight.w600,
               ),
-            ),
-            const SizedBox(height: 20),
-            Center(
-              child: InkWell(
-                borderRadius: BorderRadius.circular(18),
-                onTap: _openMpinLogin,
-                child: Ink(
-                  width: 132,
-                  height: 132,
-                  decoration: BoxDecoration(
-                    color: primary,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x22000000),
-                        blurRadius: 16,
-                        offset: Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.dialpad_rounded, color: Colors.white, size: 44),
-                      SizedBox(height: 10),
-                      Text(
-                        'MPIN Login',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 22),
-            TextButton(
-              onPressed: () => Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const AuthRegisterPage(role: UserRole.official),
-                ),
-              ),
-              child: const Text('Create a new official account'),
             ),
           ],
         ),
@@ -4040,9 +4329,9 @@ class _OfficialMpinSetupPageState extends State<OfficialMpinSetupPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF4F4),
+      backgroundColor: _officialThemeBackground,
       appBar: AppBar(
-        title: const Text('Set MPIN'),
+        title: const Text('Set PIN'),
         backgroundColor: Colors.transparent,
       ),
       body: SafeArea(
@@ -4054,34 +4343,34 @@ class _OfficialMpinSetupPageState extends State<OfficialMpinSetupPage> {
               const Icon(
                 Icons.admin_panel_settings_rounded,
                 size: 72,
-                color: Color(0xFFD70000),
+                color: _officialThemePrimary,
               ),
               const SizedBox(height: 18),
               const Text(
-                'Create your 4-digit MPIN',
+                'Create your 6-digit PIN',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 10),
               Text(
-                'Use this MPIN for faster official login on this device for ${widget.mobile}.',
+                'Use this PIN for faster official login on this device for ${widget.mobile}.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Color(0xFF7A5959)),
+                style: const TextStyle(color: _officialThemeSubtext),
               ),
               const SizedBox(height: 28),
               TextFormField(
                 controller: _pinController,
                 keyboardType: TextInputType.number,
                 obscureText: true,
-                maxLength: 4,
+                maxLength: _appPinLength,
                 decoration: const InputDecoration(
-                  labelText: '4-digit MPIN',
+                  labelText: '6-digit PIN',
                   counterText: '',
                 ),
                 validator: (value) {
                   final normalized = value?.trim() ?? '';
-                  if (normalized.length != 4 || int.tryParse(normalized) == null) {
-                    return 'Enter a 4-digit MPIN.';
+                  if (!_isValidAppPin(normalized)) {
+                    return 'Enter a 6-digit PIN.';
                   }
                   return null;
                 },
@@ -4091,14 +4380,14 @@ class _OfficialMpinSetupPageState extends State<OfficialMpinSetupPage> {
                 controller: _confirmPinController,
                 keyboardType: TextInputType.number,
                 obscureText: true,
-                maxLength: 4,
+                maxLength: _appPinLength,
                 decoration: const InputDecoration(
-                  labelText: 'Confirm MPIN',
+                  labelText: 'Confirm PIN',
                   counterText: '',
                 ),
                 validator: (value) {
                   if ((value?.trim() ?? '') != _pinController.text.trim()) {
-                    return 'MPIN does not match.';
+                    return 'PIN does not match.';
                   }
                   return null;
                 },
@@ -4107,10 +4396,10 @@ class _OfficialMpinSetupPageState extends State<OfficialMpinSetupPage> {
               FilledButton(
                 onPressed: _saving ? null : _saveMpin,
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFD70000),
+                  backgroundColor: _officialThemePrimary,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-                child: Text(_saving ? 'Saving...' : 'Save MPIN'),
+                child: Text(_saving ? 'Saving...' : 'Save PIN'),
               ),
               TextButton(
                 onPressed: _saving
@@ -4183,7 +4472,7 @@ class _OfficialMpinUnlockPageState extends State<OfficialMpinUnlockPage> {
       }
       return;
     }
-    if (_pin.length < 4) {
+    if (_pin.length < _appPinLength) {
       setState(() => _pin += value);
     }
   }
@@ -4192,7 +4481,7 @@ class _OfficialMpinUnlockPageState extends State<OfficialMpinUnlockPage> {
     if (_mobile.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No official mobile number found for MPIN login.'),
+          content: Text('No official mobile number found for PIN login.'),
         ),
       );
       return;
@@ -4212,8 +4501,8 @@ class _OfficialMpinUnlockPageState extends State<OfficialMpinUnlockPage> {
         SnackBar(
           content: Text(
             hasPin
-                ? 'Incorrect MPIN. Try again.'
-                : 'No MPIN found for this account. Log in with password first.',
+                ? 'Incorrect PIN. Try again.'
+                : 'No PIN found for this account. Log in on the access page.',
           ),
         ),
       );
@@ -4229,7 +4518,7 @@ class _OfficialMpinUnlockPageState extends State<OfficialMpinUnlockPage> {
       setState(() => _pin = '');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Saved session expired. Log in with password first.'),
+          content: Text('Saved session expired. Log in again on the access page.'),
         ),
       );
       return;
@@ -4245,9 +4534,9 @@ class _OfficialMpinUnlockPageState extends State<OfficialMpinUnlockPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF4F4),
+      backgroundColor: _officialThemeBackground,
       appBar: AppBar(
-        title: const Text('MPIN Login'),
+        title: const Text('PIN Login'),
         backgroundColor: Colors.transparent,
       ),
       body: SafeArea(
@@ -4257,7 +4546,7 @@ class _OfficialMpinUnlockPageState extends State<OfficialMpinUnlockPage> {
             children: [
               const SizedBox(height: 12),
               const Text(
-                'Enter your 4-digit MPIN',
+                'Enter your 6-digit PIN',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
               ),
@@ -4268,7 +4557,7 @@ class _OfficialMpinUnlockPageState extends State<OfficialMpinUnlockPage> {
                     : (_mobile.isEmpty ? 'Official account not found' : _mobile),
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  color: Color(0xFF7A5959),
+                  color: _officialThemeSubtext,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -4276,17 +4565,17 @@ class _OfficialMpinUnlockPageState extends State<OfficialMpinUnlockPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: List.generate(
-                  4,
+                  _appPinLength,
                   (index) => Container(
                     width: 18,
                     height: 18,
                     margin: const EdgeInsets.symmetric(horizontal: 8),
                     decoration: BoxDecoration(
                       color: index < _pin.length
-                          ? const Color(0xFFD70000)
+                          ? _officialThemePrimary
                           : Colors.white,
                       shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFFD70000)),
+                      border: Border.all(color: _officialThemePrimary),
                     ),
                   ),
                 ),
@@ -4305,14 +4594,14 @@ class _OfficialMpinUnlockPageState extends State<OfficialMpinUnlockPage> {
                           onPressed: () => _tapKey(key),
                           style: FilledButton.styleFrom(
                             backgroundColor: key == 'C' || key == '<'
-                                ? const Color(0xFFFFE5E5)
+                                ? _officialThemeSurfaceAlt
                                 : Colors.white,
-                            foregroundColor: const Color(0xFF8A2424),
+                            foregroundColor: _officialThemeSecondary,
                             elevation: 0,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(18),
                               side: const BorderSide(
-                                color: Color(0xFFFFCFCF),
+                                color: _officialThemeBorder,
                               ),
                             ),
                           ),
@@ -4333,9 +4622,11 @@ class _OfficialMpinUnlockPageState extends State<OfficialMpinUnlockPage> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: _pin.length == 4 && !_submitting ? _submitMpin : null,
+                  onPressed: _pin.length == _appPinLength && !_submitting
+                      ? _submitMpin
+                      : null,
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFD70000),
+                    backgroundColor: _officialThemePrimary,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   child: Text(_submitting ? 'Checking...' : 'Continue'),

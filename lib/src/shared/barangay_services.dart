@@ -2845,7 +2845,7 @@ class GovAgenciesPage extends StatelessWidget {
         website: 'zambales.gov.ph/governor',
         logoDomain: 'zambales.gov.ph',
         contact: '(047) 811-2001',
-        color: Color(0xFFB52A2A),
+        color: Color(0xFFB80F0F),
         icon: Icons.account_balance,
       ),
       _AgencyInfo(
@@ -2855,7 +2855,7 @@ class GovAgenciesPage extends StatelessWidget {
         website: 'zambales.gov.ph/sangguniang-panlalawigan',
         logoDomain: 'zambales.gov.ph',
         contact: '(047) 811-2014',
-        color: Color(0xFF7A2F3E),
+        color: Color(0xFF8F1111),
         icon: Icons.gavel,
       ),
       _AgencyInfo(
@@ -2866,7 +2866,7 @@ class GovAgenciesPage extends StatelessWidget {
         website: 'zambales.gov.ph/health',
         logoDomain: 'zambales.gov.ph',
         contact: '(047) 811-2032',
-        color: Color(0xFF2E7D67),
+        color: Color(0xFFCC2A2A),
         icon: Icons.local_hospital,
       ),
       _AgencyInfo(
@@ -2876,7 +2876,7 @@ class GovAgenciesPage extends StatelessWidget {
         website: 'zambales.gov.ph/pdrrmo',
         logoDomain: 'zambales.gov.ph',
         contact: '(047) 811-2045',
-        color: Color(0xFF2C5FA8),
+        color: Color(0xFFA51515),
         icon: Icons.warning_amber_rounded,
       ),
       _AgencyInfo(
@@ -2887,7 +2887,7 @@ class GovAgenciesPage extends StatelessWidget {
         website: 'zambales.gov.ph/pswdo',
         logoDomain: 'zambales.gov.ph',
         contact: '(047) 811-2058',
-        color: Color(0xFFB64C66),
+        color: Color(0xFFD23D3D),
         icon: Icons.volunteer_activism,
       ),
       _AgencyInfo(
@@ -2898,7 +2898,7 @@ class GovAgenciesPage extends StatelessWidget {
         website: 'zambales.gov.ph/peso',
         logoDomain: 'zambales.gov.ph',
         contact: '(047) 811-2073',
-        color: Color(0xFF5A4FAF),
+        color: Color(0xFF931010),
         icon: Icons.work_history,
       ),
       _AgencyInfo(
@@ -2909,7 +2909,7 @@ class GovAgenciesPage extends StatelessWidget {
         website: 'zambales.gov.ph/agriculture',
         logoDomain: 'zambales.gov.ph',
         contact: '(047) 811-2096',
-        color: Color(0xFF4C8B46),
+        color: Color(0xFFC71C1C),
         icon: Icons.agriculture,
       ),
       _AgencyInfo(
@@ -2919,7 +2919,7 @@ class GovAgenciesPage extends StatelessWidget {
         website: 'zambales.gov.ph/veterinary',
         logoDomain: 'zambales.gov.ph',
         contact: '(047) 811-2104',
-        color: Color(0xFF2D7F7E),
+        color: Color(0xFFAA1818),
         icon: Icons.pets,
       ),
       _AgencyInfo(
@@ -2930,7 +2930,7 @@ class GovAgenciesPage extends StatelessWidget {
         website: 'zambales.gov.ph/engineering',
         logoDomain: 'zambales.gov.ph',
         contact: '(047) 811-2118',
-        color: Color(0xFFBA6A32),
+        color: Color(0xFFD44848),
         icon: Icons.engineering,
       ),
       _AgencyInfo(
@@ -2940,21 +2940,22 @@ class GovAgenciesPage extends StatelessWidget {
         website: 'zambales.gov.ph/pio',
         logoDomain: 'zambales.gov.ph',
         contact: '(047) 811-2130',
-        color: Color(0xFF385CA8),
+        color: Color(0xFF9E1313),
         icon: Icons.campaign,
       ),
     ];
     return Scaffold(
       appBar: AppBar(
         title: const Text('Provincial Government'),
-        backgroundColor: const Color(0xFFF7F8FF),
+        backgroundColor: const Color(0xFFCB1010),
+        foregroundColor: Colors.white,
       ),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFFF7F8FF), Color(0xFFF8F0EE)],
+            colors: [Color(0xFFFFF8F8), Color(0xFFFFF0F0)],
           ),
         ),
         child: ListView(
@@ -2967,11 +2968,11 @@ class GovAgenciesPage extends StatelessWidget {
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Color(0xFFCF4545), Color(0xFFEA6C67)],
+                  colors: [Color(0xFFB90F0F), Color(0xFFD93636)],
                 ),
                 boxShadow: const [
                   BoxShadow(
-                    color: Color(0x26C63E3E),
+                    color: Color(0x26A30E0E),
                     blurRadius: 12,
                     offset: Offset(0, 6),
                   ),
@@ -2995,7 +2996,7 @@ class GovAgenciesPage extends StatelessWidget {
                         Text(
                           'Capitol offices, hotlines, and service pages for Zambales province.',
                           style: TextStyle(
-                            color: Color(0xFFFFE3DF),
+                            color: Color(0xFFFFE7E7),
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -3005,7 +3006,7 @@ class GovAgenciesPage extends StatelessWidget {
                   SizedBox(width: 8),
                   CircleAvatar(
                     radius: 24,
-                    backgroundColor: Color(0x3CFFFFFF),
+                    backgroundColor: Color(0x30FFFFFF),
                     child: Icon(Icons.apartment, color: Colors.white),
                   ),
                 ],
@@ -3043,6 +3044,7 @@ class GovAgenciesPage extends StatelessWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(foregroundColor: const Color(0xFF8F1111)),
               child: const Text('Close'),
             ),
             FilledButton(
@@ -3050,6 +3052,10 @@ class GovAgenciesPage extends StatelessWidget {
                 Navigator.pop(context);
                 _showFeature(context, 'Opening ${agency.website}');
               },
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFCB1010),
+                foregroundColor: Colors.white,
+              ),
               child: const Text('Open Portal'),
             ),
           ],
@@ -3060,10 +3066,10 @@ class GovAgenciesPage extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFE5E7F4)),
+          border: Border.all(color: const Color(0xFFF0D6D6)),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x12000000),
+              color: Color(0x14B21A1A),
               blurRadius: 9,
               offset: Offset(0, 4),
             ),
