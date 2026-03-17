@@ -38,9 +38,9 @@ class ActivationFlow extends StatefulWidget {
 }
 
 class _ActivationFlowState extends State<ActivationFlow> {
-  static const Map<String, Map<String, List<String>>> _location = {
+  late final Map<String, Map<String, List<String>>> _location = {
     'Zambales': {
-      'City of Olongapo': ['Old Cabalan', 'Banicain', 'West Tapinac'],
+      'City of Olongapo': _olongapoBarangayDirectory.map((e) => e.name).toList(),
       'Subic': ['Calapacuan', 'Baraca-Camachile'],
     },
     'Bataan': {
@@ -57,9 +57,9 @@ class _ActivationFlowState extends State<ActivationFlow> {
 
   final _page = PageController();
   int _step = 0;
-  String? _province = 'Zambales';
-  String? _city = 'City of Olongapo';
-  String? _barangay = 'Old Cabalan';
+  String? _province = _officialBarangaySetup.province;
+  String? _city = _officialBarangaySetup.city;
+  String? _barangay = _officialBarangaySetup.barangay;
 
   final _secFirst = TextEditingController(text: 'Brigette');
   final _secMiddle = TextEditingController();
@@ -79,15 +79,33 @@ class _ActivationFlowState extends State<ActivationFlow> {
   final _signature = TextEditingController(text: 'E. NAZARENO');
   bool _acceptCert = false;
 
-  final _population = TextEditingController();
-  String _divisionType = 'Urban';
-  final _households = TextEditingController();
-  final _founded = TextEditingController(text: 'Friday, August 08, 2025');
+  final _population = TextEditingController(
+    text: _officialBarangaySetup.population.toString(),
+  );
+  String _divisionType = _officialBarangaySetup.divisionType;
+  final _divisionCount = TextEditingController(
+    text: _officialBarangaySetup.divisionCount.toString(),
+  );
+  final _foundedYear = TextEditingController(
+    text: _officialBarangaySetup.foundingYear.toString(),
+  );
+  final _website = TextEditingController(text: _officialBarangaySetup.website);
+  final _facebook = TextEditingController(text: _officialBarangaySetup.facebook);
+  final _latitude = TextEditingController(
+    text: _formatCoordinateValue(_officialBarangaySetup.latitude),
+  );
+  final _longitude = TextEditingController(
+    text: _formatCoordinateValue(_officialBarangaySetup.longitude),
+  );
+  Uint8List? _logoBytes = _officialBarangaySetup.logoBytes;
+  String? _logoName = _officialBarangaySetup.logoFileName;
 
   List<String> get _cities => _location[_province]?.keys.toList() ?? const [];
   List<String> get _barangays => (_province != null && _city != null)
       ? (_location[_province]?[_city] ?? const [])
       : const [];
+  _BarangayDirectoryEntry? get _selectedBarangayEntry =>
+      _lookupBarangayDirectoryEntry(_province, _city, _barangay);
 
   @override
   void dispose() {
@@ -102,8 +120,12 @@ class _ActivationFlowState extends State<ActivationFlow> {
     _punongLast.dispose();
     _signature.dispose();
     _population.dispose();
-    _households.dispose();
-    _founded.dispose();
+    _divisionCount.dispose();
+    _foundedYear.dispose();
+    _website.dispose();
+    _facebook.dispose();
+    _latitude.dispose();
+    _longitude.dispose();
     super.dispose();
   }
 
@@ -139,6 +161,69 @@ class _ActivationFlowState extends State<ActivationFlow> {
       _idImage = bytes;
       _idName = file.name;
     });
+  }
+
+  Future<void> _pickBarangayLogo() async {
+    final result = await _pickAndPrepareBarangayLogo();
+    if (result == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _logoBytes = result.bytes;
+      _logoName = result.fileName;
+    });
+  }
+
+  Future<void> _pickFoundingYear() async {
+    final currentYear = DateTime.now().year;
+    var selectedYear =
+        int.tryParse(_foundedYear.text.trim()) ?? _officialBarangaySetup.foundingYear;
+    selectedYear = selectedYear
+        .clamp(_minimumFoundingYear, currentYear)
+        .toInt();
+
+    final pickedYear = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) {
+        var tempYear = selectedYear;
+        return StatefulBuilder(
+          builder: (context, setLocalState) {
+            return AlertDialog(
+              title: const Text('Select Founding Year'),
+              content: DropdownButtonFormField<int>(
+                initialValue: tempYear,
+                decoration: _field('Founding Year'),
+                items: [
+                  for (var year = currentYear; year >= _minimumFoundingYear; year--)
+                    DropdownMenuItem<int>(value: year, child: Text('$year')),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setLocalState(() => tempYear = value);
+                  }
+                },
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, tempYear),
+                  style: FilledButton.styleFrom(backgroundColor: _actRed),
+                  child: const Text('Apply'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (pickedYear == null || !mounted) {
+      return;
+    }
+    setState(() => _foundedYear.text = '$pickedYear');
   }
 
   bool _validate() {
@@ -180,10 +265,43 @@ class _ActivationFlowState extends State<ActivationFlow> {
       _msg('Please accept certification terms.');
       return false;
     }
-    if (_step == 7 &&
-        (_population.text.trim().isEmpty || _households.text.trim().isEmpty)) {
-      _msg('Please complete initial setup details.');
-      return false;
+    if (_step == 7) {
+      final population = int.tryParse(_population.text.trim());
+      final divisionCount = int.tryParse(_divisionCount.text.trim());
+      final foundingYear = int.tryParse(_foundedYear.text.trim());
+      final latitude = _parseCoordinateValue(
+        _latitude.text,
+        min: -90,
+        max: 90,
+      );
+      final longitude = _parseCoordinateValue(
+        _longitude.text,
+        min: -180,
+        max: 180,
+      );
+
+      if (population == null || population <= 0) {
+        _msg('Population must be a valid number.');
+        return false;
+      }
+      if (divisionCount == null || divisionCount <= 0) {
+        _msg('Division count must be a valid number.');
+        return false;
+      }
+      if (foundingYear == null || !_isValidFoundingYearValue(foundingYear)) {
+        _msg(
+          'Founding year must be between $_minimumFoundingYear and ${DateTime.now().year}.',
+        );
+        return false;
+      }
+      if (!_isValidSchemaUrl(_website.text) || !_isValidSchemaUrl(_facebook.text)) {
+        _msg('Website and Facebook links must start with http:// or https://.');
+        return false;
+      }
+      if (latitude == null || longitude == null) {
+        _msg('Latitude and longitude must be valid with up to 6 decimals.');
+        return false;
+      }
     }
     return true;
   }
@@ -202,7 +320,38 @@ class _ActivationFlowState extends State<ActivationFlow> {
     final punongMiddle = _punongMiddle.text.trim();
     final punongSuffix = _punongSuffix == 'None' ? null : _punongSuffix;
     final population = _parseOptionalInt(_population.text);
-    final households = _parseOptionalInt(_households.text);
+    final divisionCount = _parseOptionalInt(_divisionCount.text);
+    final foundingYear = _parseOptionalInt(_foundedYear.text);
+    final latitude = _parseCoordinateValue(_latitude.text, min: -90, max: 90);
+    final longitude = _parseCoordinateValue(_longitude.text, min: -180, max: 180);
+    final selectedEntry = _selectedBarangayEntry;
+
+    _officialBarangaySetup
+      ..province = _province ?? _officialBarangaySetup.province
+      ..city = _city ?? _officialBarangaySetup.city
+      ..barangay = _barangay ?? _officialBarangaySetup.barangay
+      ..landmark = '${_barangay ?? _officialBarangaySetup.barangay} BARANGAY HALL'
+      ..website = _website.text.trim()
+      ..facebook = _facebook.text.trim()
+      ..divisionType = _divisionType
+      ..divisionCount = divisionCount ?? _officialBarangaySetup.divisionCount
+      ..population = population ?? _officialBarangaySetup.population
+      ..psaPopulationBaseYear = DateTime.now().year
+      ..foundingYear = foundingYear ?? _officialBarangaySetup.foundingYear
+      ..latitude = latitude ?? _officialBarangaySetup.latitude
+      ..longitude = longitude ?? _officialBarangaySetup.longitude
+      ..secretaryFirstName = _secFirst.text.trim()
+      ..secretaryMiddleName = secMiddle
+      ..secretaryLastName = _secLast.text.trim()
+      ..secretarySuffix = _secSuffix
+      ..secretaryMobile = _secMobile.text.trim()
+      ..secretaryEmail = _secEmail.text.trim()
+      ..secretaryIdType = _idType
+      ..secretaryIdBytes = _idImage
+      ..secretaryIdFileName = _idName
+      ..punongSignatureText = _signature.text.trim()
+      ..logoBytes = _logoBytes
+      ..logoFileName = _logoName;
 
     return {
       'province': _province,
@@ -222,10 +371,19 @@ class _ActivationFlowState extends State<ActivationFlow> {
       if (punongSuffix != null) 'punong_suffix': punongSuffix,
       'signature': _signature.text.trim(),
       'accepted_certification': _acceptCert,
+      if (selectedEntry != null) 'psgc_listed': selectedEntry.psgcListed,
+      if (selectedEntry != null) 'activation_status': selectedEntry.statusLabel,
       if (population != null) 'population': population,
-      if (households != null) 'households': households,
+      if (divisionCount != null) 'division_count': divisionCount,
       'division_type': _divisionType,
-      'founded': _founded.text.trim(),
+      if (foundingYear != null) 'founding_year': foundingYear,
+      if (_website.text.trim().isNotEmpty) 'website': _website.text.trim(),
+      if (_facebook.text.trim().isNotEmpty)
+        'facebook_url': _facebook.text.trim(),
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      if (_logoName != null) 'logo_file_name': _logoName,
+      if (_logoBytes != null) 'logo_image_base64': base64Encode(_logoBytes!),
     };
   }
 
@@ -325,6 +483,7 @@ class _ActivationFlowState extends State<ActivationFlow> {
                   province: _province,
                   city: _city,
                   barangay: _barangay,
+                  selectedEntry: _selectedBarangayEntry,
                   cities: _cities,
                   barangays: _barangays,
                   location: _location,
@@ -404,11 +563,19 @@ class _ActivationFlowState extends State<ActivationFlow> {
                 _ActivationSetupStep(
                   field: _field,
                   population: _population,
-                  households: _households,
+                  divisionCount: _divisionCount,
                   divisionType: _divisionType,
                   onDivision: (v) =>
-                      setState(() => _divisionType = v ?? 'Urban'),
-                  founded: _founded,
+                      setState(() => _divisionType = v ?? 'Zone'),
+                  foundedYear: _foundedYear,
+                  website: _website,
+                  facebook: _facebook,
+                  latitude: _latitude,
+                  longitude: _longitude,
+                  logoBytes: _logoBytes,
+                  logoName: _logoName,
+                  onPickFoundedYear: _pickFoundingYear,
+                  onPickLogo: _pickBarangayLogo,
                 ),
                 _ActivationCouncilStep(onUpdate: _finish, onLater: _finish),
               ],
@@ -481,6 +648,7 @@ class _ActivationAddressStep extends StatelessWidget {
   final String? province;
   final String? city;
   final String? barangay;
+  final _BarangayDirectoryEntry? selectedEntry;
   final List<String> cities;
   final List<String> barangays;
   final Map<String, Map<String, List<String>>> location;
@@ -492,6 +660,7 @@ class _ActivationAddressStep extends StatelessWidget {
     required this.province,
     required this.city,
     required this.barangay,
+    required this.selectedEntry,
     required this.cities,
     required this.barangays,
     required this.location,
@@ -546,29 +715,75 @@ class _ActivationAddressStep extends StatelessWidget {
           const SizedBox(height: 14),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: _actBorder),
             ),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  barangay ?? 'Select Barangay',
-                  style: const TextStyle(
-                    color: _actText,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 30,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        barangay ?? 'Select Barangay',
+                        style: const TextStyle(
+                          color: _actText,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 26,
+                        ),
+                      ),
+                    ),
+                    if (selectedEntry != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: selectedEntry!.activated
+                              ? const Color(0xFFEAF8EE)
+                              : const Color(0xFFFFEEE4),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          selectedEntry!.statusLabel,
+                          style: TextStyle(
+                            color: selectedEntry!.activated
+                                ? const Color(0xFF167441)
+                                : const Color(0xFFB04B16),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-                const Text(
-                  'Unregistered Barangay',
-                  style: TextStyle(
+                const SizedBox(height: 6),
+                Text(
+                  selectedEntry == null
+                      ? 'Choose a province, municipality, and barangay to continue.'
+                      : selectedEntry!.psgcListed
+                      ? 'Official PSGC Olongapo roster • ${selectedEntry!.classification}'
+                      : selectedEntry!.classification,
+                  style: const TextStyle(
                     color: _actSubtext,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+                if (selectedEntry != null && !selectedEntry!.activated) ...[
+                  const SizedBox(height: 6),
+                  const Text(
+                    'This barangay is not activated yet. Officials can still proceed with setup and activation.',
+                    style: TextStyle(
+                      color: _actSubtext,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1109,17 +1324,33 @@ class _MiniFeature extends StatelessWidget {
 class _ActivationSetupStep extends StatelessWidget {
   final InputDecoration Function(String, {String? hint}) field;
   final TextEditingController population;
-  final TextEditingController households;
+  final TextEditingController divisionCount;
   final String divisionType;
   final ValueChanged<String?> onDivision;
-  final TextEditingController founded;
+  final TextEditingController foundedYear;
+  final TextEditingController website;
+  final TextEditingController facebook;
+  final TextEditingController latitude;
+  final TextEditingController longitude;
+  final Uint8List? logoBytes;
+  final String? logoName;
+  final Future<void> Function() onPickFoundedYear;
+  final Future<void> Function() onPickLogo;
   const _ActivationSetupStep({
     required this.field,
     required this.population,
-    required this.households,
+    required this.divisionCount,
     required this.divisionType,
     required this.onDivision,
-    required this.founded,
+    required this.foundedYear,
+    required this.website,
+    required this.facebook,
+    required this.latitude,
+    required this.longitude,
+    required this.logoBytes,
+    required this.logoName,
+    required this.onPickFoundedYear,
+    required this.onPickLogo,
   });
   @override
   Widget build(BuildContext context) {
@@ -1145,36 +1376,176 @@ class _ActivationSetupStep extends StatelessWidget {
           TextField(
             controller: population,
             keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: field(
-              'Populasyon',
-              hint: 'Ilagay ang kabuuang populasyon',
+              'Population',
+              hint: 'Enter the total barangay population',
             ),
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
             initialValue: divisionType,
-            decoration: field('Uri ng Dibisyon'),
+            decoration: field('Division Type'),
             items: const [
-              DropdownMenuItem(value: 'Urban', child: Text('Urban')),
-              DropdownMenuItem(value: 'Rural', child: Text('Rural')),
-              DropdownMenuItem(value: 'Coastal', child: Text('Coastal')),
+              DropdownMenuItem(value: 'Zone', child: Text('Zone')),
+              DropdownMenuItem(value: 'Purok', child: Text('Purok')),
+              DropdownMenuItem(value: 'Sitio', child: Text('Sitio')),
             ],
             onChanged: onDivision,
           ),
           const SizedBox(height: 10),
           TextField(
-            controller: households,
+            controller: divisionCount,
             keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: field(
-              'Kabuuang Bilang o Titik ng Dibisyon',
-              hint: 'Ilagay ang numero o titik',
+              'Division Count',
+              hint: 'Enter the total number of $divisionType units',
             ),
           ),
           const SizedBox(height: 10),
           TextField(
-            controller: founded,
+            controller: foundedYear,
             readOnly: true,
-            decoration: field('Petsa ng Pagkakatatag'),
+            onTap: onPickFoundedYear,
+            decoration: field('Founding Year').copyWith(
+              suffixIcon: const Icon(Icons.calendar_today_outlined),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: website,
+            keyboardType: TextInputType.url,
+            decoration: field(
+              'Barangay Website',
+              hint: 'https://your-barangay.gov.ph',
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: facebook,
+            keyboardType: TextInputType.url,
+            decoration: field(
+              'Barangay Facebook Page',
+              hint: 'https://facebook.com/yourbarangay',
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: latitude,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: true,
+                  ),
+                  inputFormatters: [const _SixDecimalCoordinateFormatter()],
+                  decoration: field(
+                    'Latitude',
+                    hint: '14.832231',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: longitude,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: true,
+                  ),
+                  inputFormatters: [const _SixDecimalCoordinateFormatter()],
+                  decoration: field(
+                    'Longitude',
+                    hint: '120.279943',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          InkWell(
+            onTap: onPickLogo,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _actBorder),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Barangay Logo',
+                    style: TextStyle(
+                      color: _actText,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Tap to upload. The image is center-cropped and resized to 500x500 px.',
+                    style: TextStyle(
+                      color: _actSubtext,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Container(
+                        width: 76,
+                        height: 76,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFEFEF),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: _actBorder),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: logoBytes == null
+                            ? const Icon(
+                                Icons.add_photo_alternate_outlined,
+                                color: _actRed,
+                                size: 34,
+                              )
+                            : Image.memory(logoBytes!, fit: BoxFit.cover),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              logoName ?? 'No logo uploaded yet',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: _actText,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'PNG output • square crop • 500x500',
+                              style: TextStyle(
+                                color: _actSubtext,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),

@@ -12,12 +12,726 @@ const _officialThemeSurfaceAlt = Color(0xFFFFEAEA);
 const _officialThemeBorder = Color(0xFFF0D1D1);
 const _officialThemeText = Color(0xFF5A2B2B);
 const _officialThemeSubtext = Color(0xFF7A5959);
+const int _minimumFoundingYear = 1900;
+const Duration _cachedSessionLifetime = Duration(hours: 12);
 
 bool _isValidAppPin(String value) => RegExp(r'^\d{6}$').hasMatch(value);
+
+String _maskedPinPreview(String pin) {
+  if (pin.isEmpty) {
+    return '';
+  }
+  return List<String>.filled(pin.length, '•').join(' ');
+}
 
 String? _authToken;
 String? _currentOfficialMobile;
 _ResidentSessionProfile? _currentResidentProfile;
+const String _appVersionLabel = 'v2026.03.14';
+const String _appCreditsLabel =
+    'BarangayMo Platform Team, Olongapo pilot deployment';
+
+class _AppNotificationItem {
+  final String id;
+  final String title;
+  final String body;
+  final String category;
+  final DateTime createdAt;
+  final IconData icon;
+  final String priority;
+  final String? recordId;
+  final String? deepLink;
+  final String deliveryChannel;
+  final bool marketing;
+  bool read;
+
+  _AppNotificationItem({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.category,
+    required this.createdAt,
+    required this.icon,
+    this.priority = 'normal',
+    this.recordId,
+    this.deepLink,
+    this.deliveryChannel = 'In-app',
+    this.marketing = false,
+    this.read = false,
+  });
+}
+
+class _SecurityLogEntry {
+  final UserRole role;
+  final String actor;
+  final String mobile;
+  final String ipAddress;
+  final String action;
+  final DateTime createdAt;
+
+  const _SecurityLogEntry({
+    required this.role,
+    required this.actor,
+    required this.mobile,
+    required this.ipAddress,
+    required this.action,
+    required this.createdAt,
+  });
+}
+
+class _SystemTransactionEntry {
+  final UserRole role;
+  final String title;
+  final String type;
+  final String reference;
+  final String status;
+  final double amount;
+  final DateTime createdAt;
+
+  const _SystemTransactionEntry({
+    required this.role,
+    required this.title,
+    required this.type,
+    required this.reference,
+    required this.status,
+    required this.amount,
+    required this.createdAt,
+  });
+}
+
+class _HelpDeskTicketEntry {
+  final String id;
+  final UserRole role;
+  final String subject;
+  final String message;
+  final String contact;
+  final DateTime createdAt;
+  String status;
+
+  _HelpDeskTicketEntry({
+    required this.id,
+    required this.role,
+    required this.subject,
+    required this.message,
+    required this.contact,
+    required this.createdAt,
+    this.status = 'Open',
+  });
+}
+
+class _AccountDeletionRequest {
+  final UserRole role;
+  final String mobile;
+  final DateTime requestedAt;
+  final DateTime deleteOn;
+
+  const _AccountDeletionRequest({
+    required this.role,
+    required this.mobile,
+    required this.requestedAt,
+    required this.deleteOn,
+  });
+}
+
+class _EditableOfficialProfile {
+  final String name;
+  final String phone;
+  final Uint8List? photoBytes;
+  final String barangay;
+
+  const _EditableOfficialProfile({
+    required this.name,
+    required this.phone,
+    required this.barangay,
+    this.photoBytes,
+  });
+
+  _EditableOfficialProfile copyWith({
+    String? name,
+    String? phone,
+    Uint8List? photoBytes,
+    bool clearPhoto = false,
+    String? barangay,
+  }) {
+    return _EditableOfficialProfile(
+      name: name ?? this.name,
+      phone: phone ?? this.phone,
+      barangay: barangay ?? this.barangay,
+      photoBytes: clearPhoto ? null : photoBytes ?? this.photoBytes,
+    );
+  }
+}
+
+class _NotificationPreferenceSettings {
+  final bool pushEnabled;
+  final bool smsEnabled;
+  final bool marketingEnabled;
+  final bool quietHoursEnabled;
+  final int quietStartHour;
+  final int quietEndHour;
+
+  const _NotificationPreferenceSettings({
+    required this.pushEnabled,
+    required this.smsEnabled,
+    required this.marketingEnabled,
+    required this.quietHoursEnabled,
+    required this.quietStartHour,
+    required this.quietEndHour,
+  });
+
+  _NotificationPreferenceSettings copyWith({
+    bool? pushEnabled,
+    bool? smsEnabled,
+    bool? marketingEnabled,
+    bool? quietHoursEnabled,
+    int? quietStartHour,
+    int? quietEndHour,
+  }) {
+    return _NotificationPreferenceSettings(
+      pushEnabled: pushEnabled ?? this.pushEnabled,
+      smsEnabled: smsEnabled ?? this.smsEnabled,
+      marketingEnabled: marketingEnabled ?? this.marketingEnabled,
+      quietHoursEnabled: quietHoursEnabled ?? this.quietHoursEnabled,
+      quietStartHour: quietStartHour ?? this.quietStartHour,
+      quietEndHour: quietEndHour ?? this.quietEndHour,
+    );
+  }
+}
+
+class _NotificationDispatcherToken {
+  final UserRole role;
+  final String mobile;
+  final String token;
+  final String platform;
+  final DateTime registeredAt;
+
+  const _NotificationDispatcherToken({
+    required this.role,
+    required this.mobile,
+    required this.token,
+    required this.platform,
+    required this.registeredAt,
+  });
+}
+
+class _NotificationDispatchLogEntry {
+  final UserRole role;
+  final String title;
+  final String body;
+  final String audience;
+  final String channel;
+  final String provider;
+  final String status;
+  final String priority;
+  final DateTime createdAt;
+
+  const _NotificationDispatchLogEntry({
+    required this.role,
+    required this.title,
+    required this.body,
+    required this.audience,
+    required this.channel,
+    required this.provider,
+    required this.status,
+    required this.priority,
+    required this.createdAt,
+  });
+}
+
+class _DeferredNotificationEnvelope {
+  final UserRole role;
+  final String title;
+  final String body;
+  final String category;
+  final IconData icon;
+  final String priority;
+  final String? recordId;
+  final String? deepLink;
+  final bool marketing;
+
+  const _DeferredNotificationEnvelope({
+    required this.role,
+    required this.title,
+    required this.body,
+    required this.category,
+    required this.icon,
+    required this.priority,
+    this.recordId,
+    this.deepLink,
+    this.marketing = false,
+  });
+}
+
+class _BroadcastResidentProfile {
+  final String name;
+  final String mobile;
+  final String zone;
+  final String purok;
+  final String residentType;
+
+  const _BroadcastResidentProfile({
+    required this.name,
+    required this.mobile,
+    required this.zone,
+    required this.purok,
+    required this.residentType,
+  });
+}
+
+class _DirectMessageEntry {
+  final String id;
+  final String threadId;
+  final UserRole senderRole;
+  final String senderName;
+  final String residentName;
+  final String residentMobile;
+  final String? text;
+  final Uint8List? imageBytes;
+  final DateTime createdAt;
+  final DateTime? readAt;
+
+  const _DirectMessageEntry({
+    required this.id,
+    required this.threadId,
+    required this.senderRole,
+    required this.senderName,
+    required this.residentName,
+    required this.residentMobile,
+    required this.createdAt,
+    this.text,
+    this.imageBytes,
+    this.readAt,
+  });
+
+  bool get hasImage => imageBytes != null;
+
+  _DirectMessageEntry copyWith({
+    DateTime? readAt,
+  }) {
+    return _DirectMessageEntry(
+      id: id,
+      threadId: threadId,
+      senderRole: senderRole,
+      senderName: senderName,
+      residentName: residentName,
+      residentMobile: residentMobile,
+      text: text,
+      imageBytes: imageBytes,
+      createdAt: createdAt,
+      readAt: readAt ?? this.readAt,
+    );
+  }
+}
+
+final ValueNotifier<List<_AppNotificationItem>> _residentNotificationCenter =
+    ValueNotifier<List<_AppNotificationItem>>([
+      _AppNotificationItem(
+        id: 'res-1',
+        title: 'Clearance ready for pickup',
+        body: 'Your barangay clearance is approved and ready at the front desk.',
+        category: 'Documents',
+        createdAt: DateTime(2026, 3, 14, 8, 45),
+        icon: Icons.badge_outlined,
+      ),
+      _AppNotificationItem(
+        id: 'res-2',
+        title: 'Marketplace order confirmed',
+        body: 'Seller meetup for your printer order is scheduled tomorrow.',
+        category: 'Marketplace',
+        createdAt: DateTime(2026, 3, 13, 17, 10),
+        icon: Icons.shopping_bag_outlined,
+      ),
+    ]);
+
+final ValueNotifier<List<_AppNotificationItem>> _officialNotificationCenter =
+    ValueNotifier<List<_AppNotificationItem>>([
+      _AppNotificationItem(
+        id: 'off-1',
+        title: 'New clearance request',
+        body: 'Resident queue has one pending work clearance for review.',
+        category: 'Documents',
+        createdAt: DateTime(2026, 3, 14, 9, 5),
+        icon: Icons.assignment_outlined,
+      ),
+      _AppNotificationItem(
+        id: 'off-2',
+        title: 'Procurement step updated',
+        body: 'Street lighting replacement has advanced to Purchase Order.',
+        category: 'Finance',
+        createdAt: DateTime(2026, 3, 14, 10, 15),
+        icon: Icons.account_balance_wallet_outlined,
+      ),
+    ]);
+
+final ValueNotifier<_NotificationPreferenceSettings>
+_residentNotificationPreferences =
+    ValueNotifier<_NotificationPreferenceSettings>(
+      const _NotificationPreferenceSettings(
+        pushEnabled: true,
+        smsEnabled: true,
+        marketingEnabled: true,
+        quietHoursEnabled: true,
+        quietStartHour: 21,
+        quietEndHour: 6,
+      ),
+    );
+
+final ValueNotifier<_NotificationPreferenceSettings>
+_officialNotificationPreferences =
+    ValueNotifier<_NotificationPreferenceSettings>(
+      const _NotificationPreferenceSettings(
+        pushEnabled: true,
+        smsEnabled: true,
+        marketingEnabled: false,
+        quietHoursEnabled: false,
+        quietStartHour: 21,
+        quietEndHour: 6,
+      ),
+    );
+
+final ValueNotifier<int> _residentNotificationBadge =
+    ValueNotifier<int>(_residentNotificationCenter.value.where((item) => !item.read).length);
+
+final ValueNotifier<int> _officialNotificationBadge =
+    ValueNotifier<int>(_officialNotificationCenter.value.where((item) => !item.read).length);
+
+final ValueNotifier<List<_NotificationDispatcherToken>> _notificationDispatcherTokens =
+    ValueNotifier<List<_NotificationDispatcherToken>>([]);
+
+final ValueNotifier<List<_NotificationDispatchLogEntry>> _notificationDispatchLog =
+    ValueNotifier<List<_NotificationDispatchLogEntry>>([]);
+
+final ValueNotifier<List<_DeferredNotificationEnvelope>> _deferredNotifications =
+    ValueNotifier<List<_DeferredNotificationEnvelope>>([]);
+
+const List<_BroadcastResidentProfile> _broadcastResidentDirectory = [
+  _BroadcastResidentProfile(
+    name: 'John Dela Cruz',
+    mobile: '09171234567',
+    zone: 'Zone 1',
+    purok: 'Purok 1',
+    residentType: 'General',
+  ),
+  _BroadcastResidentProfile(
+    name: 'Maria Santos',
+    mobile: '09172345678',
+    zone: 'Zone 1',
+    purok: 'Purok 2',
+    residentType: 'Senior Citizen',
+  ),
+  _BroadcastResidentProfile(
+    name: 'Pedro Reyes',
+    mobile: '09173456789',
+    zone: 'Zone 2',
+    purok: 'Purok 3',
+    residentType: 'PWD',
+  ),
+  _BroadcastResidentProfile(
+    name: 'Ana Villanueva',
+    mobile: '09174567890',
+    zone: 'Zone 3',
+    purok: 'Purok 4',
+    residentType: 'Solo Parent',
+  ),
+];
+
+final ValueNotifier<List<_DirectMessageEntry>> _directMessageStore =
+    ValueNotifier<List<_DirectMessageEntry>>([
+      _DirectMessageEntry(
+        id: 'dm-1',
+        threadId: 'resident-09171234567',
+        senderRole: UserRole.official,
+        senderName: 'Barangay Secretary',
+        residentName: 'John Dela Cruz',
+        residentMobile: '09171234567',
+        text: 'Your clearance request is under verification. Please keep your ID ready.',
+        createdAt: DateTime(2026, 3, 14, 9, 30),
+      ),
+      _DirectMessageEntry(
+        id: 'dm-2',
+        threadId: 'resident-09171234567',
+        senderRole: UserRole.resident,
+        senderName: 'John Dela Cruz',
+        residentName: 'John Dela Cruz',
+        residentMobile: '09171234567',
+        text: 'Noted. I can visit the barangay hall after lunch.',
+        createdAt: DateTime(2026, 3, 14, 9, 37),
+        readAt: DateTime(2026, 3, 14, 9, 38),
+      ),
+      _DirectMessageEntry(
+        id: 'dm-3',
+        threadId: 'resident-09172345678',
+        senderRole: UserRole.resident,
+        senderName: 'Maria Santos',
+        residentName: 'Maria Santos',
+        residentMobile: '09172345678',
+        text: 'Can I follow up my indigency certificate request today?',
+        createdAt: DateTime(2026, 3, 14, 10, 18),
+      ),
+    ]);
+
+final StreamController<_DirectMessageEntry> _directMessageStreamController =
+    StreamController<_DirectMessageEntry>.broadcast();
+
+final ValueNotifier<List<_SecurityLogEntry>> _securityLogFeed =
+    ValueNotifier<List<_SecurityLogEntry>>([]);
+
+final ValueNotifier<List<_HelpDeskTicketEntry>> _helpDeskFeed =
+    ValueNotifier<List<_HelpDeskTicketEntry>>([
+      _HelpDeskTicketEntry(
+        id: 'HD-24018',
+        role: UserRole.resident,
+        subject: 'Document follow-up',
+        message: 'Resident asked for a follow-up on a travel clearance request.',
+        contact: '09123456789',
+        createdAt: DateTime(2026, 3, 12, 14, 25),
+        status: 'In Review',
+      ),
+      _HelpDeskTicketEntry(
+        id: 'HD-24019',
+        role: UserRole.official,
+        subject: 'Printer issue in records desk',
+        message: 'Official reported a queue printing failure in the records desk.',
+        contact: '09184443322',
+        createdAt: DateTime(2026, 3, 13, 9, 40),
+        status: 'Open',
+      ),
+    ]);
+
+final ValueNotifier<List<_SystemTransactionEntry>> _transactionHistoryFeed =
+    ValueNotifier<List<_SystemTransactionEntry>>([
+      _SystemTransactionEntry(
+        role: UserRole.resident,
+        title: 'Barangay Clearance',
+        type: 'Document Request',
+        reference: 'CLR-2026-114',
+        status: 'Approved',
+        amount: 75,
+        createdAt: DateTime(2026, 3, 11, 13, 10),
+      ),
+      _SystemTransactionEntry(
+        role: UserRole.resident,
+        title: 'Epson EcoTank L3210',
+        type: 'Marketplace Order',
+        reference: 'ORD-88341',
+        status: 'For Meetup',
+        amount: 8290,
+        createdAt: DateTime(2026, 3, 10, 16, 45),
+      ),
+      _SystemTransactionEntry(
+        role: UserRole.official,
+        title: 'Daily queue bulk export',
+        type: 'System Export',
+        reference: 'EXP-20014',
+        status: 'Completed',
+        amount: 0,
+        createdAt: DateTime(2026, 3, 14, 10, 5),
+      ),
+    ]);
+
+final ValueNotifier<_AccountDeletionRequest?> _residentDeletionRequest =
+    ValueNotifier<_AccountDeletionRequest?>(null);
+final ValueNotifier<_AccountDeletionRequest?> _officialDeletionRequest =
+    ValueNotifier<_AccountDeletionRequest?>(null);
+
+final ValueNotifier<_EditableOfficialProfile> _officialEditableProfile =
+    ValueNotifier<_EditableOfficialProfile>(
+      const _EditableOfficialProfile(
+        name: 'Lester Nadong',
+        phone: '09124444233',
+        barangay: 'West Tapinac',
+      ),
+    );
+
+class _BarangayDirectoryEntry {
+  final String name;
+  final bool activated;
+  final bool psgcListed;
+  final String classification;
+
+  const _BarangayDirectoryEntry({
+    required this.name,
+    this.activated = false,
+    this.psgcListed = true,
+    this.classification = 'Urban Barangay',
+  });
+
+  String get statusLabel => activated ? 'Registered' : 'For Activation';
+}
+
+// PSA PSGC roster for Olongapo City barangays, verified March 14, 2026.
+const List<_BarangayDirectoryEntry> _olongapoBarangayDirectory = [
+  _BarangayDirectoryEntry(name: 'Asinan'),
+  _BarangayDirectoryEntry(name: 'Banicain', activated: true),
+  _BarangayDirectoryEntry(name: 'Barretto'),
+  _BarangayDirectoryEntry(name: 'East Bajac-bajac'),
+  _BarangayDirectoryEntry(name: 'East Tapinac', activated: true),
+  _BarangayDirectoryEntry(name: 'Gordon Heights'),
+  _BarangayDirectoryEntry(name: 'Kalaklan', activated: true),
+  _BarangayDirectoryEntry(name: 'Mabayuan'),
+  _BarangayDirectoryEntry(name: 'New Cabalan'),
+  _BarangayDirectoryEntry(name: 'New Ilalim'),
+  _BarangayDirectoryEntry(name: 'New Kababae'),
+  _BarangayDirectoryEntry(name: 'New Kalalake'),
+  _BarangayDirectoryEntry(name: 'Old Cabalan', activated: true),
+  _BarangayDirectoryEntry(name: 'Pag-asa'),
+  _BarangayDirectoryEntry(name: 'Santa Rita'),
+  _BarangayDirectoryEntry(name: 'West Bajac-bajac'),
+  _BarangayDirectoryEntry(name: 'West Tapinac', activated: true),
+];
+
+final Map<String, _BarangayDirectoryEntry> _olongapoBarangayIndex = {
+  for (final entry in _olongapoBarangayDirectory) entry.name: entry,
+};
+
+class _OfficialBarangaySetupDraft {
+  String barangay = 'West Tapinac';
+  String city = 'City of Olongapo';
+  String province = 'Zambales';
+  String region = 'Region 3';
+  String landmark = 'WEST TAPINAC BARANGAY HALL';
+  String website = 'https://www.westtapinac-olongapo.gov.ph';
+  String facebook = 'https://facebook.com/westtapinacofficial';
+  String divisionType = 'Zone';
+  int divisionCount = 10;
+  int population = 22365;
+  int foundingYear = 1961;
+  double latitude = 14.832231;
+  double longitude = 120.279943;
+  Uint8List? logoBytes;
+  String? logoFileName;
+  int psaPopulationBaseYear = 2025;
+  String secretaryFirstName = 'Brigette';
+  String secretaryMiddleName = '';
+  String secretaryLastName = 'Barrera';
+  String secretarySuffix = 'None';
+  String secretaryMobile = '09123456701';
+  String secretaryEmail = 'olongapoasinan@gmail.com';
+  String secretaryIdType = 'Digital National ID';
+  Uint8List? secretaryIdBytes;
+  String? secretaryIdFileName;
+  String punongSignatureText = 'E. NAZARENO';
+  List<List<Offset>> punongSignaturePaths = <List<Offset>>[];
+}
+
+final _officialBarangaySetup = _OfficialBarangaySetupDraft();
+
+_BarangayDirectoryEntry? _lookupBarangayDirectoryEntry(
+  String? province,
+  String? city,
+  String? barangay,
+) {
+  if (province == 'Zambales' &&
+      city == 'City of Olongapo' &&
+      barangay != null &&
+      barangay.isNotEmpty) {
+    return _olongapoBarangayIndex[barangay];
+  }
+  return null;
+}
+
+bool _isValidSchemaUrl(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return true;
+  }
+  final uri = Uri.tryParse(trimmed);
+  return uri != null &&
+      (uri.scheme == 'http' || uri.scheme == 'https') &&
+      uri.host.isNotEmpty;
+}
+
+bool _isValidFoundingYearValue(int year) {
+  return year >= _minimumFoundingYear && year <= DateTime.now().year;
+}
+
+int _officialPopulationForYear([int? year]) {
+  final targetYear = year ?? DateTime.now().year;
+  final delta = targetYear - _officialBarangaySetup.psaPopulationBaseYear;
+  if (delta <= 0) {
+    return _officialBarangaySetup.population;
+  }
+  final annualIncrease = (_officialBarangaySetup.population * 0.0125).round();
+  return _officialBarangaySetup.population + (annualIncrease * delta);
+}
+
+double? _parseCoordinateValue(
+  String input, {
+  required double min,
+  required double max,
+}) {
+  final trimmed = input.trim();
+  if (trimmed.isEmpty || !RegExp(r'^-?\d{1,3}(\.\d{1,6})?$').hasMatch(trimmed)) {
+    return null;
+  }
+  final parsed = double.tryParse(trimmed);
+  if (parsed == null || parsed < min || parsed > max) {
+    return null;
+  }
+  return double.parse(parsed.toStringAsFixed(6));
+}
+
+String _formatCoordinateValue(double value) => value.toStringAsFixed(6);
+
+Future<Uint8List> _cropAndResizeSquareImage(
+  Uint8List sourceBytes, {
+  int size = 500,
+}) async {
+  final codec = await ui.instantiateImageCodec(sourceBytes);
+  final frame = await codec.getNextFrame();
+  final image = frame.image;
+  final shortestSide = image.width < image.height ? image.width : image.height;
+  final offsetX = (image.width - shortestSide) / 2;
+  final offsetY = (image.height - shortestSide) / 2;
+
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder);
+  final paint = Paint()
+    ..isAntiAlias = true
+    ..filterQuality = FilterQuality.high;
+
+  canvas.drawImageRect(
+    image,
+    Rect.fromLTWH(
+      offsetX.toDouble(),
+      offsetY.toDouble(),
+      shortestSide.toDouble(),
+      shortestSide.toDouble(),
+    ),
+    Rect.fromLTWH(0, 0, size.toDouble(), size.toDouble()),
+    paint,
+  );
+
+  final square = await recorder.endRecording().toImage(size, size);
+  final data = await square.toByteData(format: ui.ImageByteFormat.png);
+  return data!.buffer.asUint8List();
+}
+
+Future<({Uint8List bytes, String fileName})?> _pickAndPrepareBarangayLogo() async {
+  final file = await ImagePicker().pickImage(source: ImageSource.gallery);
+  if (file == null) {
+    return null;
+  }
+  final rawBytes = await file.readAsBytes();
+  final preparedBytes = await _cropAndResizeSquareImage(rawBytes);
+  return (bytes: preparedBytes, fileName: file.name);
+}
+
+class _SixDecimalCoordinateFormatter extends TextInputFormatter {
+  const _SixDecimalCoordinateFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final next = newValue.text;
+    if (next.isEmpty || RegExp(r'^-?\d{0,3}(\.\d{0,6})?$').hasMatch(next)) {
+      return newValue;
+    }
+    return oldValue;
+  }
+}
 
 class _ResidentSessionProfile {
   final String name;
@@ -75,7 +789,7 @@ class _ResidentSessionProfile {
     if (mobile.isEmpty) {
       return displayName;
     }
-    return '$displayName • $mobile';
+    return '$displayName - $mobile';
   }
 
   String get profileCode {
@@ -119,6 +833,26 @@ void _clearResidentSessionProfile() {
   _currentResidentProfile = null;
 }
 
+void _updateResidentEditableProfile({
+  required String name,
+  required String phone,
+}) {
+  final current = _currentResidentProfile;
+  if (current == null) {
+    return;
+  }
+  _currentResidentProfile = _ResidentSessionProfile(
+    name: name,
+    mobile: phone,
+    province: current.province,
+    cityMunicipality: current.cityMunicipality,
+    barangay: current.barangay,
+    middleName: current.middleName,
+    suffix: current.suffix,
+    religion: current.religion,
+  );
+}
+
 String _residentDisplayName() {
   return _currentResidentProfile?.displayName ?? 'Resident';
 }
@@ -146,6 +880,508 @@ String _residentPersonalSummary() {
 
 String _residentProfileCode() {
   return _currentResidentProfile?.profileCode ?? 'Resident Account';
+}
+
+ValueNotifier<List<_AppNotificationItem>> _notificationCenterForRole(
+  UserRole role,
+) {
+  return role == UserRole.resident
+      ? _residentNotificationCenter
+      : _officialNotificationCenter;
+}
+
+ValueNotifier<_NotificationPreferenceSettings> _notificationPreferencesForRole(
+  UserRole role,
+) {
+  return role == UserRole.resident
+      ? _residentNotificationPreferences
+      : _officialNotificationPreferences;
+}
+
+ValueNotifier<int> _notificationBadgeForRole(UserRole role) {
+  return role == UserRole.resident
+      ? _residentNotificationBadge
+      : _officialNotificationBadge;
+}
+
+bool _isInQuietHours(
+  DateTime value,
+  _NotificationPreferenceSettings settings,
+) {
+  if (!settings.quietHoursEnabled) {
+    return false;
+  }
+  final hour = value.hour;
+  final start = settings.quietStartHour;
+  final end = settings.quietEndHour;
+  if (start == end) {
+    return true;
+  }
+  if (start > end) {
+    return hour >= start || hour < end;
+  }
+  return hour >= start && hour < end;
+}
+
+void _incrementNotificationBadge(UserRole role) {
+  final badge = _notificationBadgeForRole(role);
+  badge.value = badge.value + 1;
+}
+
+void _resetNotificationBadge(UserRole role) {
+  _notificationBadgeForRole(role).value = 0;
+}
+
+void _markNotificationRead(UserRole role, _AppNotificationItem item) {
+  item.read = true;
+  _notificationCenterForRole(role).value = [..._notificationCenterForRole(role).value];
+}
+
+void _registerNotificationToken(
+  UserRole role,
+  String mobile, {
+  String platform = 'android',
+}) {
+  final normalized = _normalizeMobileForKey(mobile);
+  if (normalized.isEmpty) {
+    return;
+  }
+  final next = [
+    for (final token in _notificationDispatcherTokens.value)
+      if (!(token.role == role && token.mobile == normalized)) token,
+    _NotificationDispatcherToken(
+      role: role,
+      mobile: normalized,
+      token: 'mock-fcm-${role.name}-$normalized',
+      platform: platform,
+      registeredAt: DateTime.now(),
+    ),
+  ];
+  _notificationDispatcherTokens.value = next;
+}
+
+void _appendDispatchLog({
+  required UserRole role,
+  required String title,
+  required String body,
+  required String audience,
+  required String channel,
+  required String provider,
+  required String status,
+  required String priority,
+}) {
+  _notificationDispatchLog.value = [
+    _NotificationDispatchLogEntry(
+      role: role,
+      title: title,
+      body: body,
+      audience: audience,
+      channel: channel,
+      provider: provider,
+      status: status,
+      priority: priority,
+      createdAt: DateTime.now(),
+    ),
+    ..._notificationDispatchLog.value,
+  ];
+}
+
+void _flushDeferredNotifications() {
+  if (_deferredNotifications.value.isEmpty) {
+    return;
+  }
+  final pending = [..._deferredNotifications.value];
+  final stillQueued = <_DeferredNotificationEnvelope>[];
+  for (final item in pending) {
+    final prefs = _notificationPreferencesForRole(item.role).value;
+    if (_isInQuietHours(DateTime.now(), prefs) && item.priority != 'emergency') {
+      stillQueued.add(item);
+      continue;
+    }
+    _pushSystemNotification(
+      item.role,
+      title: item.title,
+      body: item.body,
+      category: item.category,
+      icon: item.icon,
+      priority: item.priority,
+      recordId: item.recordId,
+      deepLink: item.deepLink,
+      marketing: item.marketing,
+      respectQuietHours: false,
+    );
+  }
+  _deferredNotifications.value = stillQueued;
+}
+
+void _handleAppOpened() {
+  _resetNotificationBadge(UserRole.resident);
+  _resetNotificationBadge(UserRole.official);
+  _flushDeferredNotifications();
+}
+
+List<_BroadcastResidentProfile> _filterBroadcastRecipients({
+  String zone = 'All',
+  String purok = 'All',
+  String residentType = 'All',
+}) {
+  return _broadcastResidentDirectory.where((entry) {
+    final zoneOk = zone == 'All' || entry.zone == zone;
+    final purokOk = purok == 'All' || entry.purok == purok;
+    final typeOk = residentType == 'All' || entry.residentType == residentType;
+    return zoneOk && purokOk && typeOk;
+  }).toList();
+}
+
+String _directThreadId(String residentMobile) =>
+    'resident-${_normalizeMobileForKey(residentMobile)}';
+
+List<_DirectMessageEntry> _messagesForThread(String threadId) {
+  final items = _directMessageStore.value
+      .where((entry) => entry.threadId == threadId)
+      .toList()
+    ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+  return items;
+}
+
+void _markDirectMessagesRead(UserRole viewerRole, String threadId) {
+  bool changed = false;
+  final updated = [
+    for (final message in _directMessageStore.value)
+      if (message.threadId == threadId &&
+          message.senderRole != viewerRole &&
+          message.readAt == null)
+        (() {
+          changed = true;
+          return message.copyWith(readAt: DateTime.now());
+        })()
+      else
+        message,
+  ];
+  if (changed) {
+    _directMessageStore.value = updated;
+  }
+}
+
+void _sendDirectMessage({
+  required UserRole senderRole,
+  required String residentName,
+  required String residentMobile,
+  String? text,
+  Uint8List? imageBytes,
+}) {
+  final threadId = _directThreadId(residentMobile);
+  final senderName = senderRole == UserRole.official
+      ? _officialEditableProfile.value.name
+      : _displayNameForRole(UserRole.resident);
+  final entry = _DirectMessageEntry(
+    id: 'dm-${DateTime.now().microsecondsSinceEpoch}',
+    threadId: threadId,
+    senderRole: senderRole,
+    senderName: senderName,
+    residentName: residentName,
+    residentMobile: residentMobile,
+    text: text,
+    imageBytes: imageBytes,
+    createdAt: DateTime.now(),
+  );
+  _directMessageStore.value = [..._directMessageStore.value, entry];
+  _directMessageStreamController.add(entry);
+  final recipientRole =
+      senderRole == UserRole.official ? UserRole.resident : UserRole.official;
+  _pushSystemNotification(
+    recipientRole,
+    title: senderRole == UserRole.official
+        ? 'Official message received'
+        : 'Resident message received',
+    body: text?.trim().isNotEmpty == true
+        ? text!.trim()
+        : 'Image attachment received.',
+    category: 'Messages',
+    icon: Icons.chat_bubble_outline_rounded,
+    priority: 'normal',
+    recordId: threadId,
+    deepLink: 'barangaymo://message/$threadId',
+  );
+}
+
+void _sendOfficialBroadcast({
+  required String title,
+  required String body,
+  required String zone,
+  required String purok,
+  required String residentType,
+  required bool emergency,
+}) {
+  final recipients = _filterBroadcastRecipients(
+    zone: zone,
+    purok: purok,
+    residentType: residentType,
+  );
+  final audience =
+      '${recipients.length} resident(s) | $zone | $purok | $residentType';
+  final currentResidentMobile = _currentResidentProfile?.mobile ?? '';
+  final shouldDeliverToCurrentResident =
+      recipients.isEmpty ||
+      recipients.any(
+        (entry) =>
+            _normalizeMobileForKey(entry.mobile) ==
+            _normalizeMobileForKey(currentResidentMobile),
+      );
+  if (shouldDeliverToCurrentResident) {
+    _pushSystemNotification(
+      UserRole.resident,
+      title: title,
+      body: body,
+      category: emergency ? 'Emergency Broadcast' : 'Broadcast',
+      icon: emergency ? Icons.warning_amber_rounded : Icons.campaign_outlined,
+      priority: emergency ? 'emergency' : 'high',
+      deepLink: 'barangaymo://broadcast/${DateTime.now().millisecondsSinceEpoch}',
+      respectQuietHours: !emergency,
+    );
+  }
+  _pushSystemNotification(
+    UserRole.official,
+    title: 'Broadcast dispatched',
+    body: '$title sent to ${recipients.length} targeted residents.',
+    category: 'Broadcast',
+    icon: Icons.campaign_rounded,
+    priority: emergency ? 'emergency' : 'high',
+    deepLink: 'barangaymo://dispatch-log/broadcast',
+    respectQuietHours: false,
+  );
+  _appendDispatchLog(
+    role: UserRole.official,
+    title: title,
+    body: body,
+    audience: audience,
+    channel: emergency ? 'FCM + SMS' : 'FCM',
+    provider: emergency ? 'Semaphore -> Twilio failover' : 'FCM dispatcher',
+    status: recipients.isEmpty ? 'No matching audience' : 'Dispatched',
+    priority: emergency ? 'emergency' : 'high',
+  );
+}
+
+ValueNotifier<_AccountDeletionRequest?> _deletionRequestForRole(UserRole role) {
+  return role == UserRole.resident
+      ? _residentDeletionRequest
+      : _officialDeletionRequest;
+}
+
+String _displayNameForRole(UserRole role) {
+  if (role == UserRole.resident) {
+    return _residentDisplayName();
+  }
+  return _officialEditableProfile.value.name;
+}
+
+String _mobileForRole(UserRole role) {
+  if (role == UserRole.resident) {
+    return _residentMobileDisplay();
+  }
+  return _officialEditableProfile.value.phone;
+}
+
+String _stableMockIpAddress(String seed) {
+  final digits = seed.replaceAll(RegExp(r'\D'), '');
+  final base = digits.isEmpty ? '09123456789' : digits;
+  final numbers = base.codeUnits.fold<List<int>>(
+    [10, 20, 30, 40],
+    (parts, unit) => [
+      (parts[0] + unit) % 200 + 20,
+      (parts[1] + unit * 2) % 180 + 20,
+      (parts[2] + unit * 3) % 180 + 20,
+      (parts[3] + unit * 4) % 180 + 20,
+    ],
+  );
+  return '${numbers[0]}.${numbers[1]}.${numbers[2]}.${numbers[3]}';
+}
+
+void _pushSystemNotification(
+  UserRole role, {
+  required String title,
+  required String body,
+  required String category,
+  required IconData icon,
+  String priority = 'normal',
+  String? recordId,
+  String? deepLink,
+  bool marketing = false,
+  bool respectQuietHours = true,
+}) {
+  final preferences = _notificationPreferencesForRole(role).value;
+  if (marketing && !preferences.marketingEnabled) {
+    _appendDispatchLog(
+      role: role,
+      title: title,
+      body: body,
+      audience: _systemRoleLabel(role),
+      channel: 'Suppressed',
+      provider: 'Preference engine',
+      status: 'Blocked by marketing preference',
+      priority: priority,
+    );
+    return;
+  }
+  if (respectQuietHours &&
+      priority != 'emergency' &&
+      _isInQuietHours(DateTime.now(), preferences)) {
+    _deferredNotifications.value = [
+      _DeferredNotificationEnvelope(
+        role: role,
+        title: title,
+        body: body,
+        category: category,
+        icon: icon,
+        priority: priority,
+        recordId: recordId,
+        deepLink: deepLink,
+        marketing: marketing,
+      ),
+      ..._deferredNotifications.value,
+    ];
+    _appendDispatchLog(
+      role: role,
+      title: title,
+      body: body,
+      audience: _systemRoleLabel(role),
+      channel: 'Deferred',
+      provider: 'Quiet hours',
+      status: 'Queued until quiet hours end',
+      priority: priority,
+    );
+    return;
+  }
+  final store = _notificationCenterForRole(role);
+  final hasToken = _notificationDispatcherTokens.value.any((token) {
+    return token.role == role;
+  });
+  final deliveryChannel = preferences.pushEnabled && hasToken
+      ? 'FCM'
+      : ((priority == 'high' || priority == 'emergency') && preferences.smsEnabled
+            ? 'SMS'
+            : 'In-app');
+  final provider = deliveryChannel == 'SMS'
+      ? 'Semaphore -> Twilio failover'
+      : (deliveryChannel == 'FCM' ? 'FCM dispatcher' : 'Local inbox');
+  store.value = [
+    _AppNotificationItem(
+      id: '${role.name}-${DateTime.now().millisecondsSinceEpoch}',
+      title: title,
+      body: body,
+      category: category,
+      createdAt: DateTime.now(),
+      icon: icon,
+      priority: priority,
+      recordId: recordId,
+      deepLink: deepLink,
+      deliveryChannel: deliveryChannel,
+      marketing: marketing,
+    ),
+    ...store.value,
+  ];
+  _incrementNotificationBadge(role);
+  _appendDispatchLog(
+    role: role,
+    title: title,
+    body: body,
+    audience: _systemRoleLabel(role),
+    channel: deliveryChannel,
+    provider: provider,
+    status: 'Delivered',
+    priority: priority,
+  );
+}
+
+void _markAllNotificationsRead(UserRole role) {
+  final store = _notificationCenterForRole(role);
+  for (final item in store.value) {
+    item.read = true;
+  }
+  store.value = [...store.value];
+  _resetNotificationBadge(role);
+}
+
+void _recordSecurityLog(
+  UserRole role, {
+  required String mobile,
+  required String action,
+}) {
+  _securityLogFeed.value = [
+    _SecurityLogEntry(
+      role: role,
+      actor: _displayNameForRole(role),
+      mobile: mobile,
+      ipAddress: _stableMockIpAddress(mobile),
+      action: action,
+      createdAt: DateTime.now(),
+    ),
+    ..._securityLogFeed.value,
+  ];
+}
+
+void _recordTransaction(_SystemTransactionEntry entry) {
+  _transactionHistoryFeed.value = [entry, ..._transactionHistoryFeed.value];
+}
+
+String _submitHelpDeskTicket(
+  UserRole role, {
+  required String subject,
+  required String message,
+  required String contact,
+}) {
+  final id = 'HD-${DateTime.now().millisecondsSinceEpoch % 100000}';
+  _helpDeskFeed.value = [
+    _HelpDeskTicketEntry(
+      id: id,
+      role: role,
+      subject: subject,
+      message: message,
+      contact: contact,
+      createdAt: DateTime.now(),
+    ),
+    ..._helpDeskFeed.value,
+  ];
+  _pushSystemNotification(
+    role,
+    title: 'Help desk ticket submitted',
+    body: '$subject has been recorded under ticket $id.',
+    category: 'Support',
+    icon: Icons.support_agent_outlined,
+    recordId: id,
+    deepLink: 'barangaymo://helpdesk/$id',
+  );
+  return id;
+}
+
+void _scheduleAccountDeletion(UserRole role, String mobile) {
+  final requestedAt = DateTime.now();
+  _deletionRequestForRole(role).value = _AccountDeletionRequest(
+    role: role,
+    mobile: mobile,
+    requestedAt: requestedAt,
+    deleteOn: requestedAt.add(const Duration(days: 30)),
+  );
+  _pushSystemNotification(
+    role,
+    title: 'Account deletion scheduled',
+    body: 'Your account is now under a 30-day grace period before deletion.',
+    category: 'Security',
+    icon: Icons.delete_outline,
+    deepLink: 'barangaymo://security/deletion',
+  );
+}
+
+void _cancelScheduledDeletion(UserRole role) {
+  _deletionRequestForRole(role).value = null;
+  _pushSystemNotification(
+    role,
+    title: 'Deletion request cancelled',
+    body: 'Your account will remain active and accessible.',
+    category: 'Security',
+    icon: Icons.restore_from_trash_outlined,
+    deepLink: 'barangaymo://security/deletion',
+  );
 }
 
 String _normalizeMobileForKey(String input) {
@@ -251,6 +1487,17 @@ class _ResidentMpinStore {
     return false;
   }
 
+  static Future<String?> currentPin(String mobile) async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final variant in _mobileKeyVariants(mobile)) {
+      final value = prefs.getString(_keyFor(variant));
+      if (value != null && value.isNotEmpty) {
+        return value;
+      }
+    }
+    return null;
+  }
+
   static Future<void> rememberMobile(String mobile) async {
     final normalized = _normalizeMobileForKey(mobile);
     if (normalized.isEmpty) {
@@ -276,6 +1523,7 @@ class _ResidentAuthCacheStore {
   static const String _middleNamePrefix = 'resident_session_middle_name_';
   static const String _suffixPrefix = 'resident_session_suffix_';
   static const String _religionPrefix = 'resident_session_religion_';
+  static const String _expiresPrefix = 'resident_session_expires_';
 
   static String _key(String prefix, String mobile) {
     return '$prefix${_normalizeMobileForKey(mobile)}';
@@ -306,6 +1554,10 @@ class _ResidentAuthCacheStore {
     );
     await prefs.setString(_key(_suffixPrefix, accountMobile), profile.suffix);
     await prefs.setString(_key(_religionPrefix, accountMobile), profile.religion);
+    await prefs.setInt(
+      _key(_expiresPrefix, accountMobile),
+      DateTime.now().add(_cachedSessionLifetime).millisecondsSinceEpoch,
+    );
   }
 
   static Future<bool> restore(String mobile) async {
@@ -325,6 +1577,11 @@ class _ResidentAuthCacheStore {
       }
     }
     if (token.isEmpty || keyMobile == null) {
+      return false;
+    }
+    final expiresAt = prefs.getInt(_key(_expiresPrefix, keyMobile)) ?? 0;
+    if (expiresAt <= DateTime.now().millisecondsSinceEpoch) {
+      await clear(keyMobile);
       return false;
     }
     _authToken = token;
@@ -358,6 +1615,7 @@ class _ResidentAuthCacheStore {
       await prefs.remove(_key(_middleNamePrefix, variant));
       await prefs.remove(_key(_suffixPrefix, variant));
       await prefs.remove(_key(_religionPrefix, variant));
+      await prefs.remove(_key(_expiresPrefix, variant));
     }
   }
 }
@@ -401,6 +1659,17 @@ class _OfficialMpinStore {
     return false;
   }
 
+  static Future<String?> currentPin(String mobile) async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final variant in _mobileKeyVariants(mobile)) {
+      final value = prefs.getString(_keyFor(variant));
+      if (value != null && value.isNotEmpty) {
+        return value;
+      }
+    }
+    return null;
+  }
+
   static Future<void> rememberMobile(String mobile) async {
     final normalized = _normalizeMobileForKey(mobile);
     if (normalized.isEmpty) {
@@ -420,6 +1689,7 @@ class _OfficialAuthCacheStore {
   static const String _tokenPrefix = 'official_session_token_';
   static const String _mobilePrefix = 'official_session_mobile_';
   static const String _activationPrefix = 'official_session_activation_';
+  static const String _expiresPrefix = 'official_session_expires_';
 
   static String _key(String prefix, String mobile) {
     return '$prefix${_normalizeMobileForKey(mobile)}';
@@ -438,6 +1708,10 @@ class _OfficialAuthCacheStore {
     await prefs.setString(_key(_tokenPrefix, mobile), token);
     await prefs.setString(_key(_mobilePrefix, mobile), normalized);
     await prefs.setBool(_key(_activationPrefix, mobile), activationCompleted);
+    await prefs.setInt(
+      _key(_expiresPrefix, mobile),
+      DateTime.now().add(_cachedSessionLifetime).millisecondsSinceEpoch,
+    );
   }
 
   static Future<bool> restore(String mobile) async {
@@ -457,6 +1731,11 @@ class _OfficialAuthCacheStore {
       }
     }
     if (token.isEmpty || keyMobile == null) {
+      return false;
+    }
+    final expiresAt = prefs.getInt(_key(_expiresPrefix, keyMobile)) ?? 0;
+    if (expiresAt <= DateTime.now().millisecondsSinceEpoch) {
+      await clear(keyMobile);
       return false;
     }
     final storedActivation =
@@ -479,6 +1758,7 @@ class _OfficialAuthCacheStore {
       await prefs.remove(_key(_tokenPrefix, variant));
       await prefs.remove(_key(_mobilePrefix, variant));
       await prefs.remove(_key(_activationPrefix, variant));
+      await prefs.remove(_key(_expiresPrefix, variant));
     }
   }
 }
@@ -521,6 +1801,19 @@ Future<void> _completeResidentSignIn(
   }
   await _ResidentMpinStore.rememberMobile(mobile);
   await _FirstRoleAccessStore.markRegistered(UserRole.resident);
+  _recordSecurityLog(
+    UserRole.resident,
+    mobile: normalizedMobile,
+    action: 'Signed in',
+  );
+  _registerNotificationToken(UserRole.resident, normalizedMobile);
+  _pushSystemNotification(
+    UserRole.resident,
+    title: 'New resident session',
+    body: 'Your resident account signed in successfully.',
+    category: 'Security',
+    icon: Icons.verified_user_outlined,
+  );
   if (!context.mounted) {
     return;
   }
@@ -546,6 +1839,10 @@ Future<void> _completeOfficialSignIn(
   final localCompleted = await _LocalActivationStore.isCompleted(normalized);
   _currentOfficialMobile = normalized;
   _officialActivationCompleted = activationCompleted || localCompleted;
+  _officialEditableProfile.value = _officialEditableProfile.value.copyWith(
+    phone: normalized,
+    barangay: _officialBarangaySetup.barangay,
+  );
   await _OfficialAuthCacheStore.save(
     token: token,
     mobile: normalized,
@@ -556,6 +1853,19 @@ Future<void> _completeOfficialSignIn(
   }
   await _OfficialMpinStore.rememberMobile(normalized);
   await _FirstRoleAccessStore.markRegistered(UserRole.official);
+  _recordSecurityLog(
+    UserRole.official,
+    mobile: normalized,
+    action: 'Signed in',
+  );
+  _registerNotificationToken(UserRole.official, normalized);
+  _pushSystemNotification(
+    UserRole.official,
+    title: 'Official session active',
+    body: 'Official account access was granted on this device.',
+    category: 'Security',
+    icon: Icons.admin_panel_settings_outlined,
+  );
   if (!context.mounted) {
     return;
   }
@@ -597,12 +1907,14 @@ class _AuthRequestOutcome {
   final Map<String, dynamic> body;
   final bool sawTimeout;
   final bool sawConnectionError;
+  final bool sawHtmlFallback;
 
   const _AuthRequestOutcome({
     required this.response,
     required this.body,
     required this.sawTimeout,
     required this.sawConnectionError,
+    required this.sawHtmlFallback,
   });
 }
 
@@ -611,7 +1923,8 @@ class _AuthApi {
   static final _AuthApi instance = _AuthApi._();
 
   static const String _liveBaseUrl = 'https://api.barangaymo.com';
-  static const String _detectedLanBaseUrl = 'http://10.100.150.96:8000';
+  static const String _androidPhysicalDeviceBaseUrlHint =
+      'http://<YOUR_PC_LOCAL_IP>:8000';
   static const String _configuredBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: '',
@@ -626,19 +1939,37 @@ class _AuthApi {
     return input.endsWith('/') ? input.substring(0, input.length - 1) : input;
   }
 
+  String? _validatedBaseUrl(String input) {
+    final trimmed = _trimTrailingSlash(input.trim());
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      return null;
+    }
+    if (uri.host.isEmpty) {
+      return null;
+    }
+    return trimmed;
+  }
+
   List<String> _baseUrlCandidates() {
     final out = <String>[];
 
     void add(String baseUrl) {
-      final trimmed = _trimTrailingSlash(baseUrl.trim());
-      if (trimmed.isNotEmpty && !out.contains(trimmed)) {
+      final trimmed = _validatedBaseUrl(baseUrl);
+      if (trimmed != null && !out.contains(trimmed)) {
         out.add(trimmed);
       }
     }
 
-    if (_configuredBaseUrl.trim().isNotEmpty) {
-      add(_configuredBaseUrl);
-      return out;
+    final configuredBaseUrl = _validatedBaseUrl(_configuredBaseUrl);
+    if (configuredBaseUrl != null) {
+      add(configuredBaseUrl);
+      if (out.isNotEmpty) {
+        return out;
+      }
     }
 
     if (!bool.fromEnvironment('dart.vm.product')) {
@@ -648,7 +1979,6 @@ class _AuthApi {
       } else {
         switch (defaultTargetPlatform) {
           case TargetPlatform.android:
-            add(_detectedLanBaseUrl);
             add('http://10.0.2.2:8000');
             add('http://127.0.0.1:8000');
             add('http://localhost:8000');
@@ -664,6 +1994,7 @@ class _AuthApi {
             break;
         }
       }
+      add(_liveBaseUrl);
       return out;
     }
 
@@ -671,9 +2002,9 @@ class _AuthApi {
     return out;
   }
 
-  Uri _endpoint(String baseUrl, String path) {
+  Uri? _endpoint(String baseUrl, String path) {
     final normalizedPath = path.startsWith('/') ? path.substring(1) : path;
-    return Uri.parse('${_trimTrailingSlash(baseUrl)}/$normalizedPath');
+    return Uri.tryParse('${_trimTrailingSlash(baseUrl)}/$normalizedPath');
   }
 
   List<Uri> _endpointCandidates(String path) {
@@ -686,6 +2017,9 @@ class _AuthApi {
 
     void add(String baseUrl, String currentPath) {
       final uri = _endpoint(baseUrl, currentPath);
+      if (uri == null) {
+        return;
+      }
       if (!out.any((existing) => existing.toString() == uri.toString())) {
         out.add(uri);
       }
@@ -722,9 +2056,28 @@ class _AuthApi {
     if (!bool.fromEnvironment('dart.vm.product') &&
         !kIsWeb &&
         defaultTargetPlatform == TargetPlatform.android) {
-      return 'Cannot connect to local Laravel backend. Run `php artisan serve --host=0.0.0.0 --port=8000`, then use `flutter run --dart-define=API_BASE_URL=$_detectedLanBaseUrl`, or use `adb reverse tcp:8000 tcp:8000` over USB.';
+      return 'Cannot connect to any backend. For local Laravel on Android, run `php artisan serve --host=0.0.0.0 --port=8000`, then start Flutter with `--dart-define=API_BASE_URL=$_androidPhysicalDeviceBaseUrlHint`, or use `adb reverse tcp:8000 tcp:8000` over USB.';
     }
     return 'Cannot connect to server. Check backend URL and if Laravel is running.';
+  }
+
+  String _htmlFallbackMessage(String path) {
+    final normalizedPath = path.startsWith('/') ? path : '/$path';
+    return 'Backend reached, but $normalizedPath returned HTML instead of JSON. Check Laravel API routes in routes/api.php and make sure the endpoint returns JSON.';
+  }
+
+  bool _looksLikeHtmlFallback(
+    http.Response response,
+    Map<String, dynamic> decodedBody,
+  ) {
+    if (decodedBody.isNotEmpty) {
+      return false;
+    }
+    final contentType = (response.headers['content-type'] ?? '').toLowerCase();
+    final raw = response.body.trimLeft().toLowerCase();
+    return contentType.contains('text/html') ||
+        raw.startsWith('<!doctype html') ||
+        raw.startsWith('<html');
   }
 
   Future<_AuthRequestOutcome> _postToEndpointCandidates({
@@ -736,6 +2089,7 @@ class _AuthApi {
     Map<String, dynamic> decodedBody = <String, dynamic>{};
     var sawTimeout = false;
     var sawConnectionError = false;
+    var sawHtmlFallback = false;
     final endpoints = _endpointCandidates(path);
 
     for (var i = 0; i < endpoints.length; i++) {
@@ -744,6 +2098,10 @@ class _AuthApi {
             .post(endpoints[i], headers: headers, body: body)
             .timeout(_requestTimeout);
         final decoded = _decodeResponseBody(current.body);
+        if (_looksLikeHtmlFallback(current, decoded)) {
+          sawHtmlFallback = true;
+          continue;
+        }
         if (i < endpoints.length - 1 && _isRouteNotFound(current, decoded)) {
           continue;
         }
@@ -762,6 +2120,7 @@ class _AuthApi {
       body: decodedBody,
       sawTimeout: sawTimeout,
       sawConnectionError: sawConnectionError,
+      sawHtmlFallback: sawHtmlFallback,
     );
   }
 
@@ -824,6 +2183,12 @@ class _AuthApi {
     final body = outcome.body;
 
     if (response == null) {
+      if (outcome.sawHtmlFallback) {
+        return _AuthApiResult(
+          success: false,
+          message: _htmlFallbackMessage('/api/register'),
+        );
+      }
       if (outcome.sawTimeout) {
         return _AuthApiResult(
           success: false,
@@ -883,6 +2248,12 @@ class _AuthApi {
     final body = outcome.body;
 
     if (response == null) {
+      if (outcome.sawHtmlFallback) {
+        return _AuthApiResult(
+          success: false,
+          message: _htmlFallbackMessage('/api/login'),
+        );
+      }
       if (outcome.sawTimeout) {
         return _AuthApiResult(
           success: false,
@@ -955,6 +2326,12 @@ class _AuthApi {
     final body = outcome.body;
 
     if (response == null) {
+      if (outcome.sawHtmlFallback) {
+        return _AuthApiResult(
+          success: false,
+          message: _htmlFallbackMessage('/api/verify-otp'),
+        );
+      }
       if (outcome.sawTimeout) {
         return _AuthApiResult(
           success: false,
@@ -1006,6 +2383,12 @@ class _AuthApi {
     final body = outcome.body;
 
     if (response == null) {
+      if (outcome.sawHtmlFallback) {
+        return _AuthApiResult(
+          success: false,
+          message: _htmlFallbackMessage('/api/resend-otp'),
+        );
+      }
       if (outcome.sawTimeout) {
         return _AuthApiResult(
           success: false,
@@ -1049,6 +2432,12 @@ class _AuthApi {
     final body = outcome.body;
 
     if (response == null) {
+      if (outcome.sawHtmlFallback) {
+        return _AuthApiResult(
+          success: false,
+          message: _htmlFallbackMessage('/api/activation/complete'),
+        );
+      }
       if (outcome.sawTimeout) {
         return _AuthApiResult(
           success: false,
@@ -1223,3419 +2612,3 @@ class _AuthApi {
   }
 }
 
-class RoleGatewayScreen extends StatelessWidget {
-  const RoleGatewayScreen({super.key});
-
-  Future<void> _openRoleEntry(BuildContext context, UserRole role) async {
-    final hasRegistered = await _FirstRoleAccessStore.hasRegistered(role);
-    if (!context.mounted) {
-      return;
-    }
-    if (!hasRegistered) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => AuthRegisterPage(role: role)),
-      );
-      return;
-    }
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => _loginPageForRole(role)),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            children: [
-              const SizedBox(height: 30),
-              Container(
-                width: 240,
-                height: 116,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(26),
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFFFFFFFF), Color(0xFFF1F3FF)],
-                  ),
-                  border: Border.all(color: const Color(0xFFE4E7FF)),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x26000000),
-                      blurRadius: 16,
-                      offset: Offset(0, 8),
-                    ),
-                    BoxShadow(
-                      color: Color(0x66FFFFFF),
-                      blurRadius: 6,
-                      offset: Offset(-2, -2),
-                    ),
-                  ],
-                ),
-                child: Image.asset(
-                  'public/barangaymo.png',
-                  fit: BoxFit.contain,
-                  filterQuality: FilterQuality.high,
-                ),
-              ),
-              const SizedBox(height: 26),
-              Expanded(
-                child: Column(
-                  children: [
-                    _roleCard(
-                      context,
-                      title: 'Residents',
-                      subtitle: 'Community services, profile, and RBI card',
-                      role: UserRole.resident,
-                    ),
-                    const SizedBox(height: 14),
-                    _roleCard(
-                      context,
-                      title: 'Barangay Officials',
-                      subtitle: 'Activation, administration, and records',
-                      role: UserRole.official,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _roleCard(
-    BuildContext context, {
-    required String title,
-    required String subtitle,
-    required UserRole role,
-  }) {
-    final isResident = role == UserRole.resident;
-    final accent = isResident
-        ? const Color(0xFF2E35D3)
-        : _officialThemePrimary;
-    final logoAsset = isResident
-        ? 'public/bm-residents.png'
-        : 'public/bm-officials.png';
-    final activeCount = isResident ? '1,284' : '64';
-
-    return Expanded(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => _openRoleEntry(context, role),
-        child: Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: const Color(0xFFF3F3FF),
-            border: Border.all(color: accent, width: 1.3),
-          ),
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 72,
-                    height: 72,
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
-                      color: Colors.white,
-                      border: Border.all(color: accent.withValues(alpha: 0.2)),
-                    ),
-                    child: Image.asset(logoAsset, fit: BoxFit.contain),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 7,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color: accent.withValues(alpha: 0.08),
-                      border: Border.all(color: accent.withValues(alpha: 0.25)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          'Active Accounts',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: accent.withValues(alpha: 0.95),
-                          ),
-                        ),
-                        Text(
-                          activeCount,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w900,
-                            color: accent,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const Spacer(),
-              Text(subtitle),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Text('Continue', style: TextStyle(color: accent)),
-                  const SizedBox(width: 6),
-                  Icon(Icons.arrow_forward, color: accent, size: 18),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class RoleAuthChoicePage extends StatelessWidget {
-  final UserRole role;
-  const RoleAuthChoicePage({super.key, required this.role});
-
-  @override
-  Widget build(BuildContext context) {
-    final isResident = role == UserRole.resident;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(isResident ? 'Residents' : 'Barangay Officials'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Spacer(),
-            SizedBox(
-              height: 120,
-              child: Image.asset(
-                isResident
-                    ? 'public/bm-residents.png'
-                    : 'public/bm-officials.png',
-                fit: BoxFit.contain,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              isResident ? 'Resident Log In' : 'Official Log In',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 26),
-            FilledButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => AuthRegisterPage(role: role)),
-              ),
-              style: FilledButton.styleFrom(
-                backgroundColor: isResident
-                    ? const Color(0xFF2E35D3)
-                    : _officialThemePrimary,
-              ),
-              child: const Text('Register'),
-            ),
-            const SizedBox(height: 10),
-            OutlinedButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => _loginPageForRole(role)),
-              ),
-              child: const Text('Log In'),
-            ),
-            const Spacer(),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class OfficialLoginPage extends StatelessWidget {
-  const OfficialLoginPage({super.key});
-
-  @override
-  Widget build(BuildContext context) =>
-      const OfficialAccessPage();
-}
-
-class AuthRegisterPage extends StatefulWidget {
-  final UserRole role;
-  const AuthRegisterPage({super.key, required this.role});
-
-  @override
-  State<AuthRegisterPage> createState() => _AuthRegisterPageState();
-}
-
-class _AuthRegisterPageState extends State<AuthRegisterPage> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _middleNameController = TextEditingController();
-  final _mobileController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
-  bool _noMiddleName = false;
-  bool _noSuffix = true;
-  String _suffix = 'None';
-  String _religion = 'Select...';
-  String? _selectedProvince;
-  String? _selectedCity;
-  String? _selectedBarangay;
-  bool _submitting = false;
-
-  static const Map<String, Map<String, List<String>>> _locationDirectory = {
-    'Zambales': {
-      'Botolan': [
-        'Bancal',
-        'Bangan',
-        'Batonlapoc',
-        'Belbel',
-        'Beneg',
-        'Binuclutan',
-        'Burgos',
-        'Cabatuan',
-        'Capayawan',
-        'Carael',
-        'Danacbunga',
-        'Maguisguis',
-        'Malomboy',
-        'Mambog',
-        'Moraza',
-        'Nacolcol',
-        'Owaog-Nibloc',
-        'Paco',
-        'Palis',
-        'Panan',
-        'Parel',
-        'Paudpod',
-        'Poonbato',
-        'Porac',
-        'San Isidro',
-        'San Juan',
-        'San Miguel',
-        'Santiago',
-        'Tampo',
-        'Taugtog',
-        'Villar',
-      ],
-      'Cabangan': [
-        'Anonang',
-        'Apo-apo',
-        'Arew',
-        'Banuambayo',
-        'Cadmang-Reserva',
-        'Camiling',
-        'Casabaan',
-        'Del Carmen',
-        'Dolores',
-        'Felmida-Diaz',
-        'Laoag',
-        'Lomboy',
-        'Longos',
-        'Mabanglit',
-        'New San Juan',
-        'San Antonio',
-        'San Isidro',
-        'San Juan',
-        'San Rafael',
-        'Santa Rita',
-        'Santo Nino',
-        'Tondo',
-      ],
-      'Candelaria': [
-        'Babancal',
-        'Binabalian',
-        'Catol',
-        'Dampay',
-        'Lauis',
-        'Libertador',
-        'Malabon',
-        'Malimanga',
-        'Pamibian',
-        'Panayonan',
-        'Pinagrealan',
-        'Poblacion',
-        'Sinabacan',
-        'Taposo',
-        'Uacon',
-        'Yamot',
-      ],
-      'Castillejos': [
-        'Balaybay',
-        'Buenavista',
-        'Del Pilar',
-        'Looc',
-        'Magsaysay',
-        'Nagbayan',
-        'Nagbunga',
-        'San Agustin',
-        'San Jose',
-        'San Juan',
-        'San Nicolas',
-        'San Pablo',
-        'San Roque',
-        'Santa Maria',
-      ],
-      'City of Olongapo': [
-        'Asinan',
-        'Banicain',
-        'Barretto',
-        'East Bajac-bajac',
-        'East Tapinac',
-        'Gordon Heights',
-        'Kalaklan',
-        'New Kalalake',
-        'Mabayuan',
-        'New Cabalan',
-        'New Ilalim',
-        'New Kababae',
-        'Pag-asa',
-        'Santa Rita',
-        'West Bajac-bajac',
-        'West Tapinac',
-        'Old Cabalan',
-      ],
-      'Iba': [
-        'Amungan',
-        'Bangantalinga',
-        'Dirita-Baloguen',
-        'Lipay-Dingin-Panibuatan',
-        'Palanginan',
-        'San Agustin',
-        'Santa Barbara',
-        'Santo Rosario',
-        'Zone 1 Poblacion',
-        'Zone 2 Poblacion',
-        'Zone 3 Poblacion',
-        'Zone 4 Poblacion',
-        'Zone 5 Poblacion',
-        'Zone 6 Poblacion',
-      ],
-      'Masinloc': [
-        'Baloganon',
-        'Bamban',
-        'Bani',
-        'Collat',
-        'Inhobol',
-        'North Poblacion',
-        'San Lorenzo',
-        'San Salvador',
-        'Santa Rita',
-        'Santo Rosario',
-        'South Poblacion',
-        'Taltal',
-        'Tapuac',
-      ],
-      'Palauig': [
-        'Alwa',
-        'Bato',
-        'Bulawen',
-        'Cauyan',
-        'East Poblacion',
-        'Garreta',
-        'Libaba',
-        'Liozon',
-        'Lipay',
-        'Locloc',
-        'Macarang',
-        'Magalawa',
-        'Pangolingan',
-        'Salaza',
-        'San Juan',
-        'Santo Nino',
-        'Santo Tomas',
-        'Tition',
-        'West Poblacion',
-      ],
-      'San Antonio': [
-        'Angeles',
-        'Antipolo',
-        'Burgos',
-        'East Dirita',
-        'Luna',
-        'Pundaquit',
-        'Rizal',
-        'San Esteban',
-        'San Gregorio',
-        'San Juan',
-        'San Miguel',
-        'San Nicolas',
-        'Santiago',
-        'West Dirita',
-      ],
-      'San Felipe': [
-        'Amagna',
-        'Apostol',
-        'Balincaguing',
-        'Faranal',
-        'Feria',
-        'Maloma',
-        'Manglicmot',
-        'Rosete',
-        'San Rafael',
-        'Santo Nino',
-        'Sindol',
-      ],
-      'San Marcelino': [
-        'Aglao',
-        'Buhawen',
-        'Burgos',
-        'Central',
-        'Consuelo Norte',
-        'Consuelo Sur',
-        'La Paz',
-        'Laoag',
-        'Linasin',
-        'Linusungan',
-        'Lucero',
-        'Nagbunga',
-        'Rabanes',
-        'Rizal',
-        'San Guillermo',
-        'San Isidro',
-        'San Rafael',
-        'Santa Fe',
-      ],
-      'San Narciso': [
-        'Alusiis',
-        'Beddeng',
-        'Candelaria',
-        'Dallipawen',
-        'Grullo',
-        'La Paz',
-        'Libertad',
-        'Namatacan',
-        'Natividad',
-        'Omaya',
-        'Paite',
-        'Patrocinio',
-        'San Jose',
-        'San Juan',
-        'San Pascual',
-        'San Rafael',
-        'Siminublan',
-      ],
-      'Santa Cruz': [
-        'Babuyan',
-        'Bangcol',
-        'Bayto',
-        'Biay',
-        'Bolitoc',
-        'Bulawon',
-        'Canaynayan',
-        'Gama',
-        'Guinabon',
-        'Guisguis',
-        'Lipay',
-        'Lomboy',
-        'Lucapon North',
-        'Lucapon South',
-        'Malabago',
-        'Naulo',
-        'Pagatpat',
-        'Pamonoran',
-        'Poblacion North',
-        'Poblacion South',
-        'Sabang',
-        'San Fernando',
-        'Tabalong',
-        'Tubotubo North',
-        'Tubotubo South',
-      ],
-      'Subic': [
-        'Aningway Sacatihan',
-        'Asinan Poblacion',
-        'Asinan Proper',
-        'Baraca-Camachile',
-        'Batiawan',
-        'Calapacuan',
-        'Calapandayan',
-        'Cawag',
-        'Ilwas',
-        'Mangan-Vaca',
-        'Matain',
-        'Naugsol',
-        'Pamatawan',
-        'San Isidro',
-        'Santo Tomas',
-        'Wawandue',
-      ],
-    },
-    'Bataan': {
-      'Balanga City': ['Bagumbayan', 'Cupang Proper', 'Poblacion', 'Tuyo'],
-      'Dinalupihan': ['Bangal', 'Layac', 'Pag-asa', 'Tucop'],
-      'Orani': ['Baluarte', 'Sibul', 'Tala', 'Wawa'],
-    },
-    'Pampanga': {
-      'City of San Fernando': ['Del Pilar', 'Sindalan', 'Calulut', 'Lourdes'],
-      'Angeles City': ['Pampang', 'Pulungbulu', 'Malabanias', 'Cutcut'],
-      'Mabalacat City': ['Dau', 'Mawaque', 'Mabiga', 'Camachiles'],
-    },
-  };
-
-  List<String> get _cities {
-    if (_selectedProvince == null) return const [];
-    final cities = _locationDirectory[_selectedProvince];
-    if (cities == null) return const [];
-    return cities.keys.toList();
-  }
-
-  List<String> get _barangays {
-    if (_selectedProvince == null || _selectedCity == null) return const [];
-    final cities = _locationDirectory[_selectedProvince];
-    if (cities == null) return const [];
-    return cities[_selectedCity] ?? const [];
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _middleNameController.dispose();
-    _mobileController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
-    super.dispose();
-  }
-
-  bool get _isResident => widget.role == UserRole.resident;
-
-  Color get _primaryColor =>
-      _isResident ? const Color(0xFF2E35D3) : _officialThemePrimary;
-
-  String get _title =>
-      _isResident ? 'Resident Registration' : 'Official Registration';
-
-  Color get _surfaceStart =>
-      _isResident ? const Color(0xFFF4F7FF) : _officialThemeSurfaceWarm;
-
-  Color get _surfaceEnd =>
-      _isResident ? const Color(0xFFEFF3FF) : _officialThemeSurfaceCool;
-
-  Color get _fieldBorderColor =>
-      _isResident ? const Color(0xFFC6D1FA) : _officialThemeBorder;
-
-  Color get _cardColor =>
-      _isResident ? const Color(0xFFFBFCFF) : const Color(0xFFFFFCF8);
-
-  Color get _titleColor =>
-      _isResident ? const Color(0xFF26305F) : _officialThemeText;
-
-  Color get _labelColor =>
-      _isResident ? const Color(0xFF5D6788) : _officialThemeSubtext;
-
-  OutlineInputBorder _inputBorder(Color color, {double width = 1}) {
-    return OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: color, width: width),
-    );
-  }
-
-  InputDecoration _fieldDecoration(String label) {
-    return InputDecoration(
-      labelText: label,
-      labelStyle: TextStyle(color: _labelColor, fontWeight: FontWeight.w600),
-      floatingLabelStyle: TextStyle(
-        color: _primaryColor,
-        fontWeight: FontWeight.w700,
-      ),
-      filled: true,
-      fillColor: Colors.white,
-      border: _inputBorder(_fieldBorderColor),
-      enabledBorder: _inputBorder(_fieldBorderColor),
-      focusedBorder: _inputBorder(_primaryColor, width: 1.5),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-    );
-  }
-
-  Widget _sectionCard({required String title, required List<Widget> children}) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _fieldBorderColor.withValues(alpha: 0.95)),
-        boxShadow: [
-          BoxShadow(
-            color: _primaryColor.withValues(alpha: 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              color: _titleColor,
-              fontWeight: FontWeight.w800,
-              fontSize: 15,
-            ),
-          ),
-          const SizedBox(height: 10),
-          ...children,
-        ],
-      ),
-    );
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    setState(() => _submitting = true);
-    final result = await _AuthApi.instance.register(
-      role: widget.role,
-      name: _nameController.text,
-      mobile: _mobileController.text,
-      password: _passwordController.text,
-      confirmPassword: _confirmPasswordController.text,
-      province: _isResident ? _selectedProvince : null,
-      cityMunicipality: _isResident ? _selectedCity : null,
-      barangay: _isResident ? _selectedBarangay : null,
-      middleName: _isResident && !_noMiddleName
-          ? _middleNameController.text.trim()
-          : null,
-      suffix: _isResident && !_noSuffix && _suffix != 'None' ? _suffix : null,
-      religion: _isResident && _religion != 'Select...' ? _religion : null,
-    );
-    if (!mounted) {
-      return;
-    }
-    setState(() => _submitting = false);
-
-    if (!result.success) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(result.message)));
-      return;
-    }
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(result.message)));
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AuthOtpVerificationPage(
-          role: widget.role,
-          mobile: _mobileController.text,
-          debugOtpCode: result.otpDebugCode,
-          pin: _passwordController.text.trim(),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
-      appBar: AppBar(
-        title: Text(_title),
-        elevation: 0,
-        backgroundColor: _surfaceStart,
-        surfaceTintColor: _surfaceStart,
-        foregroundColor: _titleColor,
-      ),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [_surfaceStart, _surfaceEnd],
-              ),
-            ),
-            child: ListView(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                16,
-                16,
-                16 + MediaQuery.of(context).viewInsets.bottom,
-              ),
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              children: [
-                Container(
-                  height: 112,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: _cardColor,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: _fieldBorderColor),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _primaryColor.withValues(alpha: 0.09),
-                        blurRadius: 12,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: Image.asset(
-                    _isResident
-                        ? 'public/bm-residents.png'
-                        : 'public/bm-officials.png',
-                    fit: BoxFit.contain,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _sectionCard(
-                  title: 'Account Basics',
-                  children: [
-                    TextFormField(
-                      controller: _nameController,
-                      decoration: _fieldDecoration('Full Name'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Name is required.';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _mobileController,
-                      keyboardType: TextInputType.phone,
-                      decoration: _fieldDecoration('Mobile Number'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Mobile number is required.';
-                        }
-                        if (value.replaceAll(RegExp(r'\D'), '').length < 10) {
-                          return 'Enter a valid mobile number.';
-                        }
-                        return null;
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                if (_isResident) ...[
-                  _sectionCard(
-                    title: 'Address Assignment (Required)',
-                    children: [
-                      DropdownButtonFormField<String>(
-                        initialValue: _selectedProvince,
-                        decoration: _fieldDecoration('1. Select Province'),
-                        items: _locationDirectory.keys
-                            .map(
-                              (v) => DropdownMenuItem(value: v, child: Text(v)),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedProvince = value;
-                            _selectedCity = null;
-                            _selectedBarangay = null;
-                          });
-                        },
-                        validator: (value) {
-                          if (!_isResident) return null;
-                          if (value == null || value.isEmpty) {
-                            return 'Province is required.';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      DropdownButtonFormField<String>(
-                        initialValue: _selectedCity,
-                        decoration: _fieldDecoration(
-                          '2. Select City/Municipality',
-                        ),
-                        items: _cities
-                            .map(
-                              (v) => DropdownMenuItem(value: v, child: Text(v)),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedCity = value;
-                            _selectedBarangay = null;
-                          });
-                        },
-                        validator: (value) {
-                          if (!_isResident) return null;
-                          if (value == null || value.isEmpty) {
-                            return 'City/Municipality is required.';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      DropdownButtonFormField<String>(
-                        initialValue: _selectedBarangay,
-                        decoration: _fieldDecoration('3. Select Barangay'),
-                        items: _barangays
-                            .map(
-                              (v) => DropdownMenuItem(value: v, child: Text(v)),
-                            )
-                            .toList(),
-                        onChanged: (value) =>
-                            setState(() => _selectedBarangay = value),
-                        validator: (value) {
-                          if (!_isResident) return null;
-                          if (value == null || value.isEmpty) {
-                            return 'Barangay is required.';
-                          }
-                          return null;
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  _sectionCard(
-                    title: 'Personal Details',
-                    children: [
-                      TextFormField(
-                        controller: _middleNameController,
-                        enabled: !_noMiddleName,
-                        decoration: _fieldDecoration(
-                          '4. Middle Name (Optional)',
-                        ),
-                      ),
-                      CheckboxListTile(
-                        dense: true,
-                        activeColor: _primaryColor,
-                        contentPadding: EdgeInsets.zero,
-                        value: _noMiddleName,
-                        title: Text(
-                          'I have no middle name',
-                          style: TextStyle(
-                            color: _labelColor,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        onChanged: (v) => setState(() {
-                          _noMiddleName = v ?? false;
-                          if (_noMiddleName) _middleNameController.clear();
-                        }),
-                      ),
-                      const SizedBox(height: 6),
-                      DropdownButtonFormField<String>(
-                        initialValue: _suffix,
-                        decoration: _fieldDecoration('5. Suffix (Optional)'),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'None',
-                            child: Text('Select...'),
-                          ),
-                          DropdownMenuItem(value: 'Jr.', child: Text('Jr.')),
-                          DropdownMenuItem(value: 'Sr.', child: Text('Sr.')),
-                          DropdownMenuItem(value: 'III', child: Text('III')),
-                          DropdownMenuItem(value: 'IV', child: Text('IV')),
-                        ],
-                        onChanged: (value) =>
-                            setState(() => _suffix = value ?? 'None'),
-                      ),
-                      CheckboxListTile(
-                        dense: true,
-                        activeColor: _primaryColor,
-                        contentPadding: EdgeInsets.zero,
-                        value: _noSuffix,
-                        title: Text(
-                          'I have no suffix',
-                          style: TextStyle(
-                            color: _labelColor,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        onChanged: (v) => setState(() {
-                          _noSuffix = v ?? true;
-                          if (_noSuffix) _suffix = 'None';
-                        }),
-                      ),
-                      const SizedBox(height: 6),
-                      DropdownButtonFormField<String>(
-                        initialValue: _religion,
-                        decoration: _fieldDecoration('6. Religion'),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'Select...',
-                            child: Text('Select...'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Catholic',
-                            child: Text('Catholic'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Christian',
-                            child: Text('Christian'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Islam',
-                            child: Text('Islam'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Iglesia ni Cristo',
-                            child: Text('Iglesia ni Cristo'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Others',
-                            child: Text('Others'),
-                          ),
-                        ],
-                        onChanged: (v) =>
-                            setState(() => _religion = v ?? 'Select...'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                ],
-                _sectionCard(
-                  title: 'Security PIN',
-                  children: [
-                    TextFormField(
-                      controller: _passwordController,
-                      keyboardType: TextInputType.number,
-                      obscureText: true,
-                      maxLength: _appPinLength,
-                      decoration: _fieldDecoration('6-digit PIN').copyWith(
-                        counterText: '',
-                      ),
-                      validator: (value) {
-                        final normalized = value?.trim() ?? '';
-                        if (!_isValidAppPin(normalized)) {
-                          return 'Enter a 6-digit PIN.';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _confirmPasswordController,
-                      keyboardType: TextInputType.number,
-                      obscureText: true,
-                      maxLength: _appPinLength,
-                      decoration: _fieldDecoration(
-                        'Confirm 6-digit PIN',
-                      ).copyWith(counterText: ''),
-                      validator: (value) {
-                        if ((value?.trim() ?? '') !=
-                            _passwordController.text.trim()) {
-                          return 'PINs do not match.';
-                        }
-                        return null;
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: _submitting ? null : _submit,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: _primaryColor,
-                    ),
-                    child: Text(
-                      _submitting ? 'Please wait...' : 'Create Account',
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: _submitting
-                      ? null
-                      : () => Navigator.pop(context),
-                  child: Text(
-                    'Back',
-                    style: TextStyle(
-                      color: _isResident
-                          ? const Color(0xFF303A8D)
-                          : _officialThemeSecondary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class AuthOtpVerificationPage extends StatefulWidget {
-  final UserRole role;
-  final String mobile;
-  final String? debugOtpCode;
-  final String? pin;
-
-  const AuthOtpVerificationPage({
-    super.key,
-    required this.role,
-    required this.mobile,
-    this.debugOtpCode,
-    this.pin,
-  });
-
-  @override
-  State<AuthOtpVerificationPage> createState() => _AuthOtpVerificationPageState();
-}
-
-class _AuthOtpVerificationPageState extends State<AuthOtpVerificationPage> {
-  final _formKey = GlobalKey<FormState>();
-  final _otpController = TextEditingController();
-  bool _submitting = false;
-  bool _resending = false;
-  String? _debugOtpCode;
-
-  bool get _isResident => widget.role == UserRole.resident;
-
-  Color get _primaryColor =>
-      _isResident ? const Color(0xFF2E35D3) : _officialThemePrimary;
-
-  Widget _homeForRole() {
-    if (_isResident) {
-      return const ResidentHomeShell();
-    }
-    return _officialActivationCompleted
-        ? const HomeShell()
-        : const ActivationFlow();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _debugOtpCode = widget.debugOtpCode;
-  }
-
-  @override
-  void dispose() {
-    _otpController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _verify() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    setState(() => _submitting = true);
-    final result = await _AuthApi.instance.verifyOtp(
-      role: widget.role,
-      mobile: widget.mobile,
-      otp: _otpController.text,
-    );
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _submitting = false;
-      if (result.otpDebugCode != null) {
-        _debugOtpCode = result.otpDebugCode;
-      }
-    });
-
-    if (!result.success || result.token == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(result.message)));
-      return;
-    }
-
-    _authToken = result.token;
-    if (_isResident) {
-      await _completeResidentSignIn(
-        context,
-        mobile: widget.mobile,
-        token: result.token!,
-        user: result.user,
-        pin: widget.pin,
-      );
-      return;
-    } else {
-      await _completeOfficialSignIn(
-        context,
-        mobile: widget.mobile,
-        token: result.token!,
-        activationCompleted: result.activationCompleted,
-        pin: widget.pin,
-      );
-      return;
-    }
-  }
-
-  Future<void> _resendOtp() async {
-    setState(() => _resending = true);
-    final result = await _AuthApi.instance.resendOtp(
-      role: widget.role,
-      mobile: widget.mobile,
-    );
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _resending = false;
-      _debugOtpCode = result.otpDebugCode;
-    });
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(result.message)));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final mobileLabel = widget.mobile.replaceAll(RegExp(r'\D'), '');
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Verify OTP')),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Icon(Icons.lock_clock_outlined, color: _primaryColor, size: 72),
-              const SizedBox(height: 16),
-              Text(
-                'Enter the 6-digit OTP for $mobileLabel',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Use the OTP generated for this new account before logging in.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Color(0xFF666B86)),
-              ),
-              if (_debugOtpCode != null) ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF2F5FF),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFD9E1FF)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Local Debug OTP',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF33409C),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _debugOtpCode!,
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 4,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-              const SizedBox(height: 20),
-              TextFormField(
-                controller: _otpController,
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                decoration: const InputDecoration(
-                  labelText: 'OTP Code',
-                  counterText: '',
-                ),
-                validator: (value) {
-                  final normalized = value?.trim() ?? '';
-                  if (normalized.length != 6) {
-                    return 'Enter the 6-digit OTP.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: _submitting ? null : _verify,
-                style: FilledButton.styleFrom(backgroundColor: _primaryColor),
-                child: Text(_submitting ? 'Verifying...' : 'Verify OTP'),
-              ),
-              const SizedBox(height: 10),
-              OutlinedButton(
-                onPressed: _resending || _submitting ? null : _resendOtp,
-                child: Text(_resending ? 'Sending...' : 'Resend OTP'),
-              ),
-              TextButton(
-                onPressed: _submitting
-                    ? null
-                    : () => Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => _loginPageForRole(
-                            widget.role,
-                            prefilledMobile: widget.mobile,
-                          ),
-                        ),
-                        (route) => false,
-                      ),
-                child: const Text('Back to PIN Login'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class AuthLoginPage extends StatefulWidget {
-  final UserRole role;
-  final String? prefilledMobile;
-  const AuthLoginPage({super.key, required this.role, this.prefilledMobile});
-
-  @override
-  State<AuthLoginPage> createState() => _AuthLoginPageState();
-}
-
-class _AuthLoginPageState extends State<AuthLoginPage> {
-  final _formKey = GlobalKey<FormState>();
-  final _mobileController = TextEditingController();
-  final _pinController = TextEditingController();
-  bool _submitting = false;
-
-  bool get _isResident => widget.role == UserRole.resident;
-
-  Color get _primaryColor =>
-      _isResident ? const Color(0xFF2E35D3) : _officialThemePrimary;
-
-  String get _title => _isResident ? 'Resident Login' : 'Official Login';
-
-  Widget _homeForRole() {
-    if (_isResident) {
-      return const ResidentHomeShell();
-    }
-    return _officialActivationCompleted
-        ? const HomeShell()
-        : const ActivationFlow();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _mobileController.text = widget.prefilledMobile ?? '';
-  }
-
-  @override
-  void dispose() {
-    _mobileController.dispose();
-    _pinController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    setState(() => _submitting = true);
-    final result = await _AuthApi.instance.login(
-      role: widget.role,
-      mobile: _mobileController.text,
-      password: _pinController.text.trim(),
-    );
-    if (!mounted) {
-      return;
-    }
-    setState(() => _submitting = false);
-
-    if (!result.success) {
-      if (result.otpRequired) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(result.message)));
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => AuthOtpVerificationPage(
-              role: widget.role,
-              mobile: _mobileController.text,
-              debugOtpCode: result.otpDebugCode,
-              pin: _pinController.text.trim(),
-            ),
-          ),
-        );
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(result.message)));
-      return;
-    }
-
-    _authToken = result.token;
-    if (_isResident) {
-      await _completeResidentSignIn(
-        context,
-        mobile: _mobileController.text,
-        token: result.token ?? '',
-        user: result.user,
-        pin: _pinController.text.trim(),
-      );
-      return;
-    } else {
-      await _completeOfficialSignIn(
-        context,
-        mobile: _mobileController.text,
-        token: result.token ?? '',
-        activationCompleted: result.activationCompleted,
-        pin: _pinController.text.trim(),
-      );
-      return;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
-      appBar: AppBar(title: Text(_title)),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              16,
-              16,
-              16 + MediaQuery.of(context).viewInsets.bottom,
-            ),
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            children: [
-              SizedBox(
-                height: 100,
-                child: Image.asset(
-                  _isResident
-                      ? 'public/bm-residents.png'
-                      : 'public/bm-officials.png',
-                  fit: BoxFit.contain,
-                ),
-              ),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: _mobileController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Mobile Number'),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Mobile number is required.';
-                  }
-                  if (value.replaceAll(RegExp(r'\D'), '').length < 10) {
-                    return 'Enter a valid mobile number.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _pinController,
-                keyboardType: TextInputType.number,
-                obscureText: true,
-                maxLength: _appPinLength,
-                decoration: const InputDecoration(
-                  labelText: '6-digit PIN',
-                  counterText: '',
-                ),
-                validator: (value) {
-                  final normalized = value?.trim() ?? '';
-                  if (!_isValidAppPin(normalized)) {
-                    return 'Enter a 6-digit PIN.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _submitting ? null : _submit,
-                  style: FilledButton.styleFrom(backgroundColor: _primaryColor),
-                  child: Text(_submitting ? 'Please wait...' : 'Log In'),
-                ),
-              ),
-              TextButton(
-                onPressed: _submitting
-                    ? null
-                    : () => Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => AuthRegisterPage(role: widget.role),
-                        ),
-                      ),
-                child: const Text('No account yet? Create one'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class ResidentWelcomePage extends StatelessWidget {
-  const ResidentWelcomePage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF2F1FF),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              const Spacer(),
-              const Text(
-                'Welcome to BarangayMo!',
-                style: TextStyle(
-                  fontSize: 34,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFF2E35D3),
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 10),
-              const Text('Ang unang sandigan ng mamamayan.'),
-              const SizedBox(height: 24),
-              SizedBox(
-                height: 110,
-                child: Image.asset(
-                  'public/bm-residents.png',
-                  fit: BoxFit.contain,
-                ),
-              ),
-              const Spacer(),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ResidentRegisterFlow(),
-                    ),
-                  ),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF2E35D3),
-                  ),
-                  child: const Text('GET STARTED'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class ResidentRegisterFlow extends StatefulWidget {
-  const ResidentRegisterFlow({super.key});
-
-  @override
-  State<ResidentRegisterFlow> createState() => _ResidentRegisterFlowState();
-}
-
-class _ResidentRegisterFlowState extends State<ResidentRegisterFlow> {
-  final page = PageController();
-  int i = 0;
-  bool noMiddleName = false;
-  bool noSuffix = false;
-  String religion = 'Select...';
-  final steps = const [
-    'Register with Mobile',
-    'OTP Verification',
-    'Set PIN',
-    'Address',
-    'Details',
-    'Photo',
-    'Done',
-  ];
-
-  void next() {
-    if (i == steps.length - 1) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const ResidentHomeShell()),
-        (route) => false,
-      );
-      return;
-    }
-    page.nextPage(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Resident Registration'),
-        backgroundColor: const Color(0xFF2E35D3),
-        foregroundColor: Colors.white,
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: LinearProgressIndicator(
-              value: (i + 1) / steps.length,
-              minHeight: 7,
-              color: const Color(0xFF2E35D3),
-            ),
-          ),
-          Text('${i + 1}/${steps.length} ${steps[i]}'),
-          Expanded(
-            child: PageView(
-              controller: page,
-              onPageChanged: (v) => setState(() => i = v),
-              children: [
-                _regWrap(
-                  children: const [
-                    TextField(
-                      decoration: InputDecoration(
-                        labelText: 'Mobile Number (+63)',
-                      ),
-                    ),
-                    SizedBox(height: 12),
-                    Text('By continuing, you agree to Terms and Policies.'),
-                  ],
-                  button: 'Get OTP',
-                  onNext: next,
-                ),
-                _regWrap(
-                  children: const [
-                    Text('Enter the 6-digit code sent to your phone.'),
-                    SizedBox(height: 10),
-                    TextField(
-                      decoration: InputDecoration(labelText: 'OTP Code'),
-                    ),
-                  ],
-                  button: 'Verify',
-                  onNext: next,
-                ),
-                _regWrap(
-                  children: const [
-                    TextField(
-                      obscureText: true,
-                      decoration: InputDecoration(
-                        labelText: 'Type 6-digit PIN',
-                      ),
-                    ),
-                    SizedBox(height: 10),
-                    TextField(
-                      obscureText: true,
-                      decoration: InputDecoration(
-                        labelText: 'Confirm 6-digit PIN',
-                      ),
-                    ),
-                  ],
-                  button: 'Submit',
-                  onNext: next,
-                ),
-                _regWrap(
-                  children: [
-                    const _StepTabs(active: 'Address'),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Please Complete Your Address Details:',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 8),
-                    const TextField(
-                      decoration: InputDecoration(
-                        labelText: '1. Select Province',
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    const TextField(
-                      decoration: InputDecoration(
-                        labelText: '2. Select City/Municipality',
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    const TextField(
-                      decoration: InputDecoration(
-                        labelText: '3. Select Barangay',
-                      ),
-                    ),
-                  ],
-                  button: 'Save Changes',
-                  onNext: next,
-                ),
-                _regWrap(
-                  children: [
-                    const _StepTabs(active: 'Details'),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Please Complete Your Personal Details:',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 8),
-                    const TextField(
-                      decoration: InputDecoration(labelText: '4. First Name'),
-                    ),
-                    const SizedBox(height: 10),
-                    const TextField(
-                      decoration: InputDecoration(
-                        labelText: '5. Middle Name (Optional)',
-                      ),
-                    ),
-                    CheckboxListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      value: noMiddleName,
-                      title: const Text('I have no middle name'),
-                      onChanged: (v) =>
-                          setState(() => noMiddleName = v ?? false),
-                    ),
-                    const SizedBox(height: 10),
-                    const TextField(
-                      decoration: InputDecoration(labelText: '6. Last Name'),
-                    ),
-                    const SizedBox(height: 10),
-                    const TextField(
-                      decoration: InputDecoration(
-                        labelText: '7. Suffix (Optional)',
-                      ),
-                    ),
-                    CheckboxListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      value: noSuffix,
-                      title: const Text('I have no suffix'),
-                      onChanged: (v) => setState(() => noSuffix = v ?? false),
-                    ),
-                    const SizedBox(height: 10),
-                    const TextField(
-                      decoration: InputDecoration(
-                        labelText: '8. Date of Birth',
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    const TextField(
-                      decoration: InputDecoration(
-                        labelText: '9. Place of Birth',
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    const TextField(
-                      decoration: InputDecoration(labelText: '10. Sex'),
-                    ),
-                    const SizedBox(height: 10),
-                    const TextField(
-                      decoration: InputDecoration(labelText: '11. Nationality'),
-                    ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: religion,
-                      decoration: const InputDecoration(
-                        labelText: '12. Religion',
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'Select...',
-                          child: Text('Select...'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'Catholic',
-                          child: Text('Catholic'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'Christian',
-                          child: Text('Christian'),
-                        ),
-                        DropdownMenuItem(value: 'Islam', child: Text('Islam')),
-                        DropdownMenuItem(
-                          value: 'Others',
-                          child: Text('Others'),
-                        ),
-                      ],
-                      onChanged: (v) =>
-                          setState(() => religion = v ?? 'Select...'),
-                    ),
-                  ],
-                  button: 'Save Details',
-                  onNext: next,
-                ),
-                _regWrap(
-                  children: [
-                    const _StepTabs(active: 'Photo'),
-                    const SizedBox(height: 8),
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Please Add a Photo for your identity:',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      height: 120,
-                      width: 120,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.black12),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Center(child: Text('Sample Photo')),
-                    ),
-                    const SizedBox(height: 10),
-                    Container(
-                      height: 130,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.black12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Center(
-                        child: Text('Choose a photo to upload'),
-                      ),
-                    ),
-                  ],
-                  button: 'Save Photo',
-                  onNext: next,
-                ),
-                _regWrap(
-                  children: const [
-                    Icon(
-                      Icons.check_circle,
-                      color: Color(0xFF2E35D3),
-                      size: 90,
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Congratulations, Shamira!',
-                      style: TextStyle(
-                        fontSize: 30,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    Text('You\'ve successfully registered in BarangayMo.'),
-                  ],
-                  button: 'Let\'s Go',
-                  onNext: next,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _regWrap({
-    required List<Widget> children,
-    required String button,
-    required VoidCallback onNext,
-  }) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        16,
-        16,
-        16 + MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: ListView(
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        children: [
-          ...children,
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: onNext,
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF2E35D3),
-            ),
-            child: Text(button),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class ResidentLoginPage extends StatelessWidget {
-  const ResidentLoginPage({super.key});
-
-  @override
-  Widget build(BuildContext context) =>
-      const AuthLoginPage(role: UserRole.resident);
-}
-
-class ResidentMpinLoginPage extends StatefulWidget {
-  const ResidentMpinLoginPage({super.key});
-  @override
-  State<ResidentMpinLoginPage> createState() => _ResidentMpinLoginPageState();
-}
-
-class _ResidentMpinLoginPageState extends State<ResidentMpinLoginPage> {
-  String pin = '';
-
-  void tap(String v) {
-    if (v == 'C') {
-      setState(() => pin = '');
-      return;
-    }
-    if (v == '<') {
-      if (pin.isNotEmpty) {
-        setState(() => pin = pin.substring(0, pin.length - 1));
-      }
-      return;
-    }
-    if (pin.length < 4) {
-      setState(() => pin += v);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '<'];
-    return Scaffold(
-      appBar: AppBar(title: const Text('PIN Login')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            const Text(
-              'Enter your 6-digit PIN',
-              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              pin.padRight(4, '•'),
-              style: const TextStyle(fontSize: 42, letterSpacing: 8),
-            ),
-            const SizedBox(height: 20),
-            Expanded(
-              child: GridView.count(
-                crossAxisCount: 3,
-                childAspectRatio: 1.4,
-                children: keys
-                    .map(
-                      (k) => Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: OutlinedButton(
-                          onPressed: () => tap(k),
-                          child: Text(k, style: const TextStyle(fontSize: 28)),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: pin.length == 4
-                    ? () => Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ResidentHomeShell(),
-                        ),
-                        (route) => false,
-                      )
-                    : null,
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF2E35D3),
-                ),
-                child: const Text('CONTINUE'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-Future<String?> _showPinEntrySheet(
-  BuildContext context, {
-  required String title,
-  required Color accentColor,
-  String initialPin = '',
-}) {
-  return showModalBottomSheet<String>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.white,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
-    builder: (sheetContext) {
-      var pin = initialPin;
-      const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '<'];
-      return StatefulBuilder(
-        builder: (context, setModalState) {
-          void tapKey(String value) {
-            if (value == 'C') {
-              setModalState(() => pin = '');
-              return;
-            }
-            if (value == '<') {
-              if (pin.isNotEmpty) {
-                setModalState(() => pin = pin.substring(0, pin.length - 1));
-              }
-              return;
-            }
-            if (pin.length < _appPinLength) {
-              setModalState(() => pin += value);
-            }
-          }
-
-          return SafeArea(
-            top: false,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                20,
-                18,
-                20,
-                20 + MediaQuery.of(sheetContext).viewInsets.bottom,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 44,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFD8DCE8),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Enter your $_appPinLength-digit PIN',
-                    style: const TextStyle(
-                      color: Color(0xFF6D738B),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(
-                      _appPinLength,
-                      (index) => Container(
-                        width: 16,
-                        height: 16,
-                        margin: const EdgeInsets.symmetric(horizontal: 7),
-                        decoration: BoxDecoration(
-                          color: index < pin.length ? accentColor : Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: accentColor, width: 1.4),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  GridView.count(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisCount: 3,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 1.3,
-                    children: keys
-                        .map(
-                          (key) => FilledButton(
-                            onPressed: () => tapKey(key),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: key == 'C' || key == '<'
-                                  ? accentColor.withValues(alpha: 0.12)
-                                  : Colors.white,
-                              foregroundColor: accentColor,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                side: BorderSide(
-                                  color: accentColor.withValues(alpha: 0.2),
-                                ),
-                              ),
-                            ),
-                            child: key == '<'
-                                ? const Icon(Icons.backspace_outlined)
-                                : Text(
-                                    key,
-                                    style: const TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: pin.length == _appPinLength
-                          ? () => Navigator.pop(sheetContext, pin)
-                          : null,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: accentColor,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      child: const Text('Use PIN'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      );
-    },
-  );
-}
-
-class ResidentAccessPage extends StatefulWidget {
-  final String? prefilledMobile;
-
-  const ResidentAccessPage({super.key, this.prefilledMobile});
-
-  @override
-  State<ResidentAccessPage> createState() => _ResidentAccessPageState();
-}
-
-class _ResidentAccessPageState extends State<ResidentAccessPage> {
-  final _mobileController = TextEditingController();
-  String _pin = '';
-  bool _loadingLastMobile = true;
-  bool _submitting = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _mobileController.text = widget.prefilledMobile?.trim() ?? '';
-    _loadLastMobile();
-  }
-
-  @override
-  void dispose() {
-    _mobileController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadLastMobile() async {
-    final lastMobile = await _ResidentMpinStore.lastMobile();
-    if (!mounted) {
-      return;
-    }
-    if (_mobileController.text.trim().isEmpty && lastMobile != null) {
-      _mobileController.text = lastMobile;
-    }
-    setState(() => _loadingLastMobile = false);
-  }
-
-  String get _normalizedMobile =>
-      _mobileController.text.replaceAll(RegExp(r'\D'), '');
-
-  bool get _hasValidMobile => _normalizedMobile.length >= 10;
-
-  Future<void> _openPinPad() async {
-    final pin = await _showPinEntrySheet(
-      context,
-      title: 'Resident PIN',
-      accentColor: const Color(0xFF2E35D3),
-      initialPin: _pin,
-    );
-    if (pin == null || !mounted) {
-      return;
-    }
-    setState(() => _pin = pin);
-  }
-
-  Future<void> _submitPinLogin() async {
-    if (!_hasValidMobile) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid mobile number first.')),
-      );
-      return;
-    }
-    if (!_isValidAppPin(_pin)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Enter your 6-digit PIN.'),
-        ),
-      );
-      return;
-    }
-    setState(() => _submitting = true);
-    final mobile = _mobileController.text.trim();
-    final hasLocalPin = await _ResidentMpinStore.hasPin(mobile);
-    final localPinValid = hasLocalPin && await _ResidentMpinStore.verifyPin(mobile, _pin);
-    if (localPinValid) {
-      final restored = await _ResidentAuthCacheStore.restore(mobile);
-      if (!mounted) {
-        return;
-      }
-      if (restored) {
-        setState(() => _submitting = false);
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const ResidentHomeShell()),
-          (route) => false,
-        );
-        return;
-      }
-    }
-
-    final result = await _AuthApi.instance.login(
-      role: UserRole.resident,
-      mobile: mobile,
-      password: _pin,
-    );
-    if (!mounted) {
-      return;
-    }
-    setState(() => _submitting = false);
-    if (!result.success) {
-      if (result.otpRequired) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => AuthOtpVerificationPage(
-              role: UserRole.resident,
-              mobile: mobile,
-              debugOtpCode: result.otpDebugCode,
-              pin: _pin,
-            ),
-          ),
-        );
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message)),
-      );
-      return;
-    }
-
-    _authToken = result.token;
-    await _completeResidentSignIn(
-      context,
-      mobile: mobile,
-      token: result.token ?? '',
-      user: result.user,
-      pin: _pin,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const primary = Color(0xFF2E35D3);
-    const background = Color(0xFFF3F1FF);
-
-    return Scaffold(
-      backgroundColor: background,
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(24, 18, 24, 32),
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.arrow_back, color: Colors.black87),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              height: 130,
-              child: Image.asset('public/barangaymo.png', fit: BoxFit.contain),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              '"Ang unang sandigan ng mamamayan!"',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Color(0xFF1E2235),
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 78),
-            const Text(
-              'Resident Log In',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Color(0xFF3D4158),
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE9E8FF),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x14000000),
-                    blurRadius: 10,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 40,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.9),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      '+63',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF2D3458),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: _mobileController,
-                      keyboardType: TextInputType.phone,
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => _submitPinLogin(),
-                      decoration: const InputDecoration(
-                        hintText: 'Enter mobile number...',
-                        border: InputBorder.none,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: _loadingLastMobile || _submitting ? null : _openPinPad,
-                style: OutlinedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xFF2D3458),
-                  side: const BorderSide(color: Color(0xFFD5D9F0)),
-                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.dialpad_rounded, color: primary),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _pin.isEmpty
-                            ? 'Tap to enter $_appPinLength-digit PIN'
-                            : ('•' * _pin.length),
-                        textAlign: TextAlign.left,
-                        style: TextStyle(
-                          color: _pin.isEmpty
-                              ? const Color(0xFF676D86)
-                              : const Color(0xFF2D3458),
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: _pin.isEmpty ? 0 : 4,
-                        ),
-                      ),
-                    ),
-                    if (_pin.isNotEmpty)
-                      IconButton(
-                        onPressed: _submitting ? null : () => setState(() => _pin = ''),
-                        icon: const Icon(Icons.close_rounded),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _loadingLastMobile || _submitting ? null : _submitPinLogin,
-                style: FilledButton.styleFrom(
-                  backgroundColor: primary,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: Text(
-                  _loadingLastMobile
-                      ? 'Loading...'
-                      : (_submitting ? 'Checking PIN...' : 'Log In with PIN'),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'Registered users can log in here using their mobile number and 6-digit PIN.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Color(0xFF666B86),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class ResidentMpinSetupPage extends StatefulWidget {
-  final String mobile;
-
-  const ResidentMpinSetupPage({super.key, required this.mobile});
-
-  @override
-  State<ResidentMpinSetupPage> createState() => _ResidentMpinSetupPageState();
-}
-
-class _ResidentMpinSetupPageState extends State<ResidentMpinSetupPage> {
-  final _formKey = GlobalKey<FormState>();
-  final _pinController = TextEditingController();
-  final _confirmPinController = TextEditingController();
-  bool _saving = false;
-
-  @override
-  void dispose() {
-    _pinController.dispose();
-    _confirmPinController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _saveMpin() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-    setState(() => _saving = true);
-    await _ResidentMpinStore.savePin(widget.mobile, _pinController.text.trim());
-    if (!mounted) {
-      return;
-    }
-    setState(() => _saving = false);
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const ResidentHomeShell()),
-      (route) => false,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF3F1FF),
-      appBar: AppBar(
-        title: const Text('Set PIN'),
-        backgroundColor: Colors.transparent,
-      ),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              const Icon(
-                Icons.lock_person_rounded,
-                size: 72,
-                color: Color(0xFF2E35D3),
-              ),
-              const SizedBox(height: 18),
-              const Text(
-                'Create your 6-digit PIN',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Use this PIN for faster resident login on this device for ${widget.mobile}.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Color(0xFF5B6079)),
-              ),
-              const SizedBox(height: 28),
-              TextFormField(
-                controller: _pinController,
-                keyboardType: TextInputType.number,
-                obscureText: true,
-                maxLength: _appPinLength,
-                decoration: const InputDecoration(
-                  labelText: '6-digit PIN',
-                  counterText: '',
-                ),
-                validator: (value) {
-                  final normalized = value?.trim() ?? '';
-                  if (!_isValidAppPin(normalized)) {
-                    return 'Enter a 6-digit PIN.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _confirmPinController,
-                keyboardType: TextInputType.number,
-                obscureText: true,
-                maxLength: _appPinLength,
-                decoration: const InputDecoration(
-                  labelText: 'Confirm PIN',
-                  counterText: '',
-                ),
-                validator: (value) {
-                  if ((value?.trim() ?? '') != _pinController.text.trim()) {
-                    return 'PIN does not match.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 18),
-              FilledButton(
-                onPressed: _saving ? null : _saveMpin,
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF2E35D3),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                child: Text(_saving ? 'Saving...' : 'Save PIN'),
-              ),
-              TextButton(
-                onPressed: _saving
-                    ? null
-                    : () => Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ResidentHomeShell(),
-                        ),
-                        (route) => false,
-                      ),
-                child: const Text('Skip for now'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class ResidentMpinUnlockPage extends StatefulWidget {
-  final String? mobile;
-
-  const ResidentMpinUnlockPage({super.key, this.mobile});
-
-  @override
-  State<ResidentMpinUnlockPage> createState() => _ResidentMpinUnlockPageState();
-}
-
-class _ResidentMpinUnlockPageState extends State<ResidentMpinUnlockPage> {
-  static const _keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '<'];
-
-  String _pin = '';
-  String _mobile = '';
-  bool _loadingMobile = true;
-  bool _submitting = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadMobile();
-  }
-
-  Future<void> _loadMobile() async {
-    final storedMobile = widget.mobile?.trim();
-    final fallbackMobile = await _ResidentMpinStore.lastMobile();
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _mobile = (storedMobile != null && storedMobile.isNotEmpty)
-          ? storedMobile
-          : (fallbackMobile ?? '');
-      _loadingMobile = false;
-    });
-  }
-
-  void _tapKey(String value) {
-    if (_submitting) {
-      return;
-    }
-    if (value == 'C') {
-      setState(() => _pin = '');
-      return;
-    }
-    if (value == '<') {
-      if (_pin.isNotEmpty) {
-        setState(() => _pin = _pin.substring(0, _pin.length - 1));
-      }
-      return;
-    }
-    if (_pin.length < _appPinLength) {
-      setState(() => _pin += value);
-    }
-  }
-
-  Future<void> _submitMpin() async {
-    if (_mobile.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No resident mobile number found for PIN login.'),
-        ),
-      );
-      return;
-    }
-    setState(() => _submitting = true);
-    final hasPin = await _ResidentMpinStore.hasPin(_mobile);
-    final isValid = hasPin && await _ResidentMpinStore.verifyPin(_mobile, _pin);
-    if (!mounted) {
-      return;
-    }
-    if (!isValid) {
-      setState(() {
-        _submitting = false;
-        _pin = '';
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            hasPin
-                ? 'Incorrect PIN. Try again.'
-                : 'No PIN found for this account. Log in on the access page.',
-          ),
-        ),
-      );
-      return;
-    }
-
-    final restored = await _ResidentAuthCacheStore.restore(_mobile);
-    if (!mounted) {
-      return;
-    }
-    setState(() => _submitting = false);
-    if (!restored) {
-      setState(() => _pin = '');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Saved session expired. Log in again on the access page.'),
-        ),
-      );
-      return;
-    }
-
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const ResidentHomeShell()),
-      (route) => false,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF3F1FF),
-      appBar: AppBar(
-        title: const Text('PIN Login'),
-        backgroundColor: Colors.transparent,
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
-              const Text(
-                'Enter your 6-digit PIN',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                _loadingMobile
-                    ? 'Loading account...'
-                    : (_mobile.isEmpty ? 'Resident account not found' : _mobile),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Color(0xFF666B86),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  _appPinLength,
-                  (index) => Container(
-                    width: 18,
-                    height: 18,
-                    margin: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      color: index < _pin.length
-                          ? const Color(0xFF2E35D3)
-                          : Colors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFF2E35D3)),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 26),
-              Expanded(
-                child: GridView.count(
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 3,
-                  mainAxisSpacing: 14,
-                  crossAxisSpacing: 14,
-                  childAspectRatio: 1.25,
-                  children: _keys
-                      .map(
-                        (key) => FilledButton(
-                          onPressed: () => _tapKey(key),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: key == 'C' || key == '<'
-                                ? const Color(0xFFE4E6FF)
-                                : Colors.white,
-                            foregroundColor: const Color(0xFF243082),
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              side: const BorderSide(
-                                color: Color(0xFFD7DBFF),
-                              ),
-                            ),
-                          ),
-                          child: key == '<'
-                              ? const Icon(Icons.backspace_outlined)
-                              : Text(
-                                  key,
-                                  style: const TextStyle(
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                        ),
-                      )
-                      .toList(),
-                ),
-              ),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _pin.length == _appPinLength && !_submitting
-                      ? _submitMpin
-                      : null,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF2E35D3),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: Text(_submitting ? 'Checking...' : 'Continue'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class OfficialAccessPage extends StatefulWidget {
-  final String? prefilledMobile;
-
-  const OfficialAccessPage({super.key, this.prefilledMobile});
-
-  @override
-  State<OfficialAccessPage> createState() => _OfficialAccessPageState();
-}
-
-class _OfficialAccessPageState extends State<OfficialAccessPage> {
-  final _mobileController = TextEditingController();
-  String _pin = '';
-  bool _loadingLastMobile = true;
-  bool _submitting = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _mobileController.text = widget.prefilledMobile?.trim() ?? '';
-    _loadLastMobile();
-  }
-
-  @override
-  void dispose() {
-    _mobileController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadLastMobile() async {
-    final lastMobile = await _OfficialMpinStore.lastMobile();
-    if (!mounted) {
-      return;
-    }
-    if (_mobileController.text.trim().isEmpty && lastMobile != null) {
-      _mobileController.text = lastMobile;
-    }
-    setState(() => _loadingLastMobile = false);
-  }
-
-  String get _normalizedMobile =>
-      _mobileController.text.replaceAll(RegExp(r'\D'), '');
-
-  bool get _hasValidMobile => _normalizedMobile.length >= 10;
-
-  Future<void> _openPinPad() async {
-    final pin = await _showPinEntrySheet(
-      context,
-      title: 'Official PIN',
-      accentColor: _officialThemePrimary,
-      initialPin: _pin,
-    );
-    if (pin == null || !mounted) {
-      return;
-    }
-    setState(() => _pin = pin);
-  }
-
-  Future<void> _submitPinLogin() async {
-    if (!_hasValidMobile) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid mobile number first.')),
-      );
-      return;
-    }
-    if (!_isValidAppPin(_pin)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Enter your 6-digit PIN.'),
-        ),
-      );
-      return;
-    }
-    setState(() => _submitting = true);
-    final mobile = _mobileController.text.trim();
-    final hasLocalPin = await _OfficialMpinStore.hasPin(mobile);
-    final localPinValid = hasLocalPin && await _OfficialMpinStore.verifyPin(mobile, _pin);
-    if (localPinValid) {
-      final restored = await _OfficialAuthCacheStore.restore(mobile);
-      if (!mounted) {
-        return;
-      }
-      if (restored) {
-        setState(() => _submitting = false);
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => _officialHomeForSession()),
-          (route) => false,
-        );
-        return;
-      }
-    }
-
-    final result = await _AuthApi.instance.login(
-      role: UserRole.official,
-      mobile: mobile,
-      password: _pin,
-    );
-    if (!mounted) {
-      return;
-    }
-    setState(() => _submitting = false);
-    if (!result.success) {
-      if (result.otpRequired) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => AuthOtpVerificationPage(
-              role: UserRole.official,
-              mobile: mobile,
-              debugOtpCode: result.otpDebugCode,
-              pin: _pin,
-            ),
-          ),
-        );
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message)),
-      );
-      return;
-    }
-
-    _authToken = result.token;
-    await _completeOfficialSignIn(
-      context,
-      mobile: mobile,
-      token: result.token ?? '',
-      activationCompleted: result.activationCompleted,
-      pin: _pin,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const primary = _officialThemePrimary;
-    const background = _officialThemeBackground;
-
-    return Scaffold(
-      backgroundColor: background,
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(24, 18, 24, 32),
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.arrow_back, color: Colors.black87),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              height: 130,
-              child: Image.asset('public/barangaymo.png', fit: BoxFit.contain),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              '"Ang unang sandigan ng mamamayan!"',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _officialThemeText,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 78),
-            const Text(
-              'Official Log In',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _officialThemeText,
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color: _officialThemeSurfaceAlt,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x14000000),
-                    blurRadius: 10,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 40,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.9),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      '+63',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: _officialThemeText,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: _mobileController,
-                      keyboardType: TextInputType.phone,
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => _submitPinLogin(),
-                      decoration: const InputDecoration(
-                        hintText: 'Enter mobile number...',
-                        border: InputBorder.none,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: _loadingLastMobile || _submitting ? null : _openPinPad,
-                style: OutlinedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: _officialThemeText,
-                  side: const BorderSide(color: _officialThemeBorder),
-                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.dialpad_rounded, color: primary),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _pin.isEmpty
-                            ? 'Tap to enter $_appPinLength-digit PIN'
-                            : ('•' * _pin.length),
-                        textAlign: TextAlign.left,
-                        style: TextStyle(
-                          color: _pin.isEmpty
-                              ? _officialThemeSubtext
-                              : _officialThemeText,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: _pin.isEmpty ? 0 : 4,
-                        ),
-                      ),
-                    ),
-                    if (_pin.isNotEmpty)
-                      IconButton(
-                        onPressed: _submitting ? null : () => setState(() => _pin = ''),
-                        icon: const Icon(Icons.close_rounded),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _loadingLastMobile || _submitting ? null : _submitPinLogin,
-                style: FilledButton.styleFrom(
-                  backgroundColor: primary,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: Text(
-                  _loadingLastMobile
-                      ? 'Loading...'
-                      : (_submitting ? 'Checking PIN...' : 'Log In with PIN'),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'Registered officials can log in here using their mobile number and 6-digit PIN.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _officialThemeSubtext,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class OfficialMpinSetupPage extends StatefulWidget {
-  final String mobile;
-
-  const OfficialMpinSetupPage({super.key, required this.mobile});
-
-  @override
-  State<OfficialMpinSetupPage> createState() => _OfficialMpinSetupPageState();
-}
-
-class _OfficialMpinSetupPageState extends State<OfficialMpinSetupPage> {
-  final _formKey = GlobalKey<FormState>();
-  final _pinController = TextEditingController();
-  final _confirmPinController = TextEditingController();
-  bool _saving = false;
-
-  @override
-  void dispose() {
-    _pinController.dispose();
-    _confirmPinController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _saveMpin() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-    setState(() => _saving = true);
-    await _OfficialMpinStore.savePin(widget.mobile, _pinController.text.trim());
-    if (!mounted) {
-      return;
-    }
-    setState(() => _saving = false);
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => _officialHomeForSession()),
-      (route) => false,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _officialThemeBackground,
-      appBar: AppBar(
-        title: const Text('Set PIN'),
-        backgroundColor: Colors.transparent,
-      ),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              const Icon(
-                Icons.admin_panel_settings_rounded,
-                size: 72,
-                color: _officialThemePrimary,
-              ),
-              const SizedBox(height: 18),
-              const Text(
-                'Create your 6-digit PIN',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Use this PIN for faster official login on this device for ${widget.mobile}.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: _officialThemeSubtext),
-              ),
-              const SizedBox(height: 28),
-              TextFormField(
-                controller: _pinController,
-                keyboardType: TextInputType.number,
-                obscureText: true,
-                maxLength: _appPinLength,
-                decoration: const InputDecoration(
-                  labelText: '6-digit PIN',
-                  counterText: '',
-                ),
-                validator: (value) {
-                  final normalized = value?.trim() ?? '';
-                  if (!_isValidAppPin(normalized)) {
-                    return 'Enter a 6-digit PIN.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _confirmPinController,
-                keyboardType: TextInputType.number,
-                obscureText: true,
-                maxLength: _appPinLength,
-                decoration: const InputDecoration(
-                  labelText: 'Confirm PIN',
-                  counterText: '',
-                ),
-                validator: (value) {
-                  if ((value?.trim() ?? '') != _pinController.text.trim()) {
-                    return 'PIN does not match.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 18),
-              FilledButton(
-                onPressed: _saving ? null : _saveMpin,
-                style: FilledButton.styleFrom(
-                  backgroundColor: _officialThemePrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                child: Text(_saving ? 'Saving...' : 'Save PIN'),
-              ),
-              TextButton(
-                onPressed: _saving
-                    ? null
-                    : () => Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => _officialHomeForSession(),
-                        ),
-                        (route) => false,
-                      ),
-                child: const Text('Skip for now'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class OfficialMpinUnlockPage extends StatefulWidget {
-  final String? mobile;
-
-  const OfficialMpinUnlockPage({super.key, this.mobile});
-
-  @override
-  State<OfficialMpinUnlockPage> createState() => _OfficialMpinUnlockPageState();
-}
-
-class _OfficialMpinUnlockPageState extends State<OfficialMpinUnlockPage> {
-  static const _keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '<'];
-
-  String _pin = '';
-  String _mobile = '';
-  bool _loadingMobile = true;
-  bool _submitting = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadMobile();
-  }
-
-  Future<void> _loadMobile() async {
-    final storedMobile = widget.mobile?.trim();
-    final fallbackMobile = await _OfficialMpinStore.lastMobile();
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _mobile = (storedMobile != null && storedMobile.isNotEmpty)
-          ? storedMobile
-          : (fallbackMobile ?? '');
-      _loadingMobile = false;
-    });
-  }
-
-  void _tapKey(String value) {
-    if (_submitting) {
-      return;
-    }
-    if (value == 'C') {
-      setState(() => _pin = '');
-      return;
-    }
-    if (value == '<') {
-      if (_pin.isNotEmpty) {
-        setState(() => _pin = _pin.substring(0, _pin.length - 1));
-      }
-      return;
-    }
-    if (_pin.length < _appPinLength) {
-      setState(() => _pin += value);
-    }
-  }
-
-  Future<void> _submitMpin() async {
-    if (_mobile.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No official mobile number found for PIN login.'),
-        ),
-      );
-      return;
-    }
-    setState(() => _submitting = true);
-    final hasPin = await _OfficialMpinStore.hasPin(_mobile);
-    final isValid = hasPin && await _OfficialMpinStore.verifyPin(_mobile, _pin);
-    if (!mounted) {
-      return;
-    }
-    if (!isValid) {
-      setState(() {
-        _submitting = false;
-        _pin = '';
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            hasPin
-                ? 'Incorrect PIN. Try again.'
-                : 'No PIN found for this account. Log in on the access page.',
-          ),
-        ),
-      );
-      return;
-    }
-
-    final restored = await _OfficialAuthCacheStore.restore(_mobile);
-    if (!mounted) {
-      return;
-    }
-    setState(() => _submitting = false);
-    if (!restored) {
-      setState(() => _pin = '');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Saved session expired. Log in again on the access page.'),
-        ),
-      );
-      return;
-    }
-
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => _officialHomeForSession()),
-      (route) => false,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _officialThemeBackground,
-      appBar: AppBar(
-        title: const Text('PIN Login'),
-        backgroundColor: Colors.transparent,
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
-              const Text(
-                'Enter your 6-digit PIN',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                _loadingMobile
-                    ? 'Loading account...'
-                    : (_mobile.isEmpty ? 'Official account not found' : _mobile),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: _officialThemeSubtext,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  _appPinLength,
-                  (index) => Container(
-                    width: 18,
-                    height: 18,
-                    margin: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      color: index < _pin.length
-                          ? _officialThemePrimary
-                          : Colors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: _officialThemePrimary),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 26),
-              Expanded(
-                child: GridView.count(
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 3,
-                  mainAxisSpacing: 14,
-                  crossAxisSpacing: 14,
-                  childAspectRatio: 1.25,
-                  children: _keys
-                      .map(
-                        (key) => FilledButton(
-                          onPressed: () => _tapKey(key),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: key == 'C' || key == '<'
-                                ? _officialThemeSurfaceAlt
-                                : Colors.white,
-                            foregroundColor: _officialThemeSecondary,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              side: const BorderSide(
-                                color: _officialThemeBorder,
-                              ),
-                            ),
-                          ),
-                          child: key == '<'
-                              ? const Icon(Icons.backspace_outlined)
-                              : Text(
-                                  key,
-                                  style: const TextStyle(
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                        ),
-                      )
-                      .toList(),
-                ),
-              ),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _pin.length == _appPinLength && !_submitting
-                      ? _submitMpin
-                      : null,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _officialThemePrimary,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: Text(_submitting ? 'Checking...' : 'Continue'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

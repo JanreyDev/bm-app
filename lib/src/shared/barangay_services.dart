@@ -1,10 +1,745 @@
 part of barangaymo_app;
 
+bool get _hasOfficialEmergencyAccess =>
+    (_currentOfficialMobile?.trim().isNotEmpty ?? false);
+
+class _EmergencyIncident {
+  final String reference;
+  final String type;
+  final String status;
+  final String priority;
+  final String location;
+  final String details;
+  final String victimName;
+  final String reporterName;
+  final String reporterMobile;
+  final String? personInvolved;
+  final String channel;
+  final String? attachmentLabel;
+  final DateTime createdAt;
+  final LatLng point;
+
+  const _EmergencyIncident({
+    required this.reference,
+    required this.type,
+    required this.status,
+    required this.priority,
+    required this.location,
+    required this.details,
+    required this.victimName,
+    required this.reporterName,
+    required this.reporterMobile,
+    required this.createdAt,
+    required this.point,
+    this.personInvolved,
+    this.channel = 'Resident App',
+    this.attachmentLabel,
+  });
+}
+
+class _PatrolRequestEntry {
+  final String reference;
+  final String location;
+  final String reason;
+  final String requestedBy;
+  final DateTime scheduledAt;
+  final String notes;
+  final String status;
+
+  const _PatrolRequestEntry({
+    required this.reference,
+    required this.location,
+    required this.reason,
+    required this.requestedBy,
+    required this.scheduledAt,
+    required this.notes,
+    required this.status,
+  });
+}
+
+class _EmergencyChatMessage {
+  final String sender;
+  final String kind;
+  final String text;
+  final bool outbound;
+  final DateTime createdAt;
+  final String? attachmentLabel;
+  final int? voiceDurationSeconds;
+
+  const _EmergencyChatMessage({
+    required this.sender,
+    required this.kind,
+    required this.text,
+    required this.outbound,
+    required this.createdAt,
+    this.attachmentLabel,
+    this.voiceDurationSeconds,
+  });
+}
+
+class _TanodDutyEntry {
+  final String name;
+  final String zone;
+  final String shift;
+  final bool online;
+  final String assignment;
+
+  const _TanodDutyEntry({
+    required this.name,
+    required this.zone,
+    required this.shift,
+    required this.online,
+    required this.assignment,
+  });
+
+  _TanodDutyEntry copyWith({bool? online, String? assignment}) {
+    return _TanodDutyEntry(
+      name: name,
+      zone: zone,
+      shift: shift,
+      online: online ?? this.online,
+      assignment: assignment ?? this.assignment,
+    );
+  }
+}
+
+class _EmergencySharedLocation {
+  final LatLng point;
+  final String address;
+  final DateTime updatedAt;
+  final bool highAccuracy;
+  final bool includeLandmark;
+
+  const _EmergencySharedLocation({
+    required this.point,
+    required this.address,
+    required this.updatedAt,
+    required this.highAccuracy,
+    required this.includeLandmark,
+  });
+}
+
+class _LuponCaseEntry {
+  final String caseNo;
+  final String complainant;
+  final String respondent;
+  final DateTime hearingDate;
+  final String status;
+  final String issueSummary;
+  final String encryptedVictimData;
+  final DateTime createdAt;
+  final String luponOfficer;
+  final String venue;
+
+  const _LuponCaseEntry({
+    required this.caseNo,
+    required this.complainant,
+    required this.respondent,
+    required this.hearingDate,
+    required this.status,
+    required this.issueSummary,
+    required this.encryptedVictimData,
+    required this.createdAt,
+    required this.luponOfficer,
+    required this.venue,
+  });
+
+  _LuponCaseEntry copyWith({
+    String? caseNo,
+    String? complainant,
+    String? respondent,
+    DateTime? hearingDate,
+    String? status,
+    String? issueSummary,
+    String? encryptedVictimData,
+    DateTime? createdAt,
+    String? luponOfficer,
+    String? venue,
+  }) {
+    return _LuponCaseEntry(
+      caseNo: caseNo ?? this.caseNo,
+      complainant: complainant ?? this.complainant,
+      respondent: respondent ?? this.respondent,
+      hearingDate: hearingDate ?? this.hearingDate,
+      status: status ?? this.status,
+      issueSummary: issueSummary ?? this.issueSummary,
+      encryptedVictimData: encryptedVictimData ?? this.encryptedVictimData,
+      createdAt: createdAt ?? this.createdAt,
+      luponOfficer: luponOfficer ?? this.luponOfficer,
+      venue: venue ?? this.venue,
+    );
+  }
+}
+
+class _SafetyCalendarEntry {
+  final String title;
+  final DateTime scheduledAt;
+  final String reference;
+  final String venue;
+  final String type;
+
+  const _SafetyCalendarEntry({
+    required this.title,
+    required this.scheduledAt,
+    required this.reference,
+    required this.venue,
+    required this.type,
+  });
+}
+
+class _PatrolCheckpoint {
+  final String id;
+  final String label;
+  final String zone;
+  final LatLng point;
+  final String qrCode;
+  final DateTime? lastScannedAt;
+  final String? lastScannedBy;
+
+  const _PatrolCheckpoint({
+    required this.id,
+    required this.label,
+    required this.zone,
+    required this.point,
+    required this.qrCode,
+    this.lastScannedAt,
+    this.lastScannedBy,
+  });
+
+  _PatrolCheckpoint copyWith({
+    DateTime? lastScannedAt,
+    String? lastScannedBy,
+  }) {
+    return _PatrolCheckpoint(
+      id: id,
+      label: label,
+      zone: zone,
+      point: point,
+      qrCode: qrCode,
+      lastScannedAt: lastScannedAt ?? this.lastScannedAt,
+      lastScannedBy: lastScannedBy ?? this.lastScannedBy,
+    );
+  }
+}
+
+class _SafetyBroadcastEntry {
+  final String title;
+  final String body;
+  final String severity;
+  final DateTime createdAt;
+  final bool active;
+
+  const _SafetyBroadcastEntry({
+    required this.title,
+    required this.body,
+    required this.severity,
+    required this.createdAt,
+    this.active = true,
+  });
+}
+
+class _FirstAidGuide {
+  final String title;
+  final String format;
+  final String category;
+  final String summary;
+  final IconData icon;
+  final Color accent;
+  final List<String> steps;
+
+  const _FirstAidGuide({
+    required this.title,
+    required this.format,
+    required this.category,
+    required this.summary,
+    required this.icon,
+    required this.accent,
+    required this.steps,
+  });
+}
+
+String _encryptSensitiveValue(String value) {
+  final bytes = value.codeUnits;
+  return bytes
+      .map((item) => (item + 7).toRadixString(16).padLeft(2, '0'))
+      .join();
+}
+
+String _decryptSensitiveValue(String value) {
+  if (value.length.isOdd || value.isEmpty) {
+    return value;
+  }
+  final chars = <int>[];
+  for (var index = 0; index < value.length; index += 2) {
+    final hex = value.substring(index, index + 2);
+    final parsed = int.tryParse(hex, radix: 16);
+    if (parsed == null) {
+      return value;
+    }
+    chars.add(parsed - 7);
+  }
+  return String.fromCharCodes(chars);
+}
+
+String _protectSensitiveValue(String encryptedValue) {
+  if (_hasOfficialEmergencyAccess) {
+    return _decryptSensitiveValue(encryptedValue);
+  }
+  return 'Encrypted - Lupon / police only';
+}
+
+String _maskedVictimName(String name) {
+  final trimmed = name.trim();
+  if (trimmed.isEmpty || _hasOfficialEmergencyAccess) {
+    return trimmed;
+  }
+  final parts = trimmed.split(RegExp(r'\s+'));
+  return parts
+      .map(
+        (part) => part.length <= 1
+            ? '*'
+            : '${part.substring(0, 1)}${'*' * math.min(4, part.length - 1)}',
+      )
+      .join(' ');
+}
+
+String _formatEmergencyDateTime(DateTime value) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final hour = value.hour == 0
+      ? 12
+      : value.hour > 12
+      ? value.hour - 12
+      : value.hour;
+  final suffix = value.hour >= 12 ? 'PM' : 'AM';
+  final minute = value.minute.toString().padLeft(2, '0');
+  return '${months[value.month - 1]} ${value.day}, ${value.year} $hour:$minute $suffix';
+}
+
+Color _emergencyStatusColor(String status) {
+  switch (status) {
+    case 'Resolved':
+      return const Color(0xFF2D8A57);
+    case 'Dispatched':
+      return const Color(0xFF245AC7);
+    case 'Rejected':
+      return const Color(0xFF9A2E2E);
+    default:
+      return const Color(0xFFB36A00);
+  }
+}
+
+Color _incidentTypeColor(String type) {
+  switch (type) {
+    case 'Fire':
+      return const Color(0xFFD43B3B);
+    case 'Medical':
+      return const Color(0xFF2877C7);
+    case 'Noise':
+      return const Color(0xFF9B6C17);
+    case 'Patrol':
+      return const Color(0xFF4B5BB7);
+    default:
+      return const Color(0xFF8E4E45);
+  }
+}
+
+LatLng _defaultEmergencyPoint() => const LatLng(14.8386, 120.2865);
+
+class _EmergencyOpsStore {
+  final ValueNotifier<List<_EmergencyIncident>> incidents = ValueNotifier(
+    [
+      _EmergencyIncident(
+        reference: 'BPAT-2026-1042',
+        type: 'Theft',
+        status: 'Pending',
+        priority: 'High',
+        location: 'Rizal Avenue corner 19th Street, West Tapinac',
+        details: 'Motorcycle side mirror stolen near sari-sari store.',
+        victimName: 'John Andrew Dela Cruz',
+        reporterName: 'Marissa Dela Cruz',
+        reporterMobile: '09171234567',
+        createdAt: DateTime(2026, 3, 14, 15, 10),
+        point: LatLng(14.8389, 120.2869),
+        personInvolved: 'Unidentified male in black jacket',
+      ),
+      _EmergencyIncident(
+        reference: 'BPAT-2026-1038',
+        type: 'Noise',
+        status: 'Dispatched',
+        priority: 'Normal',
+        location: 'Zone 3 Basketball Court, East Tapinac',
+        details: 'Loud speakers still active past curfew.',
+        victimName: 'Liza Fernandez',
+        reporterName: 'Nico Ramos',
+        reporterMobile: '09172345678',
+        createdAt: DateTime(2026, 3, 14, 14, 32),
+        point: LatLng(14.8377, 120.2874),
+      ),
+      _EmergencyIncident(
+        reference: 'BPAT-2026-1031',
+        type: 'Fire',
+        status: 'Resolved',
+        priority: 'Urgent',
+        location: 'Magsaysay Drive rear alley, Barretto',
+        details: 'Small electrical fire contained before spread.',
+        victimName: 'Alvin Navarro',
+        reporterName: 'BPAT Unit 2',
+        reporterMobile: '09170001001',
+        createdAt: DateTime(2026, 3, 14, 11, 16),
+        point: LatLng(14.8393, 120.2858),
+        channel: 'Responder Desk',
+      ),
+    ],
+  );
+
+  final ValueNotifier<List<_PatrolRequestEntry>> patrolRequests = ValueNotifier(
+    [
+      _PatrolRequestEntry(
+        reference: 'PATROL-2026-208',
+        location: 'Purok 4, New Cabalan footbridge',
+        reason: 'Late-night loitering near closed stores',
+        requestedBy: 'Mia Lopez',
+        scheduledAt: DateTime(2026, 3, 14, 22, 0),
+        notes: 'Focus between 10 PM and midnight.',
+        status: 'Scheduled',
+      ),
+      _PatrolRequestEntry(
+        reference: 'PATROL-2026-203',
+        location: 'West Tapinac market perimeter',
+        reason: 'Weekend crowd management',
+        requestedBy: 'Barangay Desk',
+        scheduledAt: DateTime(2026, 3, 15, 18, 30),
+        notes: 'Coordinate with tanods assigned to Zone 1.',
+        status: 'Queued',
+      ),
+    ],
+  );
+
+  final ValueNotifier<List<_EmergencyChatMessage>> chatMessages = ValueNotifier(
+    [
+      _EmergencyChatMessage(
+        sender: 'Responder Desk',
+        kind: 'text',
+        text: 'Describe the emergency and share your nearest landmark.',
+        outbound: false,
+        createdAt: DateTime(2026, 3, 14, 15, 0),
+      ),
+      _EmergencyChatMessage(
+        sender: 'Resident',
+        kind: 'text',
+        text: 'Two men are arguing near the alley behind the mini mart.',
+        outbound: true,
+        createdAt: DateTime(2026, 3, 14, 15, 1),
+      ),
+    ],
+  );
+
+  final ValueNotifier<List<_TanodDutyEntry>> tanods = ValueNotifier(
+    const [
+      _TanodDutyEntry(
+        name: 'Tanod Joel Ramos',
+        zone: 'Zone 1',
+        shift: '6:00 PM - 2:00 AM',
+        online: true,
+        assignment: 'Market perimeter',
+      ),
+      _TanodDutyEntry(
+        name: 'Tanod Grace Padilla',
+        zone: 'Zone 2',
+        shift: '2:00 PM - 10:00 PM',
+        online: true,
+        assignment: 'School approach road',
+      ),
+      _TanodDutyEntry(
+        name: 'Tanod Mark Dizon',
+        zone: 'Zone 3',
+        shift: '8:00 PM - 4:00 AM',
+        online: false,
+        assignment: 'Off duty',
+      ),
+    ],
+  );
+
+  final ValueNotifier<List<_LuponCaseEntry>> luponCases = ValueNotifier(
+    [
+      _LuponCaseEntry(
+        caseNo: 'KP-2026-014',
+        complainant: 'Marissa Dela Cruz',
+        respondent: 'Rene Bautista',
+        hearingDate: DateTime(2026, 3, 16, 14, 0),
+        status: 'Settled',
+        issueSummary: 'Boundary and driveway obstruction complaint.',
+        encryptedVictimData: _encryptSensitiveValue(
+          'Complainant requested private handling due to prior threats.',
+        ),
+        createdAt: DateTime(2026, 3, 10, 9, 30),
+        luponOfficer: 'Lupon Chair Maria Cortez',
+        venue: 'Barangay Session Hall',
+      ),
+      _LuponCaseEntry(
+        caseNo: 'KP-2026-018',
+        complainant: 'Liza Fernandez',
+        respondent: 'Carlo Mendez',
+        hearingDate: DateTime(2026, 3, 18, 10, 30),
+        status: 'Forwarded to Court',
+        issueSummary: 'Repeated disturbance and non-compliance with settlement.',
+        encryptedVictimData: _encryptSensitiveValue(
+          'Respondent linked to prior blotter BPAT-2026-1038.',
+        ),
+        createdAt: DateTime(2026, 3, 12, 11, 45),
+        luponOfficer: 'Lupon Secretary Danica Reyes',
+        venue: 'Lupon Mediation Room',
+      ),
+    ],
+  );
+
+  final ValueNotifier<List<_SafetyCalendarEntry>> legalCalendar = ValueNotifier(
+    [
+      _SafetyCalendarEntry(
+        title: 'Mediation Hearing',
+        scheduledAt: DateTime(2026, 3, 16, 14, 0),
+        reference: 'KP-2026-014',
+        venue: 'Barangay Session Hall',
+        type: 'Lupon',
+      ),
+      _SafetyCalendarEntry(
+        title: 'Katarungang Pambarangay Conference',
+        scheduledAt: DateTime(2026, 3, 18, 10, 30),
+        reference: 'KP-2026-018',
+        venue: 'Lupon Mediation Room',
+        type: 'Lupon',
+      ),
+    ],
+  );
+
+  final ValueNotifier<List<_PatrolCheckpoint>> patrolCheckpoints = ValueNotifier(
+    const [
+      _PatrolCheckpoint(
+        id: 'CHK-001',
+        label: 'West Tapinac Covered Court',
+        zone: 'Zone 1',
+        point: LatLng(14.8387, 120.2866),
+        qrCode: 'QR-WTCC-001',
+      ),
+      _PatrolCheckpoint(
+        id: 'CHK-002',
+        label: 'Old Cabalan Footbridge',
+        zone: 'Zone 2',
+        point: LatLng(14.8378, 120.2871),
+        qrCode: 'QR-OCFB-002',
+      ),
+      _PatrolCheckpoint(
+        id: 'CHK-003',
+        label: 'Barangay Hall Gate',
+        zone: 'Zone 3',
+        point: LatLng(14.8391, 120.2859),
+        qrCode: 'QR-BHG-003',
+      ),
+    ],
+  );
+
+  final ValueNotifier<List<_SafetyBroadcastEntry>> broadcasts = ValueNotifier(
+    [
+      _SafetyBroadcastEntry(
+        title: 'Late-night patrol advisory',
+        body:
+            'Additional tanods are assigned near the market perimeter from 10 PM to 2 AM.',
+        severity: 'Watch',
+        createdAt: DateTime(2026, 3, 14, 18, 0),
+      ),
+    ],
+  );
+
+  final ValueNotifier<_EmergencySharedLocation?> sharedLocation = ValueNotifier(
+    _EmergencySharedLocation(
+      point: _defaultEmergencyPoint(),
+      address:
+          _currentResidentProfile?.locationSummary ?? 'West Tapinac, Olongapo City',
+      updatedAt: DateTime(2026, 3, 14, 15, 2),
+      highAccuracy: true,
+      includeLandmark: true,
+    ),
+  );
+
+  List<_EmergencyIncident> get sortedIncidents {
+    final list = [...incidents.value];
+    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return list;
+  }
+
+  void addIncident(_EmergencyIncident entry) {
+    incidents.value = [entry, ...sortedIncidents];
+  }
+
+  void addPatrolRequest(_PatrolRequestEntry entry) {
+    final next = [...patrolRequests.value, entry];
+    next.sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+    patrolRequests.value = next;
+  }
+
+  void addChatMessage(_EmergencyChatMessage entry) {
+    chatMessages.value = [...chatMessages.value, entry];
+  }
+
+  void shareLocation({
+    required LatLng point,
+    required String address,
+    required bool highAccuracy,
+    required bool includeLandmark,
+  }) {
+    sharedLocation.value = _EmergencySharedLocation(
+      point: point,
+      address: address,
+      updatedAt: DateTime.now(),
+      highAccuracy: highAccuracy,
+      includeLandmark: includeLandmark,
+    );
+    addChatMessage(
+      _EmergencyChatMessage(
+        sender: 'Resident',
+        kind: 'location',
+        text: 'Shared live location: $address',
+        outbound: true,
+        createdAt: DateTime.now(),
+      ),
+    );
+  }
+
+  void toggleTanod(int index) {
+    final rows = [...tanods.value];
+    final item = rows[index];
+    rows[index] = item.copyWith(
+      online: !item.online,
+      assignment: item.online ? 'Off duty' : 'Available for dispatch',
+    );
+    tanods.value = rows;
+  }
+
+  void addLuponCase(_LuponCaseEntry entry) {
+    final next = [entry, ...luponCases.value]
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    luponCases.value = next;
+    addCalendarEntry(
+      _SafetyCalendarEntry(
+        title: 'Mediation Hearing',
+        scheduledAt: entry.hearingDate,
+        reference: entry.caseNo,
+        venue: entry.venue,
+        type: 'Lupon',
+      ),
+    );
+  }
+
+  void updateLuponCaseStatus(String caseNo, String status) {
+    final next = [
+      for (final entry in luponCases.value)
+        if (entry.caseNo == caseNo) entry.copyWith(status: status) else entry,
+    ];
+    luponCases.value = next;
+  }
+
+  void addCalendarEntry(_SafetyCalendarEntry entry) {
+    final next = [...legalCalendar.value, entry]
+      ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+    legalCalendar.value = next;
+  }
+
+  void addBroadcast(_SafetyBroadcastEntry entry) {
+    broadcasts.value = [entry, ...broadcasts.value];
+  }
+
+  void scanPatrolCheckpoint(int index, String tanodName) {
+    final rows = [...patrolCheckpoints.value];
+    if (index < 0 || index >= rows.length) {
+      return;
+    }
+    rows[index] = rows[index].copyWith(
+      lastScannedAt: DateTime.now(),
+      lastScannedBy: tanodName,
+    );
+    patrolCheckpoints.value = rows;
+  }
+}
+
+final _emergencyOpsStore = _EmergencyOpsStore();
+
+const List<_FirstAidGuide> _firstAidGuides = [
+  _FirstAidGuide(
+    title: 'Burn Care Quick Sheet',
+    format: 'PDF Guide',
+    category: 'Fire',
+    summary: 'Immediate cooling, clean covering, and burn severity checks.',
+    icon: Icons.picture_as_pdf_rounded,
+    accent: Color(0xFFD74A35),
+    steps: [
+      'Remove the person from heat or electrical source if safe.',
+      'Cool the burn under clean running water for 20 minutes.',
+      'Cover lightly with clean cloth or sterile dressing.',
+      'Do not apply ice, toothpaste, or oil on the wound.',
+    ],
+  ),
+  _FirstAidGuide(
+    title: 'CPR Response Card',
+    format: 'Image Guide',
+    category: 'Medical',
+    summary: 'Adult CPR sequence with compression rhythm reminders.',
+    icon: Icons.image_outlined,
+    accent: Color(0xFF2C77C8),
+    steps: [
+      'Check responsiveness and call for help immediately.',
+      'Begin chest compressions at the center of the chest.',
+      'Push hard and fast at 100 to 120 compressions per minute.',
+      'Continue until trained responders arrive.',
+    ],
+  ),
+  _FirstAidGuide(
+    title: 'Earthquake Grab Bag Checklist',
+    format: 'PDF Guide',
+    category: 'Disaster',
+    summary: 'Preparedness checklist for family evacuation kits.',
+    icon: Icons.picture_as_pdf_rounded,
+    accent: Color(0xFF6B59C9),
+    steps: [
+      'Store water, flashlight, radio, medicines, and IDs in one bag.',
+      'Keep emergency contacts and barangay numbers inside the kit.',
+      'Review the kit every six months and replace expired items.',
+    ],
+  ),
+  _FirstAidGuide(
+    title: 'Bleeding Control Steps',
+    format: 'Image Guide',
+    category: 'Trauma',
+    summary: 'Direct pressure and escalation steps for severe bleeding.',
+    icon: Icons.image_outlined,
+    accent: Color(0xFF2D8A57),
+    steps: [
+      'Apply firm direct pressure using clean cloth or gauze.',
+      'Raise the injured area if it does not cause more pain.',
+      'Do not remove soaked cloth; add more layers on top.',
+      'Seek urgent medical support if bleeding does not stop.',
+    ],
+  ),
+];
+
 class ResponderPage extends StatelessWidget {
   const ResponderPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final isOfficialView = _hasOfficialEmergencyAccess;
     const contacts = [
       (
         'BPAT',
@@ -41,19 +776,161 @@ class ResponderPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Barangay Emergency'),
-        backgroundColor: const Color(0xFFF7F8FF),
+        backgroundColor: isOfficialView
+            ? const Color(0xFFD70000)
+            : const Color(0xFFF7F8FF),
+        foregroundColor: isOfficialView ? Colors.white : const Color(0xFF2F3248),
       ),
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFFF7F8FF), Color(0xFFF8F0EE)],
+            colors: isOfficialView
+                ? const [Color(0xFFFFF5F5), Color(0xFFFFF0EE)]
+                : const [Color(0xFFF7F8FF), Color(0xFFF8F0EE)],
           ),
         ),
         child: ListView(
           padding: const EdgeInsets.all(12),
           children: [
+            ValueListenableBuilder<List<_EmergencyIncident>>(
+              valueListenable: _emergencyOpsStore.incidents,
+              builder: (_, incidents, __) {
+                final active = incidents
+                    .where((entry) => entry.status != 'Resolved')
+                    .length;
+                final urgent = incidents
+                    .where((entry) => entry.priority == 'Urgent')
+                    .length;
+                final tanodsOnline = _emergencyOpsStore.tanods.value
+                    .where((entry) => entry.online)
+                    .length;
+                return Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: isOfficialView
+                          ? const [Color(0xFFD70000), Color(0xFF8E1212)]
+                          : const [Color(0xFF3948D1), Color(0xFF6787FF)],
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  isOfficialView
+                                      ? 'Responder Dashboard'
+                                      : 'Emergency Response Hub',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 24,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  isOfficialView
+                                      ? 'Monitor incidents, shared locations, and tanod coverage from one place.'
+                                      : 'Reach barangay responders quickly, submit reports, and share your location.',
+                                  style: const TextStyle(
+                                    color: Color(0xFFECEFFF),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            width: 58,
+                            height: 58,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.16),
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: Icon(
+                              isOfficialView
+                                  ? Icons.local_police_rounded
+                                  : Icons.emergency_share_rounded,
+                              color: Colors.white,
+                              size: 32,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _EmergencyHeroStat(
+                              label: 'Active Incidents',
+                              value: '$active',
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _EmergencyHeroStat(
+                              label: 'Urgent Calls',
+                              value: '$urgent',
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _EmergencyHeroStat(
+                              label: 'Tanods Online',
+                              value: '$tanodsOnline',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            _sectionTitle('Quick Dial'),
+            const SizedBox(height: 8),
+            Row(
+              children: const [
+                Expanded(
+                  child: _EmergencyQuickDialButton(
+                    label: 'PNP',
+                    number: '117',
+                    icon: Icons.local_police_rounded,
+                    color: Color(0xFF2F6BC8),
+                  ),
+                ),
+                SizedBox(width: 8),
+                Expanded(
+                  child: _EmergencyQuickDialButton(
+                    label: 'BFP',
+                    number: '160',
+                    icon: Icons.local_fire_department_rounded,
+                    color: Color(0xFFD84B3F),
+                  ),
+                ),
+                SizedBox(width: 8),
+                Expanded(
+                  child: _EmergencyQuickDialButton(
+                    label: 'Ambulance',
+                    number: '911',
+                    icon: Icons.medical_services_rounded,
+                    color: Color(0xFF2A8D62),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             _sectionTitle('Emergency Contacts'),
             ...contacts.map(
               (e) => Container(
@@ -123,10 +1000,88 @@ class ResponderPage extends StatelessWidget {
             ),
             _goTile(
               context,
+              'Responder Dashboard',
+              const EmergencyResponderDashboardPage(),
+            ),
+            _goTile(
+              context,
               'Emergency Hotlines',
               const EmergencyHotlinesPage(),
             ),
-            _goTile(context, 'Message Barangay', const EmergencyMessagePage()),
+            _goTile(context, 'Emergency Chat', const EmergencyMessagePage()),
+            _goTile(context, 'First Aid Library', const FirstAidLibraryPage()),
+            _goTile(context, 'BPAT Operations', const BpatPage()),
+            const SizedBox(height: 10),
+            _sectionTitle('Active Incident Feed'),
+            const SizedBox(height: 8),
+            ValueListenableBuilder<List<_EmergencyIncident>>(
+              valueListenable: _emergencyOpsStore.incidents,
+              builder: (_, incidents, __) {
+                final rows = [...incidents]
+                  ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                return Column(
+                  children: rows.take(3).map((incident) {
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFFE4E7F3)),
+                      ),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                        leading: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: _incidentTypeColor(incident.type)
+                                .withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Icon(
+                            incident.type == 'Fire'
+                                ? Icons.local_fire_department_rounded
+                                : incident.type == 'Medical'
+                                    ? Icons.health_and_safety_rounded
+                                    : Icons.report_gmailerrorred_rounded,
+                            color: _incidentTypeColor(incident.type),
+                          ),
+                        ),
+                        title: Text(
+                          '${incident.type} • ${incident.location}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF2F3248),
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            '${_maskedVictimName(incident.victimName)} • ${incident.reference}\n${_formatEmergencyDateTime(incident.createdAt)}',
+                            style: const TextStyle(
+                              color: Color(0xFF646B84),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        trailing: _EmergencyStatusPill(
+                          label: incident.status,
+                          color: _emergencyStatusColor(incident.status),
+                        ),
+                        onTap: () => showModalBottomSheet<void>(
+                          context: context,
+                          showDragHandle: true,
+                          builder: (_) =>
+                              _EmergencyIncidentDetailSheet(incident: incident),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
 
             _sectionTitle('Emergency Tips'),
             ...emergencyTips.map(
@@ -1091,7 +2046,7 @@ class BpatPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('BPAT Assistance'),
@@ -1110,6 +2065,7 @@ class BpatPage extends StatelessWidget {
               Tab(text: 'Call'),
               Tab(text: 'Blotter'),
               Tab(text: 'Records'),
+              Tab(text: 'Duty'),
             ],
           ),
         ),
@@ -1182,8 +2138,12 @@ class BpatPage extends StatelessWidget {
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) =>
-                            const SimpleSerbilisPage(title: 'Call BPAT'),
+                        builder: (_) => const EmergencyContactActionPage(
+                          contactName: 'BPAT',
+                          phoneNumber: '0917-800-1001',
+                          description:
+                              'Barangay patrol and neighborhood security response',
+                        ),
                       ),
                     ),
                   ),
@@ -1214,6 +2174,7 @@ class BpatPage extends StatelessWidget {
               ),
               const BpatBlotterPage(),
               const BpatRecordsPage(),
+              const _BpatDutyPage(),
             ],
           ),
         ),
@@ -1284,92 +2245,434 @@ class BpatPage extends StatelessWidget {
   }
 }
 
-class BpatReportPage extends StatelessWidget {
+class BpatReportPage extends StatefulWidget {
   const BpatReportPage({super.key});
+
+  @override
+  State<BpatReportPage> createState() => _BpatReportPageState();
+}
+
+class _BpatReportPageState extends State<BpatReportPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _locationController = TextEditingController(
+    text: _currentResidentProfile?.locationSummary ?? 'West Tapinac, Olongapo City',
+  );
+  final _detailsController = TextEditingController();
+  final _victimController = TextEditingController(text: _residentDisplayName());
+  final _reporterController = TextEditingController(text: _residentDisplayName());
+  final _mobileController = TextEditingController(
+    text: _mobileForRole(UserRole.resident),
+  );
+  final _personInvolvedController = TextEditingController();
+  String _type = 'Theft';
+  String _priority = 'High';
+  DateTime _incidentAt = DateTime.now();
+  String? _photoName;
+
+  @override
+  void dispose() {
+    _locationController.dispose();
+    _detailsController.dispose();
+    _victimController.dispose();
+    _reporterController.dispose();
+    _mobileController.dispose();
+    _personInvolvedController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickEvidence(ImageSource source) async {
+    final image = await ImagePicker().pickImage(source: source);
+    if (image == null || !mounted) {
+      return;
+    }
+    setState(() => _photoName = image.name);
+  }
+
+  Future<void> _pickIncidentTime() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _incidentAt,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now(),
+    );
+    if (date == null || !mounted) {
+      return;
+    }
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_incidentAt),
+    );
+    if (time == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _incidentAt = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Submit Incident Report')),
-      body: ListView(
-        padding: const EdgeInsets.all(12),
-        children: const [
-          TextField(decoration: InputDecoration(labelText: 'Report Type')),
-          SizedBox(height: 8),
-          TextField(decoration: InputDecoration(labelText: 'Time of Incident')),
-          SizedBox(height: 8),
-          TextField(decoration: InputDecoration(labelText: 'Location')),
-          SizedBox(height: 8),
-          TextField(
-            maxLines: 4,
-            decoration: InputDecoration(labelText: 'Description'),
-          ),
-          SizedBox(height: 8),
-          TextField(decoration: InputDecoration(labelText: 'Person Involved')),
-          SizedBox(height: 8),
-          TextField(
-            maxLines: 3,
-            decoration: InputDecoration(labelText: 'Action Taken'),
-          ),
-          SizedBox(height: 8),
-          TextField(
-            maxLines: 3,
-            decoration: InputDecoration(labelText: 'Further Action Needed'),
-          ),
-        ],
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(12),
+          children: [
+            DropdownButtonFormField<String>(
+              initialValue: _type,
+              decoration: const InputDecoration(
+                labelText: 'Incident Type',
+                border: OutlineInputBorder(),
+              ),
+              items: const [
+                'Theft',
+                'Noise',
+                'Fire',
+                'Medical',
+                'Suspicious Activity',
+                'Domestic Dispute',
+                'Accident',
+              ]
+                  .map(
+                    (value) => DropdownMenuItem(
+                      value: value,
+                      child: Text(value),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) => setState(() => _type = value ?? _type),
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: _priority,
+              decoration: const InputDecoration(
+                labelText: 'Priority',
+                border: OutlineInputBorder(),
+              ),
+              items: const ['Urgent', 'High', 'Normal']
+                  .map(
+                    (value) => DropdownMenuItem(
+                      value: value,
+                      child: Text(value),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) =>
+                  setState(() => _priority = value ?? _priority),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _pickIncidentTime,
+              icon: const Icon(Icons.schedule_outlined),
+              label: Text('Incident Time: ${_formatEmergencyDateTime(_incidentAt)}'),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _locationController,
+              decoration: const InputDecoration(
+                labelText: 'Incident Location',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) =>
+                  (value == null || value.trim().isEmpty) ? 'Enter the incident location.' : null,
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _victimController,
+              decoration: const InputDecoration(
+                labelText: 'Victim / Affected Resident',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) =>
+                  (value == null || value.trim().isEmpty) ? 'Enter the resident name.' : null,
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _reporterController,
+              decoration: const InputDecoration(
+                labelText: 'Reporter Name',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) =>
+                  (value == null || value.trim().isEmpty) ? 'Enter the reporter name.' : null,
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _mobileController,
+              decoration: const InputDecoration(
+                labelText: 'Reporter Mobile',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) {
+                final digits = (value ?? '').replaceAll(RegExp(r'\D'), '');
+                return digits.length < 10 ? 'Enter a valid mobile number.' : null;
+              },
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _personInvolvedController,
+              decoration: const InputDecoration(
+                labelText: 'Person Involved / Suspect Description',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _detailsController,
+              minLines: 4,
+              maxLines: 6,
+              decoration: const InputDecoration(
+                labelText: 'Incident Details',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) => (value == null || value.trim().length < 8)
+                  ? 'Provide more incident details.'
+                  : null,
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE4E7F3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Evidence Attachment',
+                    style: TextStyle(
+                      color: Color(0xFF2F3248),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _pickEvidence(ImageSource.camera),
+                          icon: const Icon(Icons.camera_alt_outlined),
+                          label: const Text('Capture Photo'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _pickEvidence(ImageSource.gallery),
+                          icon: const Icon(Icons.photo_library_outlined),
+                          label: const Text('Upload Image'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_photoName != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Attached: $_photoName',
+                      style: const TextStyle(
+                        color: Color(0xFF646B84),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.all(12),
-        child: FilledButton(
-          onPressed: () => _showFeature(context, 'Incident report submitted.'),
-          style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFFD70000),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: FilledButton(
+            onPressed: () {
+              if (!_formKey.currentState!.validate()) {
+                return;
+              }
+              final reference =
+                  'BPAT-${DateTime.now().year}-${1000 + _emergencyOpsStore.incidents.value.length + 1}';
+              final base = _emergencyOpsStore.sharedLocation.value?.point ??
+                  _defaultEmergencyPoint();
+              final point = LatLng(
+                double.parse((base.latitude + 0.0005).toStringAsFixed(6)),
+                double.parse((base.longitude + 0.0003).toStringAsFixed(6)),
+              );
+              _emergencyOpsStore.addIncident(
+                _EmergencyIncident(
+                  reference: reference,
+                  type: _type,
+                  status: 'Pending',
+                  priority: _priority,
+                  location: _locationController.text.trim(),
+                  details: _detailsController.text.trim(),
+                  victimName: _victimController.text.trim(),
+                  reporterName: _reporterController.text.trim(),
+                  reporterMobile: _mobileController.text.trim(),
+                  createdAt: _incidentAt,
+                  point: point,
+                  personInvolved: _personInvolvedController.text.trim().isEmpty
+                      ? null
+                      : _personInvolvedController.text.trim(),
+                  attachmentLabel: _photoName,
+                ),
+              );
+              _showFeature(context, 'Incident report submitted. Ref: $reference');
+              Navigator.pop(context);
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFD70000),
+            ),
+            child: const Text('SUBMIT REPORT'),
           ),
-          child: const Text('SUBMIT REPORT'),
         ),
       ),
     );
   }
 }
 
-class BpatPatrolPage extends StatelessWidget {
+class BpatPatrolPage extends StatefulWidget {
   const BpatPatrolPage({super.key});
+
+  @override
+  State<BpatPatrolPage> createState() => _BpatPatrolPageState();
+}
+
+class _BpatPatrolPageState extends State<BpatPatrolPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _locationController = TextEditingController();
+  final _reasonController = TextEditingController();
+  final _notesController = TextEditingController();
+  DateTime _scheduledAt = DateTime.now().add(const Duration(hours: 4));
+
+  @override
+  void dispose() {
+    _locationController.dispose();
+    _reasonController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickSchedule() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _scheduledAt,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 60)),
+    );
+    if (date == null || !mounted) {
+      return;
+    }
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_scheduledAt),
+    );
+    if (time == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _scheduledAt = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Request Patrol')),
-      body: ListView(
-        padding: const EdgeInsets.all(12),
-        children: const [
-          TextField(
-            decoration: InputDecoration(labelText: 'Location for Patrol'),
-          ),
-          SizedBox(height: 8),
-          TextField(
-            decoration: InputDecoration(labelText: 'Reason for Patrol Request'),
-          ),
-          SizedBox(height: 8),
-          TextField(decoration: InputDecoration(labelText: 'Preferred Time')),
-          SizedBox(height: 8),
-          TextField(
-            maxLines: 4,
-            decoration: InputDecoration(labelText: 'Additional Comments'),
-          ),
-        ],
-      ),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.all(12),
-        child: FilledButton(
-          onPressed: () => showDialog<void>(
-            context: context,
-            builder: (_) => const AlertDialog(
-              title: Text('Submitted'),
-              content: Text('Your patrol request has been received.'),
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(12),
+          children: [
+            TextFormField(
+              controller: _locationController,
+              decoration: const InputDecoration(
+                labelText: 'Location for Patrol',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) =>
+                  (value == null || value.trim().isEmpty) ? 'Enter the patrol area.' : null,
             ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _reasonController,
+              decoration: const InputDecoration(
+                labelText: 'Reason for Patrol Request',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) =>
+                  (value == null || value.trim().isEmpty) ? 'Enter the patrol reason.' : null,
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _pickSchedule,
+              icon: const Icon(Icons.event_available_outlined),
+              label: Text('Scheduled Date/Time: ${_formatEmergencyDateTime(_scheduledAt)}'),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _notesController,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'Additional Comments',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: FilledButton(
+            onPressed: () {
+              if (!_formKey.currentState!.validate()) {
+                return;
+              }
+              final reference =
+                  'PATROL-${DateTime.now().year}-${200 + _emergencyOpsStore.patrolRequests.value.length + 1}';
+              _emergencyOpsStore.addPatrolRequest(
+                _PatrolRequestEntry(
+                  reference: reference,
+                  location: _locationController.text.trim(),
+                  reason: _reasonController.text.trim(),
+                  requestedBy: _residentDisplayName(),
+                  scheduledAt: _scheduledAt,
+                  notes: _notesController.text.trim(),
+                  status: 'Queued',
+                ),
+              );
+              showDialog<void>(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text('Submitted'),
+                  content: Text(
+                    'Your patrol request has been received.\nReference: $reference',
+                  ),
+                ),
+              );
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFD70000),
+            ),
+            child: const Text('SUBMIT PATROL REQUEST'),
           ),
-          style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFFD70000),
-          ),
-          child: const Text('SUBMIT PATROL REQUEST'),
         ),
       ),
     );
@@ -1385,72 +2688,109 @@ class BpatBlotterPage extends StatefulWidget {
 
 class _BpatBlotterPageState extends State<BpatBlotterPage> {
   String _query = '';
+  String _status = 'All';
 
   @override
   Widget build(BuildContext context) {
-    const data = [
-      'csac avsv',
-      'LOIDA LAXA HUSSEY',
-      'ANGELO GREGG ELANE',
-      'Lester Castro Nadong',
-    ];
-    final rows = data
-        .where((name) => name.toLowerCase().contains(_query.toLowerCase()))
-        .toList();
+    return ValueListenableBuilder<List<_EmergencyIncident>>(
+      valueListenable: _emergencyOpsStore.incidents,
+      builder: (_, incidents, __) {
+        final rows = [...incidents]
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        final filtered = rows.where((entry) {
+          final matchesQuery =
+              entry.reference.toLowerCase().contains(_query.toLowerCase()) ||
+              entry.location.toLowerCase().contains(_query.toLowerCase()) ||
+              entry.type.toLowerCase().contains(_query.toLowerCase()) ||
+              _maskedVictimName(entry.victimName)
+                  .toLowerCase()
+                  .contains(_query.toLowerCase());
+          final matchesStatus = _status == 'All' || entry.status == _status;
+          return matchesQuery && matchesStatus;
+        }).toList();
 
-    return ListView(
-      padding: const EdgeInsets.all(12),
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE2E6F2)),
-          ),
-          child: TextField(
-            onChanged: (value) => setState(() => _query = value),
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search_rounded),
-              hintText: 'Search blotter name or reference...',
-              border: InputBorder.none,
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        if (rows.isEmpty)
-          const ListTile(
-            leading: Icon(Icons.search_off_rounded),
-            title: Text('No blotter matches found'),
-          ),
-        ...rows.map(
-          (e) => Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.86),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE2E6F2)),
-            ),
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 6,
+        return ListView(
+          padding: const EdgeInsets.all(12),
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E6F2)),
               ),
-              title: Text(
-                e,
-                style: const TextStyle(
-                  color: Color(0xFF332F35),
-                  fontWeight: FontWeight.w700,
+              child: TextField(
+                onChanged: (value) => setState(() => _query = value),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search_rounded),
+                  hintText: 'Search blotter name, location, or reference...',
+                  border: InputBorder.none,
                 ),
               ),
-              subtitle: const Text(
-                'RBI-3-6-10',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              trailing: const Icon(Icons.chevron_right_rounded),
             ),
-          ),
-        ),
-      ],
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 36,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: 4,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (_, index) {
+                  const items = ['All', 'Pending', 'Dispatched', 'Resolved'];
+                  final item = items[index];
+                  final selected = item == _status;
+                  return ChoiceChip(
+                    label: Text(item),
+                    selected: selected,
+                    onSelected: (_) => setState(() => _status = item),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (filtered.isEmpty)
+              const ListTile(
+                leading: Icon(Icons.search_off_rounded),
+                title: Text('No blotter matches found'),
+              ),
+            ...filtered.map(
+              (entry) => Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E6F2)),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  title: Text(
+                    '${entry.type} • ${_maskedVictimName(entry.victimName)}',
+                    style: const TextStyle(
+                      color: Color(0xFF332F35),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '${entry.reference}\n${entry.location}\n${_formatEmergencyDateTime(entry.createdAt)}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  trailing: _EmergencyStatusPill(
+                    label: entry.status,
+                    color: _emergencyStatusColor(entry.status),
+                  ),
+                  onTap: () => showModalBottomSheet<void>(
+                    context: context,
+                    showDragHandle: true,
+                    builder: (_) => _EmergencyIncidentDetailSheet(incident: entry),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -1467,3798 +2807,252 @@ class _BpatRecordsPageState extends State<BpatRecordsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final records = List.generate(
-      4,
-      (i) => (title: 'IR-$i', date: '2/10/2025 5:38 AM'),
-    );
-    final rows = records
-        .where(
-          (item) =>
-              item.title.toLowerCase().contains(_query.toLowerCase()) ||
-              item.date.toLowerCase().contains(_query.toLowerCase()),
-        )
-        .toList();
+    return ValueListenableBuilder<List<_EmergencyIncident>>(
+      valueListenable: _emergencyOpsStore.incidents,
+      builder: (_, incidents, __) {
+        return ValueListenableBuilder<List<_PatrolRequestEntry>>(
+          valueListenable: _emergencyOpsStore.patrolRequests,
+          builder: (_, patrols, __) {
+            final incidentRows = incidents.where((item) {
+              final haystack = [
+                item.reference,
+                item.type,
+                item.location,
+                item.reporterName,
+                item.createdAt.toIso8601String(),
+              ].join(' ').toLowerCase();
+              return haystack.contains(_query.toLowerCase());
+            }).toList()
+              ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+            final patrolRows = patrols.where((item) {
+              final haystack = [
+                item.reference,
+                item.location,
+                item.reason,
+                item.requestedBy,
+                item.scheduledAt.toIso8601String(),
+              ].join(' ').toLowerCase();
+              return haystack.contains(_query.toLowerCase());
+            }).toList()
+              ..sort((a, b) => b.scheduledAt.compareTo(a.scheduledAt));
 
-    return ListView(
-      padding: const EdgeInsets.all(12),
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE2E6F2)),
-          ),
-          child: TextField(
-            onChanged: (value) => setState(() => _query = value),
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search_rounded),
-              hintText: 'Search person involved, report ID...',
-              border: InputBorder.none,
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        if (rows.isEmpty)
-          const ListTile(
-            leading: Icon(Icons.search_off_rounded),
-            title: Text('No incident records matched'),
-          ),
-        ...rows.map(
-          (item) => Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.86),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE2E6F2)),
-            ),
-            child: ListTile(
-              contentPadding: const EdgeInsets.fromLTRB(14, 6, 10, 6),
-              title: Text(
-                item.title,
-                style: const TextStyle(
-                  color: Color(0xFF332F35),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              subtitle: Text(
-                item.date,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              trailing: FilledButton(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const SimpleSerbilisPage(
-                      title: 'Incident Report Details',
-                    ),
-                  ),
-                ),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFD70000),
-                ),
-                child: const Text('DETAILS'),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class ClearancePage extends StatelessWidget {
-  const ClearancePage({super.key});
-  @override
-  Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 4,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Documents'),
-          backgroundColor: const Color(0xFFF7F8FF),
-          bottom: TabBar(
-            isScrollable: true,
-            indicatorColor: Colors.transparent,
-            indicator: BoxDecoration(
-              color: const Color(0xFFDDE2FF),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            indicatorSize: TabBarIndicatorSize.tab,
-            labelColor: const Color(0xFF2D3150),
-            unselectedLabelColor: const Color(0xFF737992),
-            labelStyle: const TextStyle(fontWeight: FontWeight.w800),
-            tabs: const [
-              Tab(text: 'Pending'),
-              Tab(text: 'Approved'),
-              Tab(text: 'Rejected'),
-              Tab(text: 'Completed'),
-            ],
-          ),
-        ),
-        body: const TabBarView(
-          children: [
-            _DocList(status: 'Pending'),
-            _DocList(status: 'Approved'),
-            _DocList(status: 'Rejected'),
-            _DocList(status: 'Completed'),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DocList extends StatefulWidget {
-  final String status;
-  const _DocList({required this.status});
-
-  @override
-  State<_DocList> createState() => _DocListState();
-}
-
-class _DocListState extends State<_DocList> {
-  String _query = '';
-
-  @override
-  Widget build(BuildContext context) {
-    final documents = _documentsByStatus(widget.status);
-    final accent = _statusColor(widget.status);
-    final q = _query.trim().toLowerCase();
-    final rows = documents.where((d) {
-      final bag = '${d.title} ${d.subtitle} ${d.reference} ${d.detail}'
-          .toLowerCase();
-      return q.isEmpty || bag.contains(q);
-    }).toList();
-
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFFF7F8FF), Color(0xFFF8F0EE)],
-        ),
-      ),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  accent.withValues(alpha: 0.95),
-                  accent.withValues(alpha: 0.75),
-                ],
-              ),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x22000000),
-                  blurRadius: 12,
-                  offset: Offset(0, 5),
-                ),
-              ],
-            ),
-            child: Row(
+            return ListView(
+              padding: const EdgeInsets.all(12),
               children: [
                 Container(
-                  width: 44,
-                  height: 44,
                   decoration: BoxDecoration(
-                    color: const Color(0x36FFFFFF),
-                    borderRadius: BorderRadius.circular(13),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E6F2)),
                   ),
-                  child: const Icon(Icons.folder_copy, color: Colors.white),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${widget.status} Documents',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 21,
-                        ),
-                      ),
-                      Text(
-                        '${documents.length} requests | Avg turnaround ${_processingEta(widget.status)}',
-                        style: const TextStyle(
-                          color: Color(0xFFECEFFF),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            onChanged: (v) => setState(() => _query = v),
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search),
-              hintText: 'Search by name, ID, purpose...',
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: Color(0xFFE3E6F4)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: Color(0xFFE3E6F4)),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          if (rows.isEmpty)
-            const Card(
-              child: ListTile(
-                leading: Icon(Icons.search_off),
-                title: Text('No matching documents'),
-              ),
-            )
-          else
-            ...rows.map(
-              (d) => Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE4E7F3)),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x11000000),
-                      blurRadius: 8,
-                      offset: Offset(0, 4),
+                  child: TextField(
+                    onChanged: (value) => setState(() => _query = value),
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search_rounded),
+                      hintText: 'Search incident, patrol, resident, or date...',
+                      border: InputBorder.none,
                     ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          backgroundColor: accent.withValues(alpha: 0.13),
-                          child: Icon(d.icon, color: accent),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            d.title,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              color: Color(0xFF2D314A),
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: accent.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            widget.status,
-                            style: TextStyle(
-                              color: accent,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      d.subtitle,
-                      style: const TextStyle(
-                        color: Color(0xFF555C77),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      d.detail,
-                      style: const TextStyle(
-                        color: Color(0xFF666B84),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.confirmation_number_outlined,
-                          size: 16,
-                          color: Color(0xFF7A809A),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          d.reference,
-                          style: const TextStyle(
-                            color: Color(0xFF7A809A),
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const Spacer(),
-                        TextButton.icon(
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => _DocumentStatusDetailPage(
-                                entry: d,
-                                status: widget.status,
-                                accent: accent,
-                              ),
-                            ),
-                          ),
-                          icon: Icon(
-                            widget.status == 'Approved'
-                                ? Icons.visibility
-                                : widget.status == 'Completed'
-                                ? Icons.download
-                                : Icons.chevron_right,
-                            color: accent,
-                            size: 18,
-                          ),
-                          label: Text(
-                            _statusAction(widget.status),
-                            style: TextStyle(color: accent),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  List<_DocEntry> _documentsByStatus(String status) {
-    switch (status) {
-      case 'Approved':
-        return const [
-          _DocEntry(
-            title: 'Barangay Clearance',
-            subtitle: 'Approved on Feb 18, 2026',
-            detail: 'Purpose: Employment requirement',
-            reference: 'BC-26-0218',
-            icon: Icons.task_alt,
-          ),
-          _DocEntry(
-            title: 'Certificate of Residency',
-            subtitle: 'Approved on Feb 14, 2026',
-            detail: 'Purpose: Scholarship application',
-            reference: 'CR-26-0214',
-            icon: Icons.home,
-          ),
-          _DocEntry(
-            title: 'Business Endorsement',
-            subtitle: 'Approved on Feb 10, 2026',
-            detail: 'Purpose: Market stall permit',
-            reference: 'BE-26-0210',
-            icon: Icons.store,
-          ),
-        ];
-      case 'Rejected':
-        return const [
-          _DocEntry(
-            title: 'Medical Assistance Form',
-            subtitle: 'Rejected on Feb 16, 2026',
-            detail: 'Reason: Missing hospital abstract',
-            reference: 'MA-26-0216',
-            icon: Icons.local_hospital,
-          ),
-          _DocEntry(
-            title: 'Scholarship Assistance',
-            subtitle: 'Rejected on Feb 11, 2026',
-            detail: 'Reason: Incomplete school attachments',
-            reference: 'SA-26-0211',
-            icon: Icons.school,
-          ),
-        ];
-      case 'Completed':
-        return const [
-          _DocEntry(
-            title: 'Barangay Clearance',
-            subtitle: 'Completed and downloaded',
-            detail: 'Released to resident on Feb 04, 2026',
-            reference: 'BC-26-0204',
-            icon: Icons.download_done,
-          ),
-          _DocEntry(
-            title: 'Community Certificate',
-            subtitle: 'Completed and released',
-            detail: 'Released to resident on Jan 29, 2026',
-            reference: 'CC-26-0129',
-            icon: Icons.verified,
-          ),
-        ];
-      case 'Pending':
-      default:
-        return const [
-          _DocEntry(
-            title: 'Barangay Clearance',
-            subtitle: 'Pending verification of residency',
-            detail: 'Submitted Feb 20, 2026',
-            reference: 'BC-26-0220',
-            icon: Icons.description,
-          ),
-          _DocEntry(
-            title: 'Certificate of Indigency',
-            subtitle: 'Queued for captain signature',
-            detail: 'Submitted Feb 19, 2026',
-            reference: 'CI-26-0219',
-            icon: Icons.assignment_turned_in,
-          ),
-          _DocEntry(
-            title: 'Medical Assistance Form',
-            subtitle: 'Under social worker review',
-            detail: 'Submitted Feb 18, 2026',
-            reference: 'MA-26-0218',
-            icon: Icons.health_and_safety,
-          ),
-        ];
-    }
-  }
-
-  String _processingEta(String status) {
-    switch (status) {
-      case 'Approved':
-        return '2 days';
-      case 'Rejected':
-        return '1 day';
-      case 'Completed':
-        return '0 day';
-      case 'Pending':
-      default:
-        return '3 days';
-    }
-  }
-
-  String _statusAction(String status) {
-    switch (status) {
-      case 'Approved':
-        return 'View';
-      case 'Completed':
-        return 'Download';
-      case 'Rejected':
-        return 'Review';
-      case 'Pending':
-      default:
-        return 'Track';
-    }
-  }
-
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'Approved':
-        return const Color(0xFF2D8E55);
-      case 'Rejected':
-        return const Color(0xFFD74637);
-      case 'Completed':
-        return const Color(0xFF3650C4);
-      case 'Pending':
-      default:
-        return const Color(0xFF7A5A43);
-    }
-  }
-}
-
-class _DocEntry {
-  final String title;
-  final String subtitle;
-  final String detail;
-  final String reference;
-  final IconData icon;
-  const _DocEntry({
-    required this.title,
-    required this.subtitle,
-    required this.detail,
-    required this.reference,
-    required this.icon,
-  });
-}
-
-class CouncilPage extends StatelessWidget {
-  const CouncilPage({super.key});
-  @override
-  Widget build(BuildContext context) {
-    final data = const [
-      (
-        'DONALD ELAD AQUINO',
-        'Sangguniang Barangay Member',
-        'Committee on Peace and Order',
-      ),
-      (
-        'LARRY DELA ROSA TOLEDO',
-        'Sangguniang Barangay Member',
-        'Committee on Infrastructure',
-      ),
-      (
-        'RIGOR BILONO AVILANES',
-        'Sangguniang Barangay Member',
-        'Committee on Finance and Budget',
-      ),
-      (
-        'ROBERTO TOGONON ANTONIO',
-        'Sangguniang Barangay Member',
-        'Committee on Social Services',
-      ),
-      (
-        'WILFREDO FABABI MIRANDA',
-        'Sangguniang Barangay Member',
-        'Committee on Education and Youth',
-      ),
-    ];
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Council'),
-        backgroundColor: const Color(0xFF9F1A1A),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF9F1A1A), Color(0xFFC92A2A)],
-            ),
-          ),
-        ),
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFF7F8FC), Color(0xFFF3ECEC)],
-          ),
-        ),
-        child: ListView(
-          padding: const EdgeInsets.all(12),
-          children: [
-            Container(
-              padding: const EdgeInsets.all(14),
-              margin: const EdgeInsets.only(bottom: 10),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF9F1A1A), Color(0xFFC92A2A)],
-                ),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x22000000),
-                    blurRadius: 10,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: const Row(
-                children: [
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor: Color(0x33FFFFFF),
-                    child: Icon(Icons.groups_2, color: Colors.white),
-                  ),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Council Directory and Committee Assignments',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 17,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            ...data.map(
-              (e) => Container(
-                margin: const EdgeInsets.only(bottom: 9),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE4E7F3)),
-                ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                  leading: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFEFEA),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.person, color: Color(0xFF9F1A1A)),
-                  ),
-                  title: Text(
-                    e.$1,
-                    style: const TextStyle(
-                      color: Color(0xFF2F3248),
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        e.$2,
-                        style: const TextStyle(
-                          color: Color(0xFF676C86),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        e.$3,
-                        style: const TextStyle(
-                          color: Color(0xFF8A5A4A),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                  trailing: const Icon(Icons.edit, size: 18),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFFB42121),
-        child: const Icon(Icons.add, color: Colors.white),
-        onPressed: () => showModalBottomSheet<void>(
-          context: context,
-          isScrollControlled: true,
-          builder: (_) => const _CouncilFormSheet(),
-        ),
-      ),
-    );
-  }
-}
-
-class _CouncilFormSheet extends StatelessWidget {
-  const _CouncilFormSheet();
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          children: const [
-            Text(
-              'Add Member of Council',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
-            ),
-            SizedBox(height: 10),
-            TextField(decoration: InputDecoration(labelText: 'First Name')),
-            SizedBox(height: 8),
-            TextField(decoration: InputDecoration(labelText: 'Middle Name')),
-            SizedBox(height: 8),
-            TextField(decoration: InputDecoration(labelText: 'Last Name')),
-            SizedBox(height: 8),
-            TextField(decoration: InputDecoration(labelText: 'Position')),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class DisclosureBoardPage extends StatefulWidget {
-  const DisclosureBoardPage({super.key});
-
-  @override
-  State<DisclosureBoardPage> createState() => _DisclosureBoardPageState();
-}
-
-class _DisclosureBoardPageState extends State<DisclosureBoardPage> {
-  final TextEditingController _searchController = TextEditingController();
-  String _purposeFilter = 'All';
-  String _statusFilter = 'All';
-  String _selectedDate = '08/08/2025';
-  String _aipView = 'AIP TABLE';
-
-  static const _purposeOptions = [
-    'All',
-    'General Services',
-    'MOOE',
-    'Capital Outlay',
-    'Social Services',
-  ];
-
-  static const _statusOptions = ['All', 'Released', 'Processing', 'Posted'];
-
-  static const _sectors = [
-    _DisbursementSector(
-      title: 'General Services',
-      available: 1899622.76,
-      utilized: 2302268.50,
-    ),
-    _DisbursementSector(
-      title: 'Maintenance and Other Operating Expenses (MOOE)',
-      available: 150000.00,
-      utilized: 62500.00,
-    ),
-    _DisbursementSector(
-      title: 'Capital Outlay',
-      available: 150000.00,
-      utilized: 0.00,
-    ),
-    _DisbursementSector(
-      title: 'Social Services',
-      available: 720000.00,
-      utilized: 1480000.00,
-    ),
-  ];
-
-  static const _disclosureRows = [
-    _DisclosureEntry(
-      date: '9/26/2024',
-      number: 'DBR-2024-085',
-      purpose: 'General Services',
-      status: 'Released',
-    ),
-    _DisclosureEntry(
-      date: '9/27/2024',
-      number: 'DBR-2024-084',
-      purpose: 'MOOE',
-      status: 'Released',
-    ),
-    _DisclosureEntry(
-      date: '9/28/2024',
-      number: 'DBR-2024-083',
-      purpose: 'Capital Outlay',
-      status: 'Posted',
-    ),
-    _DisclosureEntry(
-      date: '9/29/2024',
-      number: 'DBR-2024-082',
-      purpose: 'Social Services',
-      status: 'Processing',
-    ),
-    _DisclosureEntry(
-      date: '9/30/2024',
-      number: 'DBR-2024-081',
-      purpose: 'General Services',
-      status: 'Released',
-    ),
-  ];
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  String _peso(double value) {
-    final whole = value.floor();
-    final decimal = ((value - whole) * 100).round().toString().padLeft(2, '0');
-    final parts = whole.toString().split('').reversed.toList();
-    final chunks = <String>[];
-    for (var i = 0; i < parts.length; i += 3) {
-      final end = (i + 3 < parts.length) ? i + 3 : parts.length;
-      chunks.add(parts.sublist(i, end).join(''));
-    }
-    return '₱${chunks.map((e) => e.split('').reversed.join('')).toList().reversed.join(',')}.$decimal';
-  }
-
-  List<_DisclosureEntry> get _filteredRows {
-    final q = _searchController.text.trim().toLowerCase();
-    return _disclosureRows.where((row) {
-      final byPurpose =
-          _purposeFilter == 'All' || row.purpose == _purposeFilter;
-      final byStatus = _statusFilter == 'All' || row.status == _statusFilter;
-      final haystack = '${row.date} ${row.number} ${row.purpose} ${row.status}'
-          .toLowerCase();
-      final byQuery = q.isEmpty || haystack.contains(q);
-      return byPurpose && byStatus && byQuery;
-    }).toList();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Disbursement'),
-          backgroundColor: const Color(0xFF9F1A1A),
-          foregroundColor: Colors.white,
-          elevation: 0,
-          flexibleSpace: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF9F1A1A), Color(0xFFC92A2A)],
-              ),
-            ),
-          ),
-          bottom: const TabBar(
-            labelColor: Colors.white,
-            unselectedLabelColor: Color(0xFFFFD8D8),
-            indicatorColor: Colors.white,
-            indicatorWeight: 3,
-            labelStyle: TextStyle(fontWeight: FontWeight.w800),
-            tabs: [
-              Tab(text: 'Disbursement'),
-              Tab(text: 'Disclosure'),
-              Tab(text: 'AIP'),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          children: [_disbursementTab(), _disclosureTab(), _aipTab()],
-        ),
-      ),
-    );
-  }
-
-  Widget _disbursementTab() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFFF7F8FC), Color(0xFFF3ECEC)],
-        ),
-      ),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFE3E6F1)),
-            ),
-            child: Column(
-              children: [
-                const Text(
-                  'Available Balance: ₱15,064,054.00',
-                  style: TextStyle(
-                    color: _officialText,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 20,
-                  ),
-                ),
-                const Text(
-                  '(as of September 13, 2024)',
-                  style: TextStyle(
-                    color: _officialSubtext,
-                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 10),
-                const _DisbursementSummaryRow(
-                  label: 'Allocated:',
-                  value: '₱20,064,054.00',
-                ),
-                const _DisbursementSummaryRow(
-                  label: 'Beginning Balance:',
-                  value: '₱2,064,054.00',
-                ),
-                const _DisbursementSummaryRow(
-                  label: 'Utilized:',
-                  value: '₱5,064,054.00',
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          ..._sectors.map(
-            (sector) => Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE3E6F1)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFB20D0D),
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(14),
-                      ),
-                    ),
-                    child: Text(
-                      sector.title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
+                _sectionTitle('Incident Reports'),
+                const SizedBox(height: 8),
+                if (incidentRows.isEmpty)
+                  const ListTile(
+                    leading: Icon(Icons.search_off_rounded),
+                    title: Text('No incident records matched'),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Available: ${_peso(sector.available)}',
-                          style: const TextStyle(
-                            color: _officialText,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        Text(
-                          'Utilized: ${_peso(sector.utilized)}',
-                          style: const TextStyle(
-                            color: _officialText,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
+                ...incidentRows.map(
+                  (item) => Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E6F2)),
                     ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _disclosureTab() {
-    final rows = _filteredRows;
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFFF7F8FC), Color(0xFFF3ECEC)],
-        ),
-      ),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: const Color(0xFFE3E6F1)),
-            ),
-            child: TextField(
-              controller: _searchController,
-              onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                prefixIcon: Icon(Icons.menu_rounded),
-                suffixIcon: Icon(Icons.search_rounded),
-                hintText: 'Search products or services...',
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          _filterDropdown(
-            label: 'Purpose',
-            value: _purposeFilter,
-            items: _purposeOptions,
-            onChanged: (v) => setState(() => _purposeFilter = v ?? 'All'),
-          ),
-          const SizedBox(height: 8),
-          _filterDropdown(
-            label: 'Status',
-            value: _statusFilter,
-            items: _statusOptions,
-            onChanged: (v) => setState(() => _statusFilter = v ?? 'All'),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            readOnly: true,
-            decoration: InputDecoration(
-              labelText: 'Date',
-              hintText: _selectedDate,
-              suffixIcon: const Icon(Icons.calendar_month_outlined),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            onTap: () async {
-              final picked = await showDatePicker(
-                context: context,
-                initialDate: DateTime(2025, 8, 8),
-                firstDate: DateTime(2024, 1, 1),
-                lastDate: DateTime(2026, 12, 31),
-              );
-              if (picked == null) return;
-              setState(() {
-                _selectedDate =
-                    '${picked.month.toString().padLeft(2, '0')}/${picked.day.toString().padLeft(2, '0')}/${picked.year}';
-              });
-            },
-          ),
-          const SizedBox(height: 10),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE3E6F1)),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF1F3F7),
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(12),
-                    ),
-                  ),
-                  child: const Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Date',
-                          style: TextStyle(fontWeight: FontWeight.w800),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
+                      title: Text(
+                        '${item.reference} • ${item.type}',
+                        style: const TextStyle(
+                          color: Color(0xFF332F35),
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                      Expanded(
-                        child: Text(
-                          'Disbursement No.',
-                          style: TextStyle(fontWeight: FontWeight.w800),
+                      subtitle: Text(
+                        '${item.location}\n${_formatEmergencyDateTime(item.createdAt)}',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      trailing: FilledButton(
+                        onPressed: () => showModalBottomSheet<void>(
+                          context: context,
+                          showDragHandle: true,
+                          builder: (_) =>
+                              _EmergencyIncidentDetailSheet(incident: item),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (rows.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: Text(
-                      'No disbursement entries matched your filters.',
-                      style: TextStyle(color: _officialSubtext),
-                    ),
-                  )
-                else
-                  ...rows.map(
-                    (row) => Container(
-                      decoration: const BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(color: Color(0xFFEAECEF)),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFFD70000),
                         ),
+                        child: const Text('DETAILS'),
                       ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 12,
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              row.date,
-                              style: const TextStyle(
-                                color: _officialText,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              row.number,
-                              style: const TextStyle(
-                                color: _officialText,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _aipTab() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFFF7F8FC), Color(0xFFF3ECEC)],
-        ),
-      ),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-        children: [
-          const Center(
-            child: Text(
-              'Annual Investment Plan (AIP)\nCY 2025',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _officialText,
-                fontSize: 21,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          const Center(
-            child: Text(
-              'By Program/Project/Activity by Sector\nas of August 2025',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _officialSubtext,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Center(
-            child: Text(
-              'WEST TAPINAC, CITY OF OLONGAPO, ZAMBALES',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _officialText,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFE3E6F1)),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFB20D0D),
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(8),
-                    ),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      isExpanded: true,
-                      value: _aipView,
-                      dropdownColor: Colors.white,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
-                      iconEnabledColor: Colors.white,
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'AIP TABLE',
-                          child: Text('AIP TABLE'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'SECTOR SUMMARY',
-                          child: Text('SECTOR SUMMARY'),
-                        ),
-                      ],
-                      onChanged: (value) =>
-                          setState(() => _aipView = value ?? 'AIP TABLE'),
                     ),
                   ),
                 ),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  child: const Text(
-                    'GRAND TOTAL: ₱94,545,498.87',
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      color: _officialText,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 21,
+                const SizedBox(height: 10),
+                _sectionTitle('Patrol Requests'),
+                const SizedBox(height: 8),
+                ...patrolRows.map(
+                  (item) => Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E6F2)),
+                    ),
+                    child: ListTile(
+                      leading: const Icon(
+                        Icons.directions_walk_rounded,
+                        color: Color(0xFF8E4E45),
+                      ),
+                      title: Text(
+                        item.location,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      subtitle: Text(
+                        '${item.reason}\n${_formatEmergencyDateTime(item.scheduledAt)} • ${item.status}',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          const Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  'Prepared by:\n'
-                  'Vicente T. Capalla\n'
-                  'Barangay Secretary\n'
-                  'Date: 8/8/2025\n\n'
-                  'Cresencio A.\n'
-                  'Fernandez, Jr.\n'
-                  'Barangay Treasurer\n'
-                  'Date: 8/8/2025',
-                  style: TextStyle(
-                    color: _officialText,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  'Attested by:\n'
-                  'Lester C. Nadong\n\n'
-                  'Punong Barangay\n'
-                  'Date: 8/8/2025',
-                  style: TextStyle(
-                    color: _officialText,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: () =>
-                  _showFeature(context, 'AIP report sent to print queue.'),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFB20D0D),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text(
-                'PRINT REPORT',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _filterDropdown({
-    required String label,
-    required String value,
-    required List<String> items,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return DropdownButtonFormField<String>(
-      initialValue: value,
-      decoration: InputDecoration(
-        labelText: label,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-      items: items
-          .map((item) => DropdownMenuItem(value: item, child: Text(item)))
-          .toList(),
-      onChanged: onChanged,
-    );
-  }
-}
-
-class _DisbursementSummaryRow extends StatelessWidget {
-  final String label;
-  final String value;
-  const _DisbursementSummaryRow({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: _officialText,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const Spacer(),
-          Text(
-            value,
-            style: const TextStyle(
-              color: _officialText,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DisbursementSector {
-  final String title;
-  final double available;
-  final double utilized;
-  const _DisbursementSector({
-    required this.title,
-    required this.available,
-    required this.utilized,
-  });
-}
-
-class _DisclosureEntry {
-  final String date;
-  final String number;
-  final String purpose;
-  final String status;
-  const _DisclosureEntry({
-    required this.date,
-    required this.number,
-    required this.purpose,
-    required this.status,
-  });
-}
-
-class GovAgenciesPage extends StatelessWidget {
-  const GovAgenciesPage({super.key});
-  @override
-  Widget build(BuildContext context) {
-    const agencies = [
-      _AgencyInfo(
-        code: 'PGO',
-        name: 'Provincial Governor\'s Office - Zambales',
-        subtitle: 'Executive directives, province-wide programs, and referrals',
-        website: 'zambales.gov.ph/governor',
-        logoDomain: 'zambales.gov.ph',
-        contact: '(047) 811-2001',
-        color: Color(0xFFB80F0F),
-        icon: Icons.account_balance,
-      ),
-      _AgencyInfo(
-        code: 'SP',
-        name: 'Sangguniang Panlalawigan',
-        subtitle: 'Provincial ordinances, hearings, and committee schedules',
-        website: 'zambales.gov.ph/sangguniang-panlalawigan',
-        logoDomain: 'zambales.gov.ph',
-        contact: '(047) 811-2014',
-        color: Color(0xFF8F1111),
-        icon: Icons.gavel,
-      ),
-      _AgencyInfo(
-        code: 'PHO',
-        name: 'Provincial Health Office',
-        subtitle:
-            'Hospital referral desk, disease surveillance, and immunization',
-        website: 'zambales.gov.ph/health',
-        logoDomain: 'zambales.gov.ph',
-        contact: '(047) 811-2032',
-        color: Color(0xFFCC2A2A),
-        icon: Icons.local_hospital,
-      ),
-      _AgencyInfo(
-        code: 'PDRRMO',
-        name: 'Provincial DRRM Office',
-        subtitle: 'Disaster preparedness, response coordination, and hotline',
-        website: 'zambales.gov.ph/pdrrmo',
-        logoDomain: 'zambales.gov.ph',
-        contact: '(047) 811-2045',
-        color: Color(0xFFA51515),
-        icon: Icons.warning_amber_rounded,
-      ),
-      _AgencyInfo(
-        code: 'PSWDO',
-        name: 'Provincial Social Welfare and Development Office',
-        subtitle:
-            'Medical aid endorsement, burial aid, and social case support',
-        website: 'zambales.gov.ph/pswdo',
-        logoDomain: 'zambales.gov.ph',
-        contact: '(047) 811-2058',
-        color: Color(0xFFD23D3D),
-        icon: Icons.volunteer_activism,
-      ),
-      _AgencyInfo(
-        code: 'PESO',
-        name: 'Provincial PESO',
-        subtitle:
-            'Local job matching, livelihood orientation, and hiring events',
-        website: 'zambales.gov.ph/peso',
-        logoDomain: 'zambales.gov.ph',
-        contact: '(047) 811-2073',
-        color: Color(0xFF931010),
-        icon: Icons.work_history,
-      ),
-      _AgencyInfo(
-        code: 'PAGRI',
-        name: 'Provincial Agriculture Office',
-        subtitle:
-            'Farm inputs, fisherfolk support, and agri-extension services',
-        website: 'zambales.gov.ph/agriculture',
-        logoDomain: 'zambales.gov.ph',
-        contact: '(047) 811-2096',
-        color: Color(0xFFC71C1C),
-        icon: Icons.agriculture,
-      ),
-      _AgencyInfo(
-        code: 'PVET',
-        name: 'Provincial Veterinary Office',
-        subtitle: 'Livestock health, anti-rabies drives, and vet certification',
-        website: 'zambales.gov.ph/veterinary',
-        logoDomain: 'zambales.gov.ph',
-        contact: '(047) 811-2104',
-        color: Color(0xFFAA1818),
-        icon: Icons.pets,
-      ),
-      _AgencyInfo(
-        code: 'PENG',
-        name: 'Provincial Engineering Office',
-        subtitle:
-            'Road maintenance, drainage requests, and infrastructure works',
-        website: 'zambales.gov.ph/engineering',
-        logoDomain: 'zambales.gov.ph',
-        contact: '(047) 811-2118',
-        color: Color(0xFFD44848),
-        icon: Icons.engineering,
-      ),
-      _AgencyInfo(
-        code: 'PIO',
-        name: 'Provincial Information Office',
-        subtitle: 'Official advisories, announcements, and media bulletins',
-        website: 'zambales.gov.ph/pio',
-        logoDomain: 'zambales.gov.ph',
-        contact: '(047) 811-2130',
-        color: Color(0xFF9E1313),
-        icon: Icons.campaign,
-      ),
-    ];
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Provincial Government'),
-        backgroundColor: const Color(0xFFCB1010),
-        foregroundColor: Colors.white,
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFFFF8F8), Color(0xFFFFF0F0)],
-          ),
-        ),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22),
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFFB90F0F), Color(0xFFD93636)],
-                ),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x26A30E0E),
-                    blurRadius: 12,
-                    offset: Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: const Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Provincial Contact Directory',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Capitol offices, hotlines, and service pages for Zambales province.',
-                          style: TextStyle(
-                            color: Color(0xFFFFE7E7),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(width: 8),
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor: Color(0x30FFFFFF),
-                    child: Icon(Icons.apartment, color: Colors.white),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: agencies.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                mainAxisExtent: 320,
-              ),
-              itemBuilder: (_, i) => _agencyCard(context, agencies[i]),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _agencyCard(BuildContext context, _AgencyInfo agency) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: () => showDialog<void>(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: Text(agency.name),
-          content: Text(
-            '${agency.subtitle}\n\nContact: ${agency.contact}\nPage: ${agency.website}\nOpen in browser when online access is enabled.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              style: TextButton.styleFrom(foregroundColor: const Color(0xFF8F1111)),
-              child: const Text('Close'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _showFeature(context, 'Opening ${agency.website}');
-              },
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFCB1010),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Open Portal'),
-            ),
-          ],
-        ),
-      ),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFF0D6D6)),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x14B21A1A),
-              blurRadius: 9,
-              offset: Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _AgencyLogoBadge(agency: agency),
-            const SizedBox(height: 10),
-            Text(
-              agency.code,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-                color: agency.color,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              agency.name,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF2D3149),
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              agency.subtitle,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Color(0xFF676D89),
-                fontWeight: FontWeight.w600,
-                fontSize: 12,
-              ),
-            ),
-            const Spacer(),
-            Row(
-              children: [
-                const Icon(Icons.phone, size: 14, color: Color(0xFF78809B)),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    agency.contact,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF78809B),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const Icon(Icons.language, size: 14, color: Color(0xFF78809B)),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    agency.website,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF78809B),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AgencyInfo {
-  final String code;
-  final String name;
-  final String subtitle;
-  final String website;
-  final String logoDomain;
-  final String contact;
-  final Color color;
-  final IconData icon;
-
-  const _AgencyInfo({
-    required this.code,
-    required this.name,
-    required this.subtitle,
-    required this.website,
-    required this.logoDomain,
-    required this.contact,
-    required this.color,
-    required this.icon,
-  });
-}
-
-class _AgencyLogoBadge extends StatelessWidget {
-  final _AgencyInfo agency;
-  const _AgencyLogoBadge({required this.agency});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 62,
-      height: 62,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            agency.color.withValues(alpha: 0.18),
-            agency.color.withValues(alpha: 0.08),
-          ],
-        ),
-        border: Border.all(color: agency.color.withValues(alpha: 0.24)),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(15),
-        child: Image.network(
-          'https://logo.clearbit.com/${agency.logoDomain}',
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
-            color: agency.color.withValues(alpha: 0.08),
-            child: Center(
-              child: Icon(agency.icon, color: agency.color, size: 24),
-            ),
-          ),
-          loadingBuilder: (context, child, progress) {
-            if (progress == null) {
-              return child;
-            }
-            return Container(
-              color: agency.color.withValues(alpha: 0.08),
-              child: Center(
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.3,
-                    color: agency.color,
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class HealthPage extends StatefulWidget {
-  const HealthPage({super.key});
-
-  @override
-  State<HealthPage> createState() => _HealthPageState();
-}
-
-class _HealthPageState extends State<HealthPage> {
-  final _searchController = TextEditingController();
-  int _doctorIndex = 0;
-
-  static const _items = [
-    _HealthServiceItem(
-      id: 'medcert',
-      title: 'Request MedCert',
-      subtitle: 'Get a barangay medical certificate after physician review.',
-      icon: Icons.assignment_rounded,
-      bg: Color(0xFFFFECEA),
-      accent: Color(0xFFD14F4F),
-      eta: 'Release in 1-2 working days',
-      keywords: 'medical certificate fit to work fit to travel',
-    ),
-    _HealthServiceItem(
-      id: 'diagnostics',
-      title: 'Diagnostics',
-      subtitle: 'Book laboratory services and diagnostic referrals.',
-      icon: Icons.biotech_rounded,
-      bg: Color(0xFFEAF1FF),
-      accent: Color(0xFF4263C5),
-      eta: 'Referral confirmation within 24 hours',
-      keywords: 'laboratory diagnostics x-ray urinalysis cbc',
-    ),
-    _HealthServiceItem(
-      id: 'pharmacy',
-      title: 'Pharmacy',
-      subtitle: 'Check medicine availability and subsidy support.',
-      icon: Icons.medication_rounded,
-      bg: Color(0xFFE8F6EE),
-      accent: Color(0xFF2D845D),
-      eta: 'Stock response in 30-60 minutes',
-      keywords: 'pharmacy medicine prescription maintenance drugs',
-    ),
-    _HealthServiceItem(
-      id: 'consultation',
-      title: 'Consultation',
-      subtitle: 'Book a consultation with barangay physician or nurse.',
-      icon: Icons.local_hospital_rounded,
-      bg: Color(0xFFFFF0E9),
-      accent: Color(0xFFB86A44),
-      eta: 'Same-day to next-day slots',
-      keywords: 'consultation doctor checkup teleconsult nurse',
-    ),
-  ];
-
-  static const _physicians = [
-    _BarangayPhysician(
-      name: 'Dr. Lea Santos, MD',
-      specialty: 'Family Medicine',
-      dutySchedule: 'Mon, Wed, Fri - 9:00 AM - 2:00 PM',
-      licenseNo: 'PRC 0765412',
-      clinicRoom: 'BHS Room 2',
-      onDuty: true,
-    ),
-    _BarangayPhysician(
-      name: 'Dr. Carlo Dizon, MD',
-      specialty: 'General Practice',
-      dutySchedule: 'Tue, Thu, Sat - 1:00 PM - 6:00 PM',
-      licenseNo: 'PRC 0803194',
-      clinicRoom: 'BHS Room 1',
-      onDuty: true,
-    ),
-  ];
-
-  static const _hotlines = [
-    ('Barangay Health Station', '(047) 251-2041'),
-    ('City Health Office', '(047) 222-1144'),
-    ('DOH Hotline', '1555'),
-  ];
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  List<_HealthServiceItem> get _filteredItems {
-    final query = _searchController.text.trim().toLowerCase();
-    if (query.isEmpty) {
-      return _items;
-    }
-    return _items
-        .where(
-          (item) =>
-              item.title.toLowerCase().contains(query) ||
-              item.subtitle.toLowerCase().contains(query) ||
-              item.keywords.contains(query),
-        )
-        .toList();
-  }
-
-  _BarangayPhysician get _selectedDoctor => _physicians[_doctorIndex];
-
-  bool _needsDoctor(_HealthServiceItem item) =>
-      item.id == 'consultation' ||
-      item.id == 'diagnostics' ||
-      item.id == 'medcert';
-
-  void _openCheckupScheduler(
-    BuildContext context,
-    _BarangayPhysician physician,
-  ) {
-    final residentController = TextEditingController();
-    final mobileController = TextEditingController();
-    final concernController = TextEditingController();
-    String day = 'Monday';
-    String slot = '9:00 AM - 10:00 AM';
-
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setModal) {
-            return AnimatedPadding(
-              duration: const Duration(milliseconds: 180),
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(10, 20, 10, 10),
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFFFFF7F6), Color(0xFFF8F5FF)],
-                  ),
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          gradient: const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [Color(0xFFD84B4B), Color(0xFFEF7272)],
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Schedule Barangay Check-Up',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 19,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              '${physician.name} - ${physician.specialty}',
-                              style: const TextStyle(
-                                color: Color(0xFFFFE8E8),
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: residentController,
-                        decoration: const InputDecoration(
-                          labelText: 'Resident Full Name',
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: mobileController,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(
-                          labelText: 'Mobile Number',
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      DropdownButtonFormField<String>(
-                        initialValue: day,
-                        decoration: const InputDecoration(
-                          labelText: 'Preferred Day',
-                        ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'Monday',
-                            child: Text('Monday'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Tuesday',
-                            child: Text('Tuesday'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Wednesday',
-                            child: Text('Wednesday'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Thursday',
-                            child: Text('Thursday'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Friday',
-                            child: Text('Friday'),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          if (value == null) return;
-                          setModal(() => day = value);
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      DropdownButtonFormField<String>(
-                        initialValue: slot,
-                        decoration: const InputDecoration(
-                          labelText: 'Preferred Time Slot',
-                        ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: '9:00 AM - 10:00 AM',
-                            child: Text('9:00 AM - 10:00 AM'),
-                          ),
-                          DropdownMenuItem(
-                            value: '10:30 AM - 11:30 AM',
-                            child: Text('10:30 AM - 11:30 AM'),
-                          ),
-                          DropdownMenuItem(
-                            value: '1:00 PM - 2:00 PM',
-                            child: Text('1:00 PM - 2:00 PM'),
-                          ),
-                          DropdownMenuItem(
-                            value: '2:30 PM - 3:30 PM',
-                            child: Text('2:30 PM - 3:30 PM'),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          if (value == null) return;
-                          setModal(() => slot = value);
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: concernController,
-                        maxLines: 3,
-                        decoration: const InputDecoration(
-                          labelText: 'Symptoms / Reason for check-up',
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: () {
-                            final name = residentController.text.trim();
-                            final mobile = mobileController.text.trim();
-                            final concern = concernController.text.trim();
-                            if (name.isEmpty ||
-                                mobile.isEmpty ||
-                                concern.length < 8) {
-                              _showFeature(
-                                context,
-                                'Please complete resident info and concern details.',
-                              );
-                              return;
-                            }
-                            Navigator.pop(context);
-                            final ref =
-                                'CHK-${DateTime.now().millisecondsSinceEpoch % 1000000}';
-                            _showFeature(
-                              this.context,
-                              'Check-up scheduled with ${physician.name} on $day ($slot). Ref: $ref',
-                            );
-                          },
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFFC74C4C),
-                          ),
-                          icon: const Icon(Icons.event_available_rounded),
-                          label: const Text('Confirm Check-Up Schedule'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             );
           },
         );
       },
-    ).whenComplete(() {
-      residentController.dispose();
-      mobileController.dispose();
-      concernController.dispose();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final filtered = _filteredItems;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Health'),
-        backgroundColor: const Color(0xFFCC1010),
-        foregroundColor: Colors.white,
-      ),
-      body: Container(
-        color: const Color(0xFFF7F7F9),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
-          children: [
-            const Text(
-              'Welcome to eBarangayMo Health',
-              style: TextStyle(
-                fontSize: 30,
-                fontWeight: FontWeight.w900,
-                color: Color(0xFF272B39),
-              ),
-            ),
-            const SizedBox(height: 3),
-            const Text(
-              'Makaisa para sa malusog at masiglang komunidad.',
-              style: TextStyle(
-                color: Color(0xFF6B7088),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _searchController,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search),
-                hintText: 'Search for health services...',
-                filled: true,
-                fillColor: Colors.white,
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFE2A9A9)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(
-                    color: Color(0xFFCC1010),
-                    width: 1.4,
-                  ),
-                ),
-                suffixIcon: _searchController.text.isEmpty
-                    ? null
-                    : IconButton(
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {});
-                        },
-                        icon: const Icon(Icons.close),
-                      ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE8EAF1)),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x10000000),
-                    blurRadius: 10,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Talk to a doctor now!',
-                    style: TextStyle(
-                      fontSize: 25,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFFD22D2D),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    'Consult with our licensed barangay physician for urgent but non-emergency concerns.',
-                    style: TextStyle(
-                      color: Color(0xFF5E647C),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Container(
-                        width: 54,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          color: const Color(0xFFE8F7EE),
-                          border: Border.all(color: const Color(0xFFBFE6CD)),
-                        ),
-                        child: const Icon(
-                          Icons.verified_user,
-                          color: Color(0xFF32A66D),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _selectedDoctor.name,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF2E3248),
-                              ),
-                            ),
-                            Text(
-                              _selectedDoctor.specialty,
-                              style: const TextStyle(
-                                color: Color(0xFF6B7088),
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _selectedDoctor.dutySchedule,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF6F748C),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        width: 74,
-                        height: 92,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          gradient: const LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [Color(0xFFF6F7FB), Color(0xFFEBEEF9)],
-                          ),
-                        ),
-                        child: const Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Positioned(
-                              top: 8,
-                              right: 10,
-                              child: Icon(
-                                Icons.favorite_rounded,
-                                color: Color(0xFFD73B3B),
-                                size: 16,
-                              ),
-                            ),
-                            Icon(
-                              Icons.medical_services_rounded,
-                              color: Color(0xFF4B6DC8),
-                              size: 36,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: List.generate(_physicians.length, (index) {
-                      final active = _doctorIndex == index;
-                      return ChoiceChip(
-                        label: Text(active ? 'On Duty' : 'Doctor ${index + 1}'),
-                        selected: active,
-                        onSelected: (_) => setState(() => _doctorIndex = index),
-                      );
-                    }),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: () =>
-                              _openCheckupScheduler(context, _selectedDoctor),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFFCC1010),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          icon: const Icon(Icons.call),
-                          label: const Text('Consult Now'),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: _selectedDoctor.onDuty
-                              ? const Color(0xFFE1F7EA)
-                              : const Color(0xFFF1F1F3),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 11,
-                        ),
-                        child: Text(
-                          _selectedDoctor.onDuty
-                              ? 'Doctor Available'
-                              : 'Fully Booked',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: _selectedDoctor.onDuty
-                                ? const Color(0xFF26794A)
-                                : const Color(0xFF656A83),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '${_selectedDoctor.licenseNo} - ${_selectedDoctor.clinicRoom}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF6F748C),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            if (filtered.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE5E8F4)),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.search_off, color: Color(0xFF7A809B)),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'No matching health service found.',
-                        style: TextStyle(
-                          color: Color(0xFF646B86),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            else
-              ...filtered.map(
-                (item) => Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE7E8EF)),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x0E000000),
-                        blurRadius: 8,
-                        offset: Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                    leading: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        color: item.bg,
-                      ),
-                      child: Icon(item.icon, color: item.accent),
-                    ),
-                    title: Text(
-                      item.title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF2F3248),
-                      ),
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.subtitle,
-                          style: const TextStyle(
-                            color: Color(0xFF686C86),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          item.eta,
-                          style: TextStyle(
-                            color: item.accent.withValues(alpha: 0.85),
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                          ),
-                        ),
-                        if (_needsDoctor(item)) ...[
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFECE8),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              'Physician-assisted service',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                color: item.accent,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => _HealthServiceDetailPage(
-                          item: item,
-                          preferredDoctor: _needsDoctor(item)
-                              ? _selectedDoctor.name
-                              : null,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE7E7F2)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.local_phone, color: Color(0xFF7B4A3F)),
-                      SizedBox(width: 7),
-                      Text(
-                        'Health Hotlines',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF2F3248),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  ..._hotlines.map(
-                    (line) => Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.check_circle,
-                            size: 16,
-                            color: Color(0xFF3FA96D),
-                          ),
-                          const SizedBox(width: 7),
-                          Expanded(
-                            child: Text(
-                              '${line.$1}  ${line.$2}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF5D627C),
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Call',
-                            onPressed: () =>
-                                _showFeature(context, 'Calling ${line.$2}...'),
-                            icon: const Icon(
-                              Icons.phone,
-                              color: Color(0xFF4960BE),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
 
-class _HealthServiceItem {
-  final String id;
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color bg;
-  final Color accent;
-  final String eta;
-  final String keywords;
-
-  const _HealthServiceItem({
-    required this.id,
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.bg,
-    required this.accent,
-    required this.eta,
-    required this.keywords,
-  });
-}
-
-class _BarangayPhysician {
-  final String name;
-  final String specialty;
-  final String dutySchedule;
-  final String licenseNo;
-  final String clinicRoom;
-  final bool onDuty;
-
-  const _BarangayPhysician({
-    required this.name,
-    required this.specialty,
-    required this.dutySchedule,
-    required this.licenseNo,
-    required this.clinicRoom,
-    this.onDuty = false,
-  });
-}
-
-class EmergencyContactActionPage extends StatelessWidget {
-  final String contactName;
-  final String phoneNumber;
-  final String description;
-  const EmergencyContactActionPage({
-    super.key,
-    required this.contactName,
-    required this.phoneNumber,
-    required this.description,
-  });
+class _BpatDutyPage extends StatelessWidget {
+  const _BpatDutyPage();
 
   @override
   Widget build(BuildContext context) {
-    final name = contactName.toLowerCase();
-    final accent = name.contains('ambulance')
-        ? const Color(0xFF3846CE)
-        : name.contains('fire')
-        ? const Color(0xFFD34E3E)
-        : name.contains('police')
-        ? const Color(0xFF2A7A56)
-        : const Color(0xFF8D5A49);
-    final icon = name.contains('ambulance')
-        ? Icons.health_and_safety_rounded
-        : name.contains('fire')
-        ? Icons.local_fire_department_rounded
-        : name.contains('police')
-        ? Icons.local_police_rounded
-        : Icons.shield_rounded;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(contactName),
-        backgroundColor: const Color(0xFFF7F8FF),
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFF4F8FF), Color(0xFFF9F1ED)],
-          ),
-        ),
-        child: ListView(
+    return ValueListenableBuilder<List<_TanodDutyEntry>>(
+      valueListenable: _emergencyOpsStore.tanods,
+      builder: (_, tanods, __) {
+        return ListView(
           padding: const EdgeInsets.all(12),
           children: [
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xFFE4E7F3)),
+                border: Border.all(color: const Color(0xFFE2E6F2)),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: accent.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Icon(icon, color: accent),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              contactName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 20,
-                                color: Color(0xFF2F3248),
-                              ),
-                            ),
-                            Text(
-                              phoneNumber,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF5E637E),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    description,
-                    style: const TextStyle(
-                      color: Color(0xFF646A84),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            FilledButton.icon(
-              onPressed: () =>
-                  _showFeature(context, 'Dialing $contactName ($phoneNumber)'),
-              style: FilledButton.styleFrom(backgroundColor: accent),
-              icon: const Icon(Icons.call_rounded),
-              label: const Text('Call Now'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () => _showFeature(
-                context,
-                'Sending location and incident details to $contactName',
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF8E4E45),
-                side: const BorderSide(color: Color(0xFFB49087)),
-              ),
-              icon: const Icon(Icons.share_location_outlined),
-              label: const Text('Share Location First'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class EmergencyLocationSharePage extends StatefulWidget {
-  const EmergencyLocationSharePage({super.key});
-
-  @override
-  State<EmergencyLocationSharePage> createState() =>
-      _EmergencyLocationSharePageState();
-}
-
-class _EmergencyLocationSharePageState
-    extends State<EmergencyLocationSharePage> {
-  bool _includeLandmark = true;
-  bool _highAccuracy = true;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Share Live Location'),
-        backgroundColor: const Color(0xFFF7F8FF),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(12),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE4E7F3)),
-            ),
-            child: const Text(
-              'Send your live location to barangay responders for faster dispatch.',
-              style: TextStyle(
-                color: Color(0xFF505674),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          SwitchListTile(
-            value: _highAccuracy,
-            onChanged: (v) => setState(() => _highAccuracy = v),
-            title: const Text('Use high accuracy GPS'),
-            subtitle: const Text('Improves location precision in dense areas'),
-          ),
-          SwitchListTile(
-            value: _includeLandmark,
-            onChanged: (v) => setState(() => _includeLandmark = v),
-            title: const Text('Include nearby landmark'),
-            subtitle: const Text('Adds a recognizable reference point'),
-          ),
-          const SizedBox(height: 6),
-          FilledButton.icon(
-            onPressed: () => _showFeature(
-              context,
-              'Location shared to responders. Ref: LOC-26-001',
-            ),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF2E35D3),
-            ),
-            icon: const Icon(Icons.send),
-            label: const Text('Share Location'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class EmergencyMessagePage extends StatefulWidget {
-  const EmergencyMessagePage({super.key});
-
-  @override
-  State<EmergencyMessagePage> createState() => _EmergencyMessagePageState();
-}
-
-class _EmergencyMessagePageState extends State<EmergencyMessagePage> {
-  final _locationController = TextEditingController();
-  final _detailsController = TextEditingController();
-  String _priority = 'Urgent';
-
-  @override
-  void dispose() {
-    _locationController.dispose();
-    _detailsController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Message Barangay'),
-        backgroundColor: const Color(0xFFF7F8FF),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(12),
-        children: [
-          TextField(
-            controller: _locationController,
-            decoration: const InputDecoration(
-              labelText: 'Incident Location',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
-            initialValue: _priority,
-            decoration: const InputDecoration(
-              labelText: 'Priority',
-              border: OutlineInputBorder(),
-            ),
-            items: const [
-              DropdownMenuItem(value: 'Urgent', child: Text('Urgent')),
-              DropdownMenuItem(value: 'High', child: Text('High')),
-              DropdownMenuItem(value: 'Normal', child: Text('Normal')),
-            ],
-            onChanged: (value) =>
-                setState(() => _priority = value ?? _priority),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _detailsController,
-            minLines: 4,
-            maxLines: 6,
-            decoration: const InputDecoration(
-              labelText: 'Incident Details',
-              hintText: 'Describe what happened and who needs help.',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: () {
-              if (_locationController.text.trim().isEmpty ||
-                  _detailsController.text.trim().isEmpty) {
-                _showFeature(context, 'Please provide location and details.');
-                return;
-              }
-              _showFeature(
-                context,
-                'Emergency message sent. Ref: MSG-26-014 ($_priority)',
-              );
-            },
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF2E35D3),
-            ),
-            icon: const Icon(Icons.send),
-            label: const Text('Send Emergency Message'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class AssistanceRequestPage extends StatefulWidget {
-  final String assistanceType;
-  final String assistanceDescription;
-  final IconData assistanceIcon;
-  final Color accentColor;
-
-  const AssistanceRequestPage({
-    super.key,
-    required this.assistanceType,
-    required this.assistanceDescription,
-    required this.assistanceIcon,
-    required this.accentColor,
-  });
-
-  @override
-  State<AssistanceRequestPage> createState() => _AssistanceRequestPageState();
-}
-
-class _AssistanceRequestPageState extends State<AssistanceRequestPage> {
-  final _fullNameController = TextEditingController(text: 'Shamira Balandra');
-  final _mobileController = TextEditingController(text: '09073170635');
-  final _notesController = TextEditingController();
-  String _urgency = 'Regular';
-
-  @override
-  void dispose() {
-    _fullNameController.dispose();
-    _mobileController.dispose();
-    _notesController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.assistanceType),
-        backgroundColor: const Color(0xFFF7F8FF),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(12),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE4E7F3)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: widget.accentColor,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    widget.assistanceIcon,
-                    color: const Color(0xFF4A4F6A),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    widget.assistanceDescription,
-                    style: const TextStyle(
-                      color: Color(0xFF5C6280),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _fullNameController,
-            decoration: const InputDecoration(
-              labelText: 'Full Name',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _mobileController,
-            keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(
-              labelText: 'Mobile Number',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
-            initialValue: _urgency,
-            decoration: const InputDecoration(
-              labelText: 'Urgency',
-              border: OutlineInputBorder(),
-            ),
-            items: const [
-              DropdownMenuItem(value: 'Regular', child: Text('Regular')),
-              DropdownMenuItem(value: 'Priority', child: Text('Priority')),
-              DropdownMenuItem(value: 'Immediate', child: Text('Immediate')),
-            ],
-            onChanged: (value) => setState(() => _urgency = value ?? _urgency),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _notesController,
-            minLines: 3,
-            maxLines: 6,
-            decoration: const InputDecoration(
-              labelText: 'Details / Supporting Notes',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: () {
-              if (_fullNameController.text.trim().isEmpty ||
-                  _mobileController.text.trim().isEmpty) {
-                _showFeature(context, 'Please complete full name and mobile.');
-                return;
-              }
-              _showFeature(
-                context,
-                '${widget.assistanceType} request submitted. Ref: AST-26-102',
-              );
-            },
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF2E35D3),
-            ),
-            icon: const Icon(Icons.send),
-            label: const Text('Submit Request'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DocumentStatusDetailPage extends StatelessWidget {
-  final _DocEntry entry;
-  final String status;
-  final Color accent;
-  const _DocumentStatusDetailPage({
-    required this.entry,
-    required this.status,
-    required this.accent,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isPending = status == 'Pending';
-    final isApproved = status == 'Approved';
-    final isRejected = status == 'Rejected';
-    final isCompleted = status == 'Completed';
-    final actionLabel = switch (status) {
-      'Approved' => 'View Document',
-      'Completed' => 'Download PDF',
-      'Rejected' => 'Review Notes',
-      _ => 'Track Status',
-    };
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(entry.title),
-        backgroundColor: const Color(0xFFF7F8FF),
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFF5F8FF), Color(0xFFF9F2EE)],
-          ),
-        ),
-        child: ListView(
-          padding: const EdgeInsets.all(12),
-          children: [
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE4E7F3)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        backgroundColor: accent.withValues(alpha: 0.14),
-                        child: Icon(entry.icon, color: accent),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              entry.title,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF2F3248),
-                              ),
-                            ),
-                            Text(
-                              'Reference: ${entry.reference}',
-                              style: const TextStyle(
-                                color: Color(0xFF69708A),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: accent.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          status,
-                          style: TextStyle(
-                            color: accent,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    entry.subtitle,
-                    style: const TextStyle(
-                      color: Color(0xFF3E445E),
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    entry.detail,
-                    style: const TextStyle(
-                      color: Color(0xFF666B84),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE4E7F3)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Processing Timeline',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF2F3248),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.check_circle, color: Color(0xFF3BAE72)),
-                    title: Text('Application received'),
-                    subtitle: Text('Request encoded and validated'),
-                  ),
-                  ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      isPending
-                          ? Icons.timelapse_rounded
-                          : Icons.check_circle_rounded,
-                      color: isPending
-                          ? const Color(0xFF6570A5)
-                          : const Color(0xFF3BAE72),
-                    ),
-                    title: const Text('Barangay processing'),
-                    subtitle: Text(
-                      isPending
-                          ? 'Assigned to records and approval queue'
-                          : 'Review completed by assigned officer',
-                    ),
-                  ),
-                  ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      isApproved || isCompleted
-                          ? Icons.task_alt_rounded
-                          : isRejected
-                          ? Icons.cancel_rounded
-                          : Icons.assignment_turned_in_rounded,
-                      color: isApproved || isCompleted
-                          ? const Color(0xFF3BAE72)
-                          : isRejected
-                          ? const Color(0xFFD74637)
-                          : const Color(0xFF6B7088),
-                    ),
-                    title: const Text('Final action'),
-                    subtitle: Text(
-                      isApproved
-                          ? 'Approved and ready for release'
-                          : isCompleted
-                          ? 'Released and completed'
-                          : isRejected
-                          ? 'Application rejected due to requirements'
-                          : 'Ready for release or additional review',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: () =>
-                  _showFeature(context, '$actionLabel: ${entry.reference}'),
-              style: FilledButton.styleFrom(backgroundColor: accent),
-              icon: const Icon(Icons.open_in_new),
-              label: Text(actionLabel),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HealthServiceDetailPage extends StatefulWidget {
-  final _HealthServiceItem item;
-  final String? preferredDoctor;
-  const _HealthServiceDetailPage({required this.item, this.preferredDoctor});
-
-  @override
-  State<_HealthServiceDetailPage> createState() =>
-      _HealthServiceDetailPageState();
-}
-
-class _HealthServiceDetailPageState extends State<_HealthServiceDetailPage> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _mobileController = TextEditingController();
-  final _notesController = TextEditingController();
-  final _certificatePurposeController = TextEditingController();
-  static const _doctorNames = ['Dr. Lea Santos, MD', 'Dr. Carlo Dizon, MD'];
-  static const _timeSlots = [
-    '9:00 AM - 10:00 AM',
-    '10:30 AM - 11:30 AM',
-    '1:00 PM - 2:00 PM',
-    '2:30 PM - 3:30 PM',
-  ];
-  String _selectedDoctor = _doctorNames[0];
-  String _selectedDay = 'Monday';
-  String _selectedTimeSlot = _timeSlots[0];
-  bool _submitting = false;
-  String? _referenceCode;
-
-  bool get _requiresDoctor =>
-      widget.item.id == 'consultation' ||
-      widget.item.id == 'diagnostics' ||
-      widget.item.id == 'medcert';
-
-  bool get _isMedicalCertificate => widget.item.id == 'medcert';
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedDoctor = widget.preferredDoctor ?? _doctorNames.first;
-    if (_isMedicalCertificate) {
-      _certificatePurposeController.text = 'Fit-to-work clearance';
-    }
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _mobileController.dispose();
-    _notesController.dispose();
-    _certificatePurposeController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-    setState(() => _submitting = true);
-    await Future<void>.delayed(const Duration(milliseconds: 650));
-    final prefix = _isMedicalCertificate
-        ? 'MED'
-        : (_requiresDoctor ? 'CHK' : 'HLT');
-    final ref = '$prefix-${DateTime.now().millisecondsSinceEpoch % 1000000}';
-    setState(() {
-      _submitting = false;
-      _referenceCode = ref;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final item = widget.item;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(item.title),
-        backgroundColor: const Color(0xFFF7F8FF),
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFF7F8FF), Color(0xFFF2F4F9)],
-          ),
-        ),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
-          children: [
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE5E8F4)),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x12000000),
-                    blurRadius: 8,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(
-                      color: item.bg,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(item.icon, color: item.accent),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.title,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF2F3248),
-                          ),
-                        ),
-                        Text(
-                          item.subtitle,
-                          style: const TextStyle(
-                            color: Color(0xFF686C86),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Expected processing: ${item.eta}',
-                          style: TextStyle(
-                            color: item.accent,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE5E8F4)),
-              ),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Request Details',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF2F3248),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _nameController,
-                      decoration: const InputDecoration(labelText: 'Full Name'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Name is required.';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _mobileController,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        labelText: 'Mobile Number',
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Mobile number is required.';
-                        }
-                        if (value.replaceAll(RegExp(r'\D'), '').length < 10) {
-                          return 'Enter a valid mobile number.';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    if (_requiresDoctor) ...[
-                      DropdownButtonFormField<String>(
-                        initialValue: _selectedDoctor,
-                        decoration: const InputDecoration(
-                          labelText: 'Preferred Physician',
-                        ),
-                        items: _doctorNames
-                            .map(
-                              (doctor) => DropdownMenuItem(
-                                value: doctor,
-                                child: Text(doctor),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          if (value == null) return;
-                          setState(() => _selectedDoctor = value);
-                        },
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Select a physician.';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: _selectedDay,
-                              decoration: const InputDecoration(
-                                labelText: 'Preferred Day',
-                              ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'Monday',
-                                  child: Text('Monday'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Tuesday',
-                                  child: Text('Tuesday'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Wednesday',
-                                  child: Text('Wednesday'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Thursday',
-                                  child: Text('Thursday'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Friday',
-                                  child: Text('Friday'),
-                                ),
-                              ],
-                              onChanged: (value) {
-                                if (value == null) return;
-                                setState(() => _selectedDay = value);
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: _selectedTimeSlot,
-                              decoration: const InputDecoration(
-                                labelText: 'Time Slot',
-                              ),
-                              items: _timeSlots
-                                  .map(
-                                    (slot) => DropdownMenuItem(
-                                      value: slot,
-                                      child: Text(slot),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (value) {
-                                if (value == null) return;
-                                setState(() => _selectedTimeSlot = value);
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                    if (_isMedicalCertificate) ...[
-                      TextFormField(
-                        controller: _certificatePurposeController,
-                        decoration: const InputDecoration(
-                          labelText: 'Certificate Purpose',
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().length < 5) {
-                            return 'Please enter certificate purpose.';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                    TextFormField(
-                      controller: _notesController,
-                      maxLines: 4,
-                      decoration: InputDecoration(
-                        labelText: _requiresDoctor
-                            ? 'Symptoms / Concern Details'
-                            : 'Additional Notes',
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().length < 10) {
-                          return 'Please enter at least 10 characters.';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: _submitting ? null : _submit,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: item.accent,
-                        ),
-                        icon: const Icon(Icons.send),
-                        label: Text(
-                          _submitting
-                              ? 'Submitting...'
-                              : (_isMedicalCertificate
-                                    ? 'Submit Certificate Request'
-                                    : (_requiresDoctor
-                                          ? 'Schedule Health Check-Up'
-                                          : 'Submit Health Request')),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (_referenceCode != null) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF3FAF6),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFCEE8D8)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Request Sent Successfully',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF2F4F42),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Reference: $_referenceCode',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF2F5E47),
-                      ),
-                    ),
-                    if (_requiresDoctor) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        'Assigned physician: $_selectedDoctor',
-                        style: const TextStyle(
-                          color: Color(0xFF365A4A),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        'Schedule: $_selectedDay - $_selectedTimeSlot',
-                        style: const TextStyle(
-                          color: Color(0xFF4E6770),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                    if (_isMedicalCertificate) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        'Certificate purpose: ${_certificatePurposeController.text}',
-                        style: const TextStyle(
-                          color: Color(0xFF516070),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 3),
-                    const Text(
-                      'You can use this code to follow up at the barangay help desk.',
-                      style: TextStyle(
-                        color: Color(0xFF5E6A7D),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class CommunityPage extends StatefulWidget {
-  const CommunityPage({super.key});
-
-  @override
-  State<CommunityPage> createState() => _CommunityPageState();
-}
-
-class _CommunityPageState extends State<CommunityPage>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabController;
-  final List<_CommunityPost> _posts = [
-    _CommunityPost(
-      author: 'West Tapinac',
-      message:
-          'Hello Brgy West Tapinac! Keep our neighborhoods clean and safe.',
-      postedAt: DateTime.now().subtract(const Duration(minutes: 13)),
-      hasPhoto: true,
-      likes: 0,
-      likedByMe: false,
-      comments: 2,
-      isOfficial: true,
-    ),
-    _CommunityPost(
-      author: 'Barangay Disaster Team',
-      message:
-          'Reminder: Rainy season preparedness seminar starts Friday, 3:00 PM at Barangay Hall.',
-      postedAt: DateTime.now().subtract(const Duration(hours: 3)),
-      hasPhoto: false,
-      likes: 11,
-      likedByMe: false,
-      comments: 3,
-      isOfficial: true,
-    ),
-    _CommunityPost(
-      author: 'Youth Council',
-      message:
-          'Basketball open tryouts this Saturday. Registration starts 8:00 AM.',
-      postedAt: DateTime.now().subtract(const Duration(days: 1, hours: 2)),
-      hasPhoto: true,
-      likes: 24,
-      likedByMe: false,
-      comments: 9,
-      isOfficial: false,
-    ),
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  List<_CommunityPost> get _latestPosts {
-    final sorted = [..._posts]
-      ..sort((a, b) => b.postedAt.compareTo(a.postedAt));
-    return sorted.take(5).toList();
-  }
-
-  Future<void> _openCreatePost() async {
-    final createdPost = await Navigator.push<_CommunityPost>(
-      context,
-      MaterialPageRoute(builder: (_) => const CommunityCreatePostPage()),
-    );
-    if (createdPost == null) return;
-    if (!mounted) return;
-    setState(() => _posts.insert(0, createdPost));
-    _tabController.animateTo(0);
-    _showFeature(context, 'Post published to community feed.');
-  }
-
-  Future<void> _openPost(_CommunityPost post) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => _CommunityPostDetailPage(post: post)),
-    );
-    if (!mounted) return;
-    setState(() {});
-  }
-
-  Widget _composerCard() {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: _openCreatePost,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE2E4EE)),
-        ),
-        child: const Row(
-          children: [
-            Expanded(
               child: Text(
-                'What\'s happening in your community?',
-                style: TextStyle(
-                  color: Color(0xFF62677E),
+                _hasOfficialEmergencyAccess
+                    ? 'Tanod status can be updated live here for duty scheduling.'
+                    : 'Residents can view which tanods are currently on duty for faster coordination.',
+                style: const TextStyle(
+                  color: Color(0xFF646B84),
                   fontWeight: FontWeight.w600,
                 ),
               ),
             ),
-            Icon(Icons.post_add, color: Color(0xFF3C425E)),
+            const SizedBox(height: 10),
+            ...tanods.asMap().entries.map((entry) {
+              final index = entry.key;
+              final tanod = entry.value;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E6F2)),
+                ),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: tanod.online
+                        ? const Color(0x1F2D8A57)
+                        : const Color(0x1FA16B6B),
+                    child: Icon(
+                      tanod.online ? Icons.check_circle : Icons.remove_circle,
+                      color: tanod.online
+                          ? const Color(0xFF2D8A57)
+                          : const Color(0xFF9A2E2E),
+                    ),
+                  ),
+                  title: Text(
+                    tanod.name,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  subtitle: Text(
+                    '${tanod.zone} • ${tanod.shift}\n${tanod.assignment}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  trailing: _hasOfficialEmergencyAccess
+                      ? Switch(
+                          value: tanod.online,
+                          activeColor: const Color(0xFFD70000),
+                          onChanged: (_) => _emergencyOpsStore.toggleTanod(index),
+                        )
+                      : _EmergencyStatusPill(
+                          label: tanod.online ? 'Online' : 'Offline',
+                          color: tanod.online
+                              ? const Color(0xFF2D8A57)
+                              : const Color(0xFF9A2E2E),
+                        ),
+                ),
+              );
+            }),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _postList(List<_CommunityPost> posts, {required String emptyLabel}) {
-    if (posts.isEmpty) {
-      return Center(
-        child: Text(
-          emptyLabel,
-          style: const TextStyle(
-            color: Color(0xFF666E89),
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      );
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(0, 10, 0, 12),
-      itemCount: posts.length,
-      itemBuilder: (context, index) {
-        final post = posts[index];
-        return _CommunityFeedCard(
-          key: ValueKey(post.id),
-          post: post,
-          onOpen: () => _openPost(post),
-          onToggleLike: () => _toggleLike(post),
-          onAddComment: () => _addComment(post),
         );
       },
     );
   }
+}
 
-  void _toggleLike(_CommunityPost post) {
-    setState(() {
-      post.toggleLike();
-    });
-    _showFeature(context, post.likedByMe ? 'Post liked.' : 'Like removed.');
-  }
-
-  Future<void> _addComment(_CommunityPost post) async {
-    final comment = await _promptCommunityComment(context);
-    if (comment == null || !mounted) return;
-    setState(() {
-      post.addComment(comment);
-    });
-    _showFeature(context, 'Comment added.');
-  }
+class KatarungangPambarangayPage extends StatelessWidget {
+  const KatarungangPambarangayPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Community Posts'),
-        backgroundColor: const Color(0xFFCB1010),
-        foregroundColor: Colors.white,
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: Colors.white,
-          unselectedLabelColor: const Color(0xFFFFD0D0),
-          indicatorColor: Colors.white,
-          indicatorWeight: 3,
-          labelStyle: const TextStyle(fontWeight: FontWeight.w800),
-          tabs: const [
-            Tab(text: 'Latest'),
-            Tab(text: 'All'),
-          ],
-        ),
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFF7F8FC), Color(0xFFF4F1F1)],
+    return DefaultTabController(
+      length: 5,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Legal Records & Lupon'),
+          backgroundColor: const Color(0xFFD70000),
+          foregroundColor: Colors.white,
+          bottom: const TabBar(
+            isScrollable: true,
+            tabs: [
+              Tab(text: 'Overview'),
+              Tab(text: 'Cases'),
+              Tab(text: 'Heatmap'),
+              Tab(text: 'Patrol'),
+              Tab(text: 'Report'),
+            ],
           ),
         ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-          child: Column(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFFF6F8FF), Color(0xFFF9F1ED)],
+            ),
+          ),
+          child: const TabBarView(
             children: [
-              _composerCard(),
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _postList(
-                      _latestPosts,
-                      emptyLabel: 'No recent posts yet. Be the first to post.',
-                    ),
-                    _postList(
-                      _posts,
-                      emptyLabel: 'No community posts available.',
-                    ),
-                  ],
-                ),
-              ),
+              _LuponOverviewTab(),
+              _LuponCasesTab(),
+              _LegalHeatmapTab(),
+              _ChiefTanodDashboardTab(),
+              _AnnualPeaceOrderTab(),
             ],
           ),
         ),
@@ -5267,759 +3061,1106 @@ class _CommunityPageState extends State<CommunityPage>
   }
 }
 
-class _CommunityFeedCard extends StatelessWidget {
-  final _CommunityPost post;
-  final VoidCallback onOpen;
-  final VoidCallback onToggleLike;
-  final VoidCallback onAddComment;
-  const _CommunityFeedCard({
-    super.key,
-    required this.post,
-    required this.onOpen,
-    required this.onToggleLike,
-    required this.onAddComment,
-  });
+class _LuponOverviewTab extends StatelessWidget {
+  const _LuponOverviewTab();
 
   @override
   Widget build(BuildContext context) {
-    final latestComment = post.latestComment;
-    final previewText = post.message.length > 92
-        ? '${post.message.substring(0, 92)}...'
-        : post.message;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE3E5EF)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0F000000),
-            blurRadius: 8,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return ValueListenableBuilder<List<_LuponCaseEntry>>(
+      valueListenable: _emergencyOpsStore.luponCases,
+      builder: (_, cases, __) {
+        return ValueListenableBuilder<List<_SafetyCalendarEntry>>(
+          valueListenable: _emergencyOpsStore.legalCalendar,
+          builder: (_, calendar, __) {
+            return ValueListenableBuilder<List<_SafetyBroadcastEntry>>(
+              valueListenable: _emergencyOpsStore.broadcasts,
+              builder: (_, broadcasts, __) {
+                final nextHearing = calendar.isEmpty ? null : calendar.first;
+                return ListView(
+                  padding: const EdgeInsets.all(12),
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(22),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFFD70000), Color(0xFF8E1515)],
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Katarungang Pambarangay Desk',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Track Lupon cases, schedule mediation, issue summons, and monitor peace and order operations.',
+                            style: TextStyle(
+                              color: Color(0xFFFFE8E8),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _EmergencyHeroStat(
+                                  label: 'Active Cases',
+                                  value: '${cases.length}',
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _EmergencyHeroStat(
+                                  label: 'Broadcasts',
+                                  value: '${broadcasts.length}',
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _EmergencyHeroStat(
+                                  label: 'Next Hearing',
+                                  value: nextHearing == null
+                                      ? '--'
+                                      : '${nextHearing.scheduledAt.month}/${nextHearing.scheduledAt.day}',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const _LuponCaseEntryPage(),
+                              ),
+                            ),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFFD70000),
+                            ),
+                            icon: const Icon(Icons.playlist_add_rounded),
+                            label: const Text('New Case'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => _openSafetyBroadcastComposer(context),
+                            icon: const Icon(Icons.campaign_rounded),
+                            label: const Text('Broadcast'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _sectionTitle('Mediation Calendar'),
+                    ...calendar.take(4).map(
+                      (entry) => Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E6F2)),
+                        ),
+                        child: ListTile(
+                          leading: const CircleAvatar(
+                            backgroundColor: Color(0xFFFFE5E5),
+                            child: Icon(
+                              Icons.calendar_today_outlined,
+                              color: Color(0xFFD70000),
+                            ),
+                          ),
+                          title: Text(
+                            '${entry.title} - ${entry.reference}',
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          subtitle: Text(
+                            '${entry.venue}\n${_formatEmergencyDateTime(entry.scheduledAt)}',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _sectionTitle('Public Safety Broadcasts'),
+                    ...broadcasts.take(3).map(
+                      (entry) => Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: const Color(0xFFE2E6F2)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    entry.title,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF2F3248),
+                                    ),
+                                  ),
+                                ),
+                                _EmergencyStatusPill(
+                                  label: entry.severity,
+                                  color: entry.severity == 'Critical'
+                                      ? const Color(0xFFD70000)
+                                      : const Color(0xFF8E4E45),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              entry.body,
+                              style: const TextStyle(
+                                color: Color(0xFF666D86),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _LuponCasesTab extends StatelessWidget {
+  const _LuponCasesTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<List<_LuponCaseEntry>>(
+      valueListenable: _emergencyOpsStore.luponCases,
+      builder: (_, cases, __) {
+        return ListView(
+          padding: const EdgeInsets.all(12),
           children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: const Color(0xFFFFEAEA),
-                  child: Icon(
-                    post.isOfficial ? Icons.campaign_rounded : Icons.person,
-                    color: const Color(0xFFCB1010),
+            ...cases.map(
+              (entry) => Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFE2E6F2)),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+                  leading: Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFE7E4),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.balance_rounded,
+                      color: Color(0xFFD70000),
+                    ),
+                  ),
+                  title: Text(
+                    '${entry.caseNo} - ${entry.complainant} vs ${entry.respondent}',
+                    style: const TextStyle(
+                      color: Color(0xFF2F3248),
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '${entry.issueSummary}\nHearing: ${_formatEmergencyDateTime(entry.hearingDate)}\nSensitive: ${_protectSensitiveValue(entry.encryptedVictimData)}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  trailing: PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'Summons') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                _LuponSummonsPreviewPage(caseEntry: entry),
+                          ),
+                        );
+                        return;
+                      }
+                      _emergencyOpsStore.updateLuponCaseStatus(entry.caseNo, value);
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'Settled', child: Text('Settled')),
+                      PopupMenuItem(
+                        value: 'Repudiated',
+                        child: Text('Repudiated'),
+                      ),
+                      PopupMenuItem(
+                        value: 'Forwarded to Court',
+                        child: Text('Forwarded to Court'),
+                      ),
+                      PopupMenuItem(
+                        value: 'Summons',
+                        child: Text('Generate Summons'),
+                      ),
+                    ],
+                    child: _EmergencyStatusPill(
+                      label: entry.status,
+                      color: _legalStatusColor(entry.status),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _LegalHeatmapTab extends StatelessWidget {
+  const _LegalHeatmapTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<List<_EmergencyIncident>>(
+      valueListenable: _emergencyOpsStore.incidents,
+      builder: (_, incidents, __) {
+        final markers = <Marker>[
+          for (final incident in incidents)
+            Marker(
+              point: incident.point,
+              width: 50,
+              height: 50,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: _incidentTypeColor(incident.type).withValues(alpha: 0.28),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: _incidentTypeColor(incident.type),
+                    width: 2,
+                  ),
+                ),
+                child: Center(
+                  child: Text(
+                    incident.type.substring(0, 1),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ];
+        return ListView(
+          padding: const EdgeInsets.all(12),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFE2E6F2)),
+              ),
+              child: const Text(
+                'Leaflet incident heatmap view for blotter concentration and legal hotspots. Larger markers indicate repeated incident locations.',
+                style: TextStyle(
+                  color: Color(0xFF666D86),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 300,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: FlutterMap(
+                  options: MapOptions(
+                    initialCenter: _defaultEmergencyPoint(),
+                    initialZoom: 14.6,
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.example.barangaymo_app',
+                    ),
+                    MarkerLayer(markers: markers),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...incidents.take(5).map(
+              (incident) => Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E6F2)),
+                ),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor:
+                        _incidentTypeColor(incident.type).withValues(alpha: 0.12),
+                    child: Icon(
+                      Icons.warning_amber_rounded,
+                      color: _incidentTypeColor(incident.type),
+                    ),
+                  ),
+                  title: Text(
+                    '${incident.type} - ${incident.location}',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  subtitle: Text(
+                    '${incident.reference}\n${_formatEmergencyDateTime(incident.createdAt)}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ChiefTanodDashboardTab extends StatelessWidget {
+  const _ChiefTanodDashboardTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<List<_TanodDutyEntry>>(
+      valueListenable: _emergencyOpsStore.tanods,
+      builder: (_, tanods, __) {
+        return ValueListenableBuilder<List<_PatrolRequestEntry>>(
+          valueListenable: _emergencyOpsStore.patrolRequests,
+          builder: (_, patrols, __) {
+            return ValueListenableBuilder<List<_PatrolCheckpoint>>(
+              valueListenable: _emergencyOpsStore.patrolCheckpoints,
+              builder: (_, checkpoints, __) {
+                final onlineCount = tanods.where((entry) => entry.online).length;
+                return ListView(
+                  padding: const EdgeInsets.all(12),
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFF8E4E45), Color(0xFFB86B5E)],
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Chief Tanod Dashboard',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  'Track active patrols, scan checkpoints, and review safety logs in one view.',
+                                  style: TextStyle(
+                                    color: Color(0xFFFFE2DC),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Container(
+                            width: 54,
+                            height: 54,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Icon(
+                              Icons.security_rounded,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _CommercialMetric(
+                            icon: Icons.check_circle_rounded,
+                            label: 'Online Tanods',
+                            value: '$onlineCount',
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _CommercialMetric(
+                            icon: Icons.route_rounded,
+                            label: 'Patrol Queue',
+                            value: '${patrols.length}',
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _CommercialMetric(
+                            icon: Icons.qr_code_scanner_rounded,
+                            label: 'QR Points',
+                            value: '${checkpoints.length}',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _sectionTitle('QR Patrol Points'),
+                    ...checkpoints.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final checkpoint = entry.value;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E6F2)),
+                        ),
+                        child: ListTile(
+                          leading: Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF4E8E5),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: const Icon(
+                              Icons.qr_code_2_rounded,
+                              color: Color(0xFF8E4E45),
+                            ),
+                          ),
+                          title: Text(
+                            checkpoint.label,
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          subtitle: Text(
+                            '${checkpoint.zone} - ${checkpoint.qrCode}\n${checkpoint.lastScannedAt == null ? 'Not scanned yet' : 'Last scan: ${_formatEmergencyDateTime(checkpoint.lastScannedAt!)} by ${checkpoint.lastScannedBy}'}',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          trailing: FilledButton(
+                            onPressed: () {
+                              final scanner = tanods.firstWhere(
+                                (tanod) => tanod.online,
+                                orElse: () => const _TanodDutyEntry(
+                                  name: 'Chief Tanod',
+                                  zone: 'Zone Command',
+                                  shift: '',
+                                  online: true,
+                                  assignment: '',
+                                ),
+                              );
+                              _emergencyOpsStore.scanPatrolCheckpoint(
+                                index,
+                                scanner.name,
+                              );
+                              _showFeature(
+                                context,
+                                '${checkpoint.label} patrol point verified.',
+                              );
+                            },
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFFD70000),
+                            ),
+                            child: const Text('SCAN'),
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _AnnualPeaceOrderTab extends StatelessWidget {
+  const _AnnualPeaceOrderTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<List<_EmergencyIncident>>(
+      valueListenable: _emergencyOpsStore.incidents,
+      builder: (_, incidents, __) {
+        return ValueListenableBuilder<List<_LuponCaseEntry>>(
+          valueListenable: _emergencyOpsStore.luponCases,
+          builder: (_, cases, __) {
+            final resolved = incidents.where((item) => item.status == 'Resolved').length;
+            final forwarded = cases
+                .where((item) => item.status == 'Forwarded to Court')
+                .length;
+            final settled =
+                cases.where((item) => item.status == 'Settled').length;
+            return ListView(
+              padding: const EdgeInsets.all(12),
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFE2E6F2)),
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        post.author,
-                        style: const TextStyle(
+                      const Text(
+                        'Annual Peace and Order Report',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
                           color: Color(0xFF2F3248),
-                          fontWeight: FontWeight.w800,
-                          fontSize: 18,
                         ),
                       ),
+                      const SizedBox(height: 8),
                       Text(
-                        _relativeTime(post.postedAt),
+                        'Incidents logged: ${incidents.length}\nResolved incidents: $resolved\nLupon cases: ${cases.length}\nSettled cases: $settled\nForwarded to court: $forwarded',
                         style: const TextStyle(
-                          color: Color(0xFFCB1010),
-                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF666D86),
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
                   ),
                 ),
-                IconButton(
-                  onPressed: () => _showFeature(context, 'Post options'),
-                  icon: const Icon(Icons.close, color: Color(0xFF8A8FA8)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              previewText,
-              style: const TextStyle(
-                color: Color(0xFF32374E),
-                fontWeight: FontWeight.w600,
-                height: 1.3,
-              ),
-            ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: onOpen,
-                child: const Text(
-                  'See more',
-                  style: TextStyle(
-                    color: Color(0xFFCB1010),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-            if (post.hasPhoto) ...[
-              _CommunityPhotoPreview(height: 168),
-              const SizedBox(height: 8),
-            ],
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '${post.likes} likes',
-                  style: const TextStyle(color: Color(0xFF60657E)),
-                ),
-                Text(
-                  '${post.comments} comments',
-                  style: const TextStyle(color: Color(0xFF60657E)),
-                ),
-              ],
-            ),
-            if (latestComment != null) ...[
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8F9FC),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFE5E8F2)),
-                ),
-                child: Text(
-                  latestComment.isMine
-                      ? 'You: ${latestComment.message}'
-                      : '${latestComment.author}: ${latestComment.message}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF474D66),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-            const Divider(height: 18),
-            Row(
-              children: [
-                TextButton.icon(
-                  onPressed: onToggleLike,
-                  icon: Icon(
-                    post.likedByMe
-                        ? Icons.thumb_up_alt_rounded
-                        : Icons.thumb_up_alt_outlined,
-                    size: 18,
-                    color: post.likedByMe
-                        ? const Color(0xFFCB1010)
-                        : const Color(0xFF6E738D),
-                  ),
-                  label: Text(
-                    post.likedByMe ? 'Liked' : 'Like',
-                    style: TextStyle(
-                      color: post.likedByMe
-                          ? const Color(0xFFCB1010)
-                          : const Color(0xFF6E738D),
-                      fontWeight: FontWeight.w700,
+                const SizedBox(height: 12),
+                ...[
+                  'Top incident type: ${_topIncidentType(incidents)}',
+                  'Highest risk zone: ${_topIncidentZone(incidents)}',
+                  'Most active checkpoint: ${_topCheckpointLabel(_emergencyOpsStore.patrolCheckpoints.value)}',
+                  'Current report year: ${DateTime.now().year}',
+                ].map(
+                  (line) => Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E6F2)),
+                    ),
+                    child: Text(
+                      line,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ),
                 ),
-                const Spacer(),
-                TextButton.icon(
-                  onPressed: onAddComment,
-                  icon: const Icon(Icons.add_comment_outlined, size: 18),
-                  label: const Text('Add a comment'),
+                const SizedBox(height: 8),
+                FilledButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const _AnnualPeaceAndOrderReportPage(),
+                    ),
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFD70000),
+                  ),
+                  icon: const Icon(Icons.download_rounded),
+                  label: const Text('Auto-Export APOC'),
                 ),
               ],
-            ),
-          ],
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 }
 
-class CommunityCreatePostPage extends StatefulWidget {
-  const CommunityCreatePostPage({super.key});
+class _LuponCaseEntryPage extends StatefulWidget {
+  const _LuponCaseEntryPage();
 
   @override
-  State<CommunityCreatePostPage> createState() =>
-      _CommunityCreatePostPageState();
+  State<_LuponCaseEntryPage> createState() => _LuponCaseEntryPageState();
 }
 
-class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
-  final _messageController = TextEditingController();
-  bool _hasAttachment = true;
-  bool _submitting = false;
+class _LuponCaseEntryPageState extends State<_LuponCaseEntryPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _complainantController = TextEditingController();
+  final _respondentController = TextEditingController();
+  final _summaryController = TextEditingController();
+  final _sensitiveController = TextEditingController();
+  final _venueController = TextEditingController(text: 'Barangay Session Hall');
+  DateTime _hearingDate = DateTime.now().add(const Duration(days: 3));
+  String _status = 'Settled';
 
   @override
   void dispose() {
-    _messageController.dispose();
+    _complainantController.dispose();
+    _respondentController.dispose();
+    _summaryController.dispose();
+    _sensitiveController.dispose();
+    _venueController.dispose();
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    final message = _messageController.text.trim();
-    if (message.length < 5) {
-      _showFeature(context, 'Please enter a meaningful post message.');
+  Future<void> _pickHearingDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _hearingDate,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (date == null || !mounted) {
       return;
     }
-    setState(() => _submitting = true);
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    if (!mounted) return;
-    Navigator.pop(
-      context,
-      _CommunityPost(
-        author: 'West Tapinac',
-        message: message,
-        postedAt: DateTime.now(),
-        hasPhoto: _hasAttachment,
-        likes: 0,
-        likedByMe: false,
-        comments: 0,
-        isOfficial: true,
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_hearingDate),
+    );
+    if (time == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _hearingDate = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
+    });
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    final caseNo =
+        'KP-${DateTime.now().year}-${100 + _emergencyOpsStore.luponCases.value.length + 1}';
+    _emergencyOpsStore.addLuponCase(
+      _LuponCaseEntry(
+        caseNo: caseNo,
+        complainant: _complainantController.text.trim(),
+        respondent: _respondentController.text.trim(),
+        hearingDate: _hearingDate,
+        status: _status,
+        issueSummary: _summaryController.text.trim(),
+        encryptedVictimData: _encryptSensitiveValue(
+          _sensitiveController.text.trim(),
+        ),
+        createdAt: DateTime.now(),
+        luponOfficer: 'Lupon Chair Maria Cortez',
+        venue: _venueController.text.trim(),
       ),
+    );
+    Navigator.pop(context);
+    _showFeature(
+      context,
+      'Lupon case $caseNo created and mediation date synced to calendar.',
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Community Posts'),
-        backgroundColor: const Color(0xFFCB1010),
-        foregroundColor: Colors.white,
+      appBar: AppBar(title: const Text('Case Entry')),
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(12),
+          children: [
+            TextFormField(
+              initialValue:
+                  'KP-${DateTime.now().year}-${100 + _emergencyOpsStore.luponCases.value.length + 1}',
+              readOnly: true,
+              decoration: const InputDecoration(
+                labelText: 'Case No',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _complainantController,
+              decoration: const InputDecoration(
+                labelText: 'Complainant',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) =>
+                  (value == null || value.trim().isEmpty) ? 'Enter complainant.' : null,
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _respondentController,
+              decoration: const InputDecoration(
+                labelText: 'Respondent',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) =>
+                  (value == null || value.trim().isEmpty) ? 'Enter respondent.' : null,
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: _status,
+              decoration: const InputDecoration(
+                labelText: 'Case Status',
+                border: OutlineInputBorder(),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'Settled', child: Text('Settled')),
+                DropdownMenuItem(value: 'Repudiated', child: Text('Repudiated')),
+                DropdownMenuItem(
+                  value: 'Forwarded to Court',
+                  child: Text('Forwarded to Court'),
+                ),
+              ],
+              onChanged: (value) => setState(() => _status = value ?? _status),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _pickHearingDate,
+              icon: const Icon(Icons.calendar_month_outlined),
+              label: Text('Mediation schedule: ${_formatEmergencyDateTime(_hearingDate)}'),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _venueController,
+              decoration: const InputDecoration(
+                labelText: 'Venue',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _summaryController,
+              minLines: 3,
+              maxLines: 5,
+              decoration: const InputDecoration(
+                labelText: 'Issue Summary',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) => (value == null || value.trim().length < 8)
+                  ? 'Provide case summary.'
+                  : null,
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _sensitiveController,
+              minLines: 2,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'Victim / Sensitive Notes',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) => (value == null || value.trim().isEmpty)
+                  ? 'Enter protected notes.'
+                  : null,
+            ),
+          ],
+        ),
       ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: FilledButton.icon(
+            onPressed: _submit,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFD70000),
+            ),
+            icon: const Icon(Icons.save_outlined),
+            label: const Text('Save Case'),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LuponSummonsPreviewPage extends StatelessWidget {
+  final _LuponCaseEntry caseEntry;
+
+  const _LuponSummonsPreviewPage({required this.caseEntry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Summons Generator')),
       body: ListView(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(12),
         children: [
-          const Text(
-            'Create a Post',
-            style: TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.w900,
-              color: Color(0xFF2C3147),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE2E6F2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Barangay Summons',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF2F3248),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text('Case No: ${caseEntry.caseNo}'),
+                Text('Respondent: ${caseEntry.respondent}'),
+                Text('Complainant: ${caseEntry.complainant}'),
+                Text('Mediation Date: ${_formatEmergencyDateTime(caseEntry.hearingDate)}'),
+                Text('Venue: ${caseEntry.venue}'),
+                const SizedBox(height: 12),
+                Text(
+                  'You are hereby summoned to appear before the Lupong Tagapamayapa regarding the complaint on ${caseEntry.issueSummary.toLowerCase()}.',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 4),
-          const Text(
-            'Share news, updates, or concerns with your barangay.',
-            style: TextStyle(
-              color: Color(0xFF646A84),
-              fontWeight: FontWeight.w600,
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: () => _showFeature(
+              context,
+              'Summons generated for ${caseEntry.respondent}.',
             ),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFD70000),
+            ),
+            icon: const Icon(Icons.print_outlined),
+            label: const Text('Generate Summons'),
           ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _messageController,
-            maxLines: 7,
-            decoration: InputDecoration(
-              hintText: 'Type your community update...',
-              fillColor: Colors.white,
-              filled: true,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFFE2E5F0)),
+        ],
+      ),
+    );
+  }
+}
+
+class _AnnualPeaceAndOrderReportPage extends StatelessWidget {
+  const _AnnualPeaceAndOrderReportPage();
+
+  @override
+  Widget build(BuildContext context) {
+    final incidents = _emergencyOpsStore.incidents.value;
+    final cases = _emergencyOpsStore.luponCases.value;
+    final broadcasts = _emergencyOpsStore.broadcasts.value;
+    return Scaffold(
+      appBar: AppBar(title: const Text('APOC Exporter')),
+      body: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE2E6F2)),
+            ),
+            child: Text(
+              'APOC ${DateTime.now().year}\n\n'
+              'Total incidents: ${incidents.length}\n'
+              'Resolved incidents: ${incidents.where((item) => item.status == 'Resolved').length}\n'
+              'Total Lupon cases: ${cases.length}\n'
+              'Settled Lupon cases: ${cases.where((item) => item.status == 'Settled').length}\n'
+              'Repudiated cases: ${cases.where((item) => item.status == 'Repudiated').length}\n'
+              'Forwarded to court: ${cases.where((item) => item.status == 'Forwarded to Court').length}\n'
+              'Broadcast advisories released: ${broadcasts.length}\n'
+              'Patrol checkpoints: ${_emergencyOpsStore.patrolCheckpoints.value.length}',
+              style: const TextStyle(
+                color: Color(0xFF2F3248),
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
           const SizedBox(height: 12),
-          const Text(
-            'Attach a Photo',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF33384F),
+          FilledButton.icon(
+            onPressed: () => _showFeature(
+              context,
+              'Annual Peace and Order Report exported.',
             ),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFD70000),
+            ),
+            icon: const Icon(Icons.file_download_outlined),
+            label: const Text('Export Report'),
           ),
-          const SizedBox(height: 8),
-          OutlinedButton(
-            onPressed: () => setState(() => _hasAttachment = true),
-            child: const Text('CHOOSE FILE'),
-          ),
-          const SizedBox(height: 8),
-          if (_hasAttachment)
-            Stack(
+        ],
+      ),
+    );
+  }
+}
+
+Color _legalStatusColor(String status) {
+  switch (status) {
+    case 'Settled':
+      return const Color(0xFF2D8A57);
+    case 'Repudiated':
+      return const Color(0xFFB36A00);
+    case 'Forwarded to Court':
+      return const Color(0xFF7B2CBF);
+    default:
+      return const Color(0xFFD70000);
+  }
+}
+
+String _topIncidentType(List<_EmergencyIncident> incidents) {
+  if (incidents.isEmpty) {
+    return 'No incidents';
+  }
+  final counts = <String, int>{};
+  for (final incident in incidents) {
+    counts[incident.type] = (counts[incident.type] ?? 0) + 1;
+  }
+  return counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+}
+
+String _topIncidentZone(List<_EmergencyIncident> incidents) {
+  if (incidents.isEmpty) {
+    return 'Undetermined';
+  }
+  final counts = <String, int>{};
+  for (final incident in incidents) {
+    final zone = incident.location.split(',').last.trim();
+    counts[zone] = (counts[zone] ?? 0) + 1;
+  }
+  return counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+}
+
+String _topCheckpointLabel(List<_PatrolCheckpoint> checkpoints) {
+  if (checkpoints.isEmpty) {
+    return 'No checkpoints';
+  }
+  final rows = [...checkpoints]
+    ..sort((a, b) {
+      final left = a.lastScannedAt ?? DateTime(2000);
+      final right = b.lastScannedAt ?? DateTime(2000);
+      return right.compareTo(left);
+    });
+  return rows.first.label;
+}
+
+Future<void> _openSafetyBroadcastComposer(BuildContext context) async {
+  final titleController = TextEditingController();
+  final bodyController = TextEditingController();
+  var severity = 'Watch';
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    builder: (sheetContext) {
+      return Padding(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+        ),
+        child: StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _CommunityPhotoPreview(height: 180),
-                Positioned(
-                  right: 6,
-                  top: 6,
-                  child: CircleAvatar(
-                    radius: 12,
-                    backgroundColor: Colors.black.withValues(alpha: 0.45),
-                    child: IconButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: () => setState(() => _hasAttachment = false),
-                      icon: const Icon(
-                        Icons.close,
-                        size: 14,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
+                const Text(
+                  'Public Safety Broadcast',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                 ),
-                Positioned(
-                  right: 10,
-                  bottom: 10,
+                const SizedBox(height: 10),
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(labelText: 'Broadcast title'),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: severity,
+                  decoration: const InputDecoration(labelText: 'Severity'),
+                  items: const [
+                    DropdownMenuItem(value: 'Watch', child: Text('Watch')),
+                    DropdownMenuItem(value: 'Alert', child: Text('Alert')),
+                    DropdownMenuItem(value: 'Critical', child: Text('Critical')),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) {
+                      return;
+                    }
+                    setSheetState(() => severity = value);
+                  },
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: bodyController,
+                  maxLines: 4,
+                  decoration: const InputDecoration(labelText: 'Message'),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
                   child: FilledButton(
-                    onPressed: _submitting ? null : _submit,
+                    onPressed: () {
+                      if (titleController.text.trim().isEmpty ||
+                          bodyController.text.trim().isEmpty) {
+                        return;
+                      }
+                      _emergencyOpsStore.addBroadcast(
+                        _SafetyBroadcastEntry(
+                          title: titleController.text.trim(),
+                          body: bodyController.text.trim(),
+                          severity: severity,
+                          createdAt: DateTime.now(),
+                        ),
+                      );
+                      Navigator.pop(sheetContext);
+                    },
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFFCB1010),
-                      shape: const StadiumBorder(),
+                      backgroundColor: const Color(0xFFD70000),
                     ),
-                    child: Text(_submitting ? 'Posting...' : 'Post Now'),
+                    child: const Text('Send Broadcast'),
                   ),
                 ),
               ],
-            )
-          else
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton(
-                onPressed: _submitting ? null : _submit,
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFCB1010),
-                ),
-                child: Text(_submitting ? 'Posting...' : 'Post Now'),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CommunityPostDetailPage extends StatefulWidget {
-  final _CommunityPost post;
-  const _CommunityPostDetailPage({required this.post});
-
-  @override
-  State<_CommunityPostDetailPage> createState() =>
-      _CommunityPostDetailPageState();
-}
-
-class _CommunityPostDetailPageState extends State<_CommunityPostDetailPage> {
-  void _toggleLike() {
-    setState(() {
-      widget.post.toggleLike();
-    });
-    _showFeature(context, widget.post.likedByMe ? 'Post liked.' : 'Like removed.');
-  }
-
-  Future<void> _addComment() async {
-    final comment = await _promptCommunityComment(context);
-    if (comment == null || !mounted) return;
-    setState(() {
-      widget.post.addComment(comment);
-    });
-    _showFeature(context, 'Comment added.');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final post = widget.post;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Community'),
-        backgroundColor: const Color(0xFFCB1010),
-        foregroundColor: Colors.white,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(12),
-        children: [
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: CircleAvatar(
-              backgroundColor: const Color(0xFFFFEAEA),
-              child: Icon(
-                post.isOfficial ? Icons.campaign_rounded : Icons.person,
-                color: const Color(0xFFCB1010),
-              ),
-            ),
-            title: Text(
-              post.author,
-              style: const TextStyle(fontWeight: FontWeight.w800),
-            ),
-            subtitle: Text(
-              _relativeTime(post.postedAt),
-              style: const TextStyle(color: Color(0xFFCB1010)),
-            ),
-          ),
-          Text(
-            post.message,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF32374E),
-            ),
-          ),
-          const SizedBox(height: 10),
-          if (post.hasPhoto) _CommunityPhotoPreview(height: 220),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('${post.likes} likes'),
-              Text('${post.comments} comments'),
-            ],
-          ),
-          const Divider(),
-          Row(
-            children: [
-              TextButton.icon(
-                onPressed: _toggleLike,
-                icon: Icon(
-                  post.likedByMe
-                      ? Icons.thumb_up_alt_rounded
-                      : Icons.thumb_up_alt_outlined,
-                  size: 18,
-                  color: post.likedByMe
-                      ? const Color(0xFFCB1010)
-                      : const Color(0xFF6E738D),
-                ),
-                label: Text(
-                  post.likedByMe ? 'Liked' : 'Like',
-                  style: TextStyle(
-                    color: post.likedByMe
-                        ? const Color(0xFFCB1010)
-                        : const Color(0xFF6E738D),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: _addComment,
-                icon: const Icon(Icons.add_comment_outlined, size: 18),
-                label: const Text('Add a comment'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          if (post.commentEntries.isEmpty)
-            const Text(
-              'No comments yet.',
-              style: TextStyle(
-                color: Color(0xFF6A7088),
-                fontWeight: FontWeight.w600,
-              ),
-            )
-          else ...[
-            const Text(
-              'Comments',
-              style: TextStyle(
-                color: Color(0xFF2E344C),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 8),
-            ...post.commentEntries.map((entry) {
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                decoration: BoxDecoration(
-                  color: entry.isMine
-                      ? const Color(0xFFFFF4F4)
-                      : const Color(0xFFF7F8FC),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE5E8F2)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            entry.author,
-                            style: const TextStyle(
-                              color: Color(0xFF2E344C),
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          _relativeTime(entry.postedAt),
-                          style: const TextStyle(
-                            color: Color(0xFF79809A),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      entry.message,
-                      style: const TextStyle(
-                        color: Color(0xFF3B4058),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _CommunityPhotoPreview extends StatelessWidget {
-  final double height;
-  const _CommunityPhotoPreview({required this.height});
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: SizedBox(
-        height: height,
-        width: double.infinity,
-        child: Image.asset(
-          'public/item-laptop.jpg',
-          fit: BoxFit.cover,
-          filterQuality: FilterQuality.high,
-          errorBuilder: (_, _, _) => Container(
-            color: const Color(0xFFE8ECFA),
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.image_not_supported_outlined,
-              color: Color(0xFF7A809A),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CommunityPost {
-  static int _nextId = 1;
-
-  final int id;
-  final String author;
-  final String message;
-  final DateTime postedAt;
-  final bool hasPhoto;
-  int likes;
-  bool likedByMe;
-  final List<_CommunityComment> commentEntries;
-  final bool isOfficial;
-
-  int get comments => commentEntries.length;
-  _CommunityComment? get latestComment =>
-      commentEntries.isEmpty ? null : commentEntries.first;
-
-  _CommunityPost({
-    int? id,
-    required this.author,
-    required this.message,
-    required this.postedAt,
-    required this.hasPhoto,
-    required this.likes,
-    this.likedByMe = false,
-    int comments = 0,
-    List<_CommunityComment>? commentEntries,
-    required this.isOfficial,
-  }) : id = id ?? _nextId++,
-       commentEntries =
-           commentEntries ??
-           List<_CommunityComment>.generate(
-             comments,
-             (index) => _CommunityComment.seed(index, postedAt),
-           );
-
-  void toggleLike() {
-    if (likedByMe) {
-      likedByMe = false;
-      if (likes > 0) {
-        likes -= 1;
-      }
-      return;
-    }
-    likedByMe = true;
-    likes += 1;
-  }
-
-  void addComment(String message) {
-    commentEntries.insert(
-      0,
-      _CommunityComment(
-        author: 'You',
-        message: message,
-        postedAt: DateTime.now(),
-        isMine: true,
-      ),
-    );
-  }
-}
-
-class _CommunityComment {
-  final String author;
-  final String message;
-  final DateTime postedAt;
-  final bool isMine;
-
-  const _CommunityComment({
-    required this.author,
-    required this.message,
-    required this.postedAt,
-    this.isMine = false,
-  });
-
-  factory _CommunityComment.seed(int index, DateTime postTime) {
-    final seededMessages = [
-      'Thanks for the update.',
-      'Will share this with our neighbors.',
-      'Copy. We will coordinate with the team.',
-      'Noted. Keep us posted on next steps.',
-    ];
-    return _CommunityComment(
-      author: 'Resident ${index + 1}',
-      message: seededMessages[index % seededMessages.length],
-      postedAt: postTime.add(Duration(minutes: (index + 1) * 6)),
-    );
-  }
-}
-
-Future<String?> _promptCommunityComment(BuildContext context) async {
-  final controller = TextEditingController();
-  final formKey = GlobalKey<FormState>();
-  final text = await showModalBottomSheet<String>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.white,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
-    builder: (sheetContext) {
-      final inset = MediaQuery.of(sheetContext).viewInsets.bottom;
-      return Padding(
-        padding: EdgeInsets.fromLTRB(14, 14, 14, 14 + inset),
-        child: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Add Comment',
-                style: TextStyle(
-                  color: Color(0xFF2F344C),
-                  fontSize: 19,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: controller,
-                minLines: 2,
-                maxLines: 4,
-                autofocus: true,
-                decoration: InputDecoration(
-                  hintText: 'Write your comment...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().length < 2) {
-                    return 'Please enter at least 2 characters.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(sheetContext),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () {
-                        if (formKey.currentState?.validate() != true) {
-                          return;
-                        }
-                        Navigator.pop(sheetContext, controller.text.trim());
-                      },
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFFCB1010),
-                      ),
-                      child: const Text('Post'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+            );
+          },
         ),
       );
     },
   );
-  controller.dispose();
-  return text;
+  titleController.dispose();
+  bodyController.dispose();
 }
 
-String _relativeTime(DateTime dateTime) {
-  final diff = DateTime.now().difference(dateTime);
-  if (diff.inMinutes < 1) return 'just now';
-  if (diff.inMinutes < 60) return '${diff.inMinutes} minutes ago';
-  if (diff.inHours < 24) return '${diff.inHours} hours ago';
-  return '${diff.inDays} days ago';
-}
-
-Widget _sectionTitle(String text) {
-  return Padding(
-    padding: const EdgeInsets.symmetric(vertical: 8),
-    child: Text(
-      text,
-      style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w700),
-    ),
-  );
-}
-
-Widget _goTile(BuildContext context, String label, Widget page) {
-  return Card(
-    child: ListTile(
-      title: Text(label),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: () =>
-          Navigator.push(context, MaterialPageRoute(builder: (_) => page)),
-    ),
-  );
-}
-
-void _showFeature(BuildContext context, String message) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-}
-
-class _StepTabs extends StatelessWidget {
-  final String active;
-  const _StepTabs({required this.active});
-
-  @override
-  Widget build(BuildContext context) {
-    String mark(String label) => label == active ? '___' : '__';
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text('Address ${mark('Address')}'),
-        Text('Details ${mark('Details')}'),
-        Text('Photo ${mark('Photo')}'),
-      ],
-    );
-  }
-}

@@ -623,6 +623,9 @@ class _ResidentProductData {
   final int sold;
   final int stock;
   final String eta;
+  final bool allowBarangayBid;
+  final String sellerZone;
+  final String sellerPurok;
   const _ResidentProductData({
     required this.title,
     required this.seller,
@@ -638,6 +641,9 @@ class _ResidentProductData {
     required this.stock,
     required this.eta,
     this.verified = false,
+    this.allowBarangayBid = true,
+    this.sellerZone = 'Zone 1',
+    this.sellerPurok = 'Purok 1',
   });
 }
 
@@ -1371,23 +1377,34 @@ class _DashboardCommunityFeedPreview extends StatefulWidget {
 
 class _DashboardCommunityFeedPreviewState
     extends State<_DashboardCommunityFeedPreview> {
-  late final List<_CommunityPost> _posts;
-
   @override
   void initState() {
     super.initState();
-    _posts = _dashboardCommunitySeedPosts();
+    _CommunityHub.ensureSeeded();
+    _CommunityHub.refresh.addListener(_handleHubRefresh);
+  }
+
+  @override
+  void dispose() {
+    _CommunityHub.refresh.removeListener(_handleHubRefresh);
+    super.dispose();
+  }
+
+  void _handleHubRefresh() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _createPost() async {
-    final createdPost = await Navigator.push<_CommunityPost>(
+    final createdPost = await _showCommunityCreatePostSheet(
       context,
-      MaterialPageRoute(builder: (_) => const CommunityCreatePostPage()),
+      officialView: false,
     );
     if (createdPost == null || !mounted) {
       return;
     }
-    setState(() => _posts.insert(0, createdPost));
+    _CommunityHub.addPost(createdPost);
     _showFeature(context, 'Post published to community feed.');
   }
 
@@ -1403,7 +1420,7 @@ class _DashboardCommunityFeedPreviewState
   }
 
   void _toggleLike(_CommunityPost post) {
-    setState(() => post.toggleLike());
+    _CommunityHub.toggleLike(post);
   }
 
   Future<void> _addComment(_CommunityPost post) async {
@@ -1411,12 +1428,16 @@ class _DashboardCommunityFeedPreviewState
     if (comment == null || !mounted) {
       return;
     }
-    setState(() => post.addComment(comment));
+    _CommunityHub.addComment(post, comment);
+  }
+
+  Future<void> _showPostActions(_CommunityPost post) async {
+    await _showReportContentSheet(context, post: post);
   }
 
   @override
   Widget build(BuildContext context) {
-    final previewPosts = _posts.take(2).toList();
+    final previewPosts = _CommunityHub.posts.take(2).toList();
     return Column(
       children: [
         Container(
@@ -1510,14 +1531,15 @@ class _DashboardCommunityFeedPreviewState
           ),
         ),
         const SizedBox(height: 10),
-        ...previewPosts.map(
-          (post) => _CommunityFeedCard(
-            post: post,
-            onOpen: () => _openPost(post),
-            onToggleLike: () => _toggleLike(post),
-            onAddComment: () => _addComment(post),
+          ...previewPosts.map(
+            (post) => _CommunityFeedCard(
+              post: post,
+              onOpen: () => _openPost(post),
+              onToggleLike: () => _toggleLike(post),
+              onAddComment: () => _addComment(post),
+              onMore: () => _showPostActions(post),
+            ),
           ),
-        ),
       ],
     );
   }
