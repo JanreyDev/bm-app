@@ -1922,13 +1922,8 @@ class _AuthApi {
   _AuthApi._();
   static final _AuthApi instance = _AuthApi._();
 
-  static const String _liveBaseUrl = 'https://api.barangaymo.com';
   static const String _androidPhysicalDeviceBaseUrlHint =
       'http://<YOUR_PC_LOCAL_IP>:8000';
-  static const String _configuredBaseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: '',
-  );
   static const Duration _requestTimeout = Duration(seconds: 5);
 
   String _normalizeMobile(String input) {
@@ -1964,7 +1959,7 @@ class _AuthApi {
       }
     }
 
-    final configuredBaseUrl = _validatedBaseUrl(_configuredBaseUrl);
+    final configuredBaseUrl = _validatedBaseUrl(_configuredApiBaseUrl);
     if (configuredBaseUrl != null) {
       add(configuredBaseUrl);
       if (out.isNotEmpty) {
@@ -1994,11 +1989,11 @@ class _AuthApi {
             break;
         }
       }
-      add(_liveBaseUrl);
+      add(_configuredApiBaseUrl);
       return out;
     }
 
-    add(_liveBaseUrl);
+    add(_configuredApiBaseUrl);
     return out;
   }
 

@@ -51,6 +51,14 @@ final ValueNotifier<_AppLocalePreference> _appLocalePreference = ValueNotifier(
 );
 final ValueNotifier<bool> _appIsOffline = ValueNotifier(false);
 
+// Single source of truth for backend base URL.
+// Change this value when the live domain changes.
+const String _defaultApiBaseUrl = 'http://167.172.89.188:8081';
+const String _configuredApiBaseUrl = String.fromEnvironment(
+  'API_BASE_URL',
+  defaultValue: _defaultApiBaseUrl,
+);
+
 bool get _isDarkModeEnabled => _appThemeMode.value == ThemeMode.dark;
 
 bool get _isTagalogEnabled =>
