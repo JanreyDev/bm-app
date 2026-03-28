@@ -4,20 +4,9 @@ class RoleGatewayScreen extends StatelessWidget {
   const RoleGatewayScreen({super.key});
 
   Future<void> _openRoleEntry(BuildContext context, UserRole role) async {
-    final hasRegistered = await _FirstRoleAccessStore.hasRegistered(role);
-    if (!context.mounted) {
-      return;
-    }
-    if (!hasRegistered) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => AuthRegisterPage(role: role)),
-      );
-      return;
-    }
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => _loginPageForRole(role)),
+      MaterialPageRoute(builder: (_) => RoleAuthChoicePage(role: role)),
     );
   }
 
