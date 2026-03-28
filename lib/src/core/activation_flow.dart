@@ -123,7 +123,7 @@ class ActivationFlow extends StatefulWidget {
 }
 
 class _ActivationFlowState extends State<ActivationFlow> {
-  Map<String, Map<String, List<String>>> _location = _fallbackActivationLocation();
+  Map<String, Map<String, List<String>>> _location = {};
   bool _isLoadingLocation = true;
   String? _locationLoadMessage;
   static const List<(String, String)> _officials = [
@@ -220,18 +220,6 @@ class _ActivationFlowState extends State<ActivationFlow> {
     super.dispose();
   }
 
-  static Map<String, Map<String, List<String>>> _fallbackActivationLocation() {
-    return {
-      'Zambales': {
-        'City of Olongapo': _olongapoBarangayDirectory.map((e) => e.name).toList(),
-        'Subic': ['Calapacuan', 'Baraca-Camachile'],
-      },
-      'Bataan': {
-        'Balanga City': ['Bagumbayan', 'Poblacion'],
-      },
-    };
-  }
-
   Future<void> _loadLocationDirectory() async {
     final result = await _AuthApi.instance.fetchActivationAddressDirectory();
     if (!mounted) {
@@ -243,7 +231,7 @@ class _ActivationFlowState extends State<ActivationFlow> {
         _location = result.location;
         _locationLoadMessage = null;
       } else {
-        _location = _fallbackActivationLocation();
+        _location = {};
         _locationLoadMessage = result.message;
       }
       _syncSelectedAddressWithLocation();
@@ -884,10 +872,10 @@ class _ActivationAddressStep extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Using fallback address list. Check API location endpoint.',
-                      style: TextStyle(
+                      locationLoadMessage!,
+                      style: const TextStyle(
                         color: Color(0xFF8A4600),
                         fontWeight: FontWeight.w700,
                         fontSize: 12,
