@@ -2134,6 +2134,7 @@ class _AuthApi {
   Future<_AuthApiResult> register({
     required UserRole role,
     required String name,
+    String? email,
     required String mobile,
     required String password,
     required String confirmPassword,
@@ -2172,6 +2173,7 @@ class _AuthApi {
       },
       body: jsonEncode({
         'name': name.trim(),
+        if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
         'mobile': normalizedMobile,
         'role': role.name,
         'password': password,

@@ -265,6 +265,7 @@ class AuthRegisterPage extends StatefulWidget {
 class _AuthRegisterPageState extends State<AuthRegisterPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _middleNameController = TextEditingController();
   final _mobileController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -592,6 +593,7 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
   @override
   void dispose() {
     _nameController.dispose();
+    _emailController.dispose();
     _middleNameController.dispose();
     _mobileController.dispose();
     _passwordController.dispose();
@@ -809,6 +811,7 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
     final result = await _AuthApi.instance.register(
       role: widget.role,
       name: _nameController.text,
+      email: _emailController.text.trim(),
       mobile: _mobileController.text,
       password: _passwordController.text,
       confirmPassword: _confirmPasswordController.text,
@@ -912,6 +915,23 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
                           return 'Name is required.';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: _fieldDecoration('Email (Optional)'),
+                      validator: (value) {
+                        final v = (value ?? '').trim();
+                        if (v.isEmpty) return null;
+                        final valid = RegExp(
+                          r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$',
+                        ).hasMatch(v);
+                        if (!valid) {
+                          return 'Enter a valid email address.';
                         }
                         return null;
                       },
