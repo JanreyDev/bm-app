@@ -535,6 +535,11 @@ class ResidentDrawer extends StatelessWidget {
                   Expanded(
                     child: FilledButton(
                       onPressed: () async {
+                        final mobile = _currentResidentProfile?.mobile ?? '';
+                        await _AuthApi.instance.logout();
+                        if (mobile.isNotEmpty) {
+                          await _ResidentAuthCacheStore.clear(mobile);
+                        }
                         _authToken = null;
                         _clearResidentSessionProfile();
                         if (!context.mounted) {
