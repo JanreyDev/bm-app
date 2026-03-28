@@ -243,6 +243,49 @@ class _HomeShellState extends State<HomeShell> {
     );
   }
 
+  Future<void> _performLogout(BuildContext context) async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Log out'),
+          content: const Text('Are you sure you want to log out?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: FilledButton.styleFrom(backgroundColor: _officialHeaderStart),
+              child: const Text('Log out'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldLogout != true || !context.mounted) {
+      return;
+    }
+
+    final mobile = _currentOfficialMobile;
+    await _AuthApi.instance.logout();
+    if (mobile != null && mobile.isNotEmpty) {
+      await _OfficialAuthCacheStore.clear(mobile);
+    }
+    _authToken = null;
+    _currentOfficialMobile = null;
+    _officialActivationCompleted = false;
+
+    if (!context.mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const RoleGatewayScreen()),
+      (_) => false,
+    );
+  }
+
   IconData _menuIcon(String title) {
     switch (title) {
       case 'Settings':
@@ -301,7 +344,7 @@ class _HomeShellState extends State<HomeShell> {
             style: TextStyle(color: textColor, fontWeight: FontWeight.w700),
           ),
           trailing: Icon(Icons.chevron_right, color: textColor),
-          onTap: () {
+          onTap: () async {
             Navigator.pop(c);
             switch (t) {
               case 'Barangay Profile':
@@ -376,10 +419,7 @@ class _HomeShellState extends State<HomeShell> {
                 );
                 return;
               case 'Log out':
-                Navigator.push(
-                  c,
-                  MaterialPageRoute(builder: (_) => const OfficialLogoutPage()),
-                );
+                await _performLogout(c);
                 return;
               case 'Delete Account':
                 Navigator.push(
