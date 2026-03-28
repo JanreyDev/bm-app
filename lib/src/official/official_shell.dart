@@ -58,6 +58,12 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    final barangayTitle = _officialBarangaySetup.barangay.trim().isEmpty
+        ? 'Barangay Profile'
+        : '${_officialBarangaySetup.barangay} Barangay Profile';
+    final barangayLocation =
+        '${_officialBarangaySetup.city}, ${_officialBarangaySetup.province}';
+
     return Scaffold(
       backgroundColor: _officialSurface,
       appBar: AppBar(
@@ -156,15 +162,15 @@ class _HomeShellState extends State<HomeShell> {
                         color: _officialHeaderStart,
                       ),
                     ),
-                    title: const Text(
-                      'West Tapinac Barangay Profile',
+                    title: Text(
+                      barangayTitle,
                       style: TextStyle(
                         color: _officialText,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    subtitle: const Text(
-                      'City of Olongapo, Zambales',
+                    subtitle: Text(
+                      barangayLocation,
                       style: TextStyle(
                         color: _officialSubtext,
                         fontWeight: FontWeight.w600,
@@ -516,15 +522,19 @@ class _OfficialHomePage extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            value,
+            value.replaceAll('\n', ' '),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: _officialHeaderStart,
               fontWeight: FontWeight.w900,
-              fontSize: 34,
+              fontSize: 30,
             ),
           ),
           Text(
             note,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: _officialSubtext,
               fontWeight: FontWeight.w600,
@@ -584,6 +594,24 @@ class _OfficialHomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final barangayName = _officialBarangaySetup.barangay.trim().isEmpty
+        ? 'Barangay Profile'
+        : _officialBarangaySetup.barangay;
+    final city = _officialBarangaySetup.city.trim();
+    final province = _officialBarangaySetup.province.trim();
+    final location = [city, province]
+        .where((part) => part.isNotEmpty)
+        .join(', ')
+        .toUpperCase();
+    final punongName = _officialBarangaySetup.punongSignatureText.trim().isEmpty
+        ? 'PB -'
+        : 'PB ${_officialBarangaySetup.punongSignatureText.trim().toUpperCase()}';
+    final secretaryName = [
+      _officialBarangaySetup.secretaryFirstName.trim(),
+      _officialBarangaySetup.secretaryMiddleName.trim(),
+      _officialBarangaySetup.secretaryLastName.trim(),
+    ].where((part) => part.isNotEmpty).join(' ');
+
     return Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -627,20 +655,24 @@ class _OfficialHomePage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Old Cabalan',
+                        barangayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: _officialText,
-                          fontSize: 29,
+                          fontSize: 48 / 2,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
                       Text(
-                        'CITY OF OLONGAPO, ZAMBALES',
+                        location,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: _officialSubtext,
                           fontWeight: FontWeight.w700,
@@ -649,21 +681,26 @@ class _OfficialHomePage extends StatelessWidget {
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'PB REINARD NADONG',
+                        punongName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: Color(0xFF4B526D),
                           fontWeight: FontWeight.w700,
                           fontSize: 11,
                         ),
                       ),
-                      Text(
-                        'SK ANGEL VICTORIA BIBANCO',
-                        style: TextStyle(
-                          color: Color(0xFF4B526D),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 11,
+                      if (secretaryName.isNotEmpty)
+                        Text(
+                          'SEC ${secretaryName.toUpperCase()}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF4B526D),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -690,7 +727,7 @@ class _OfficialHomePage extends StatelessWidget {
             crossAxisCount: 2,
             crossAxisSpacing: 8,
             mainAxisSpacing: 8,
-            childAspectRatio: 1.35,
+            childAspectRatio: 1.15,
             children: [
               _metricCard(
                 icon: Icons.groups_2_outlined,
