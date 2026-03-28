@@ -1902,6 +1902,18 @@ class _AuthApiResult {
   });
 }
 
+class _AddressDirectoryResult {
+  final bool success;
+  final String message;
+  final Map<String, Map<String, List<String>>> location;
+
+  const _AddressDirectoryResult({
+    required this.success,
+    required this.message,
+    this.location = const {},
+  });
+}
+
 class _AuthRequestOutcome {
   final http.Response? response;
   final Map<String, dynamic> body;
@@ -2604,6 +2616,275 @@ class _AuthApi {
       }
     } catch (_) {}
     return <String, dynamic>{};
+  }
+
+  Future<_AddressDirectoryResult> fetchActivationAddressDirectory() async {
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    var sawHtmlFallback = false;
+    final attemptedUris = <String>{};
+    final paths = <String>[
+      'locations/address-directory',
+      'locations/directory',
+      'locations',
+      'address/directory',
+      'activation/locations',
+      'barangays/directory',
+    ];
+
+    for (final path in paths) {
+      final endpoints = _endpointCandidates(path);
+      for (final endpoint in endpoints) {
+        if (!attemptedUris.add(endpoint.toString())) {
+          continue;
+        }
+        try {
+          final response = await http
+              .get(endpoint, headers: const {'Accept': 'application/json'})
+              .timeout(_requestTimeout);
+          final decoded = _decodeDynamicJson(response.body);
+          final decodedMap = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+
+          if (_looksLikeHtmlFallback(response, decodedMap)) {
+            sawHtmlFallback = true;
+            continue;
+          }
+
+          if (response.statusCode == 404) {
+            continue;
+          }
+
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final location = _extractLocationDirectory(decoded);
+            if (location.isNotEmpty) {
+              return _AddressDirectoryResult(
+                success: true,
+                message: 'Address directory loaded.',
+                location: location,
+              );
+            }
+          }
+        } on TimeoutException {
+          sawTimeout = true;
+        } catch (_) {
+          sawConnectionError = true;
+        }
+      }
+    }
+
+    if (sawHtmlFallback) {
+      return _AddressDirectoryResult(
+        success: false,
+        message: _htmlFallbackMessage('/api/locations'),
+      );
+    }
+    if (sawTimeout || sawConnectionError) {
+      return _AddressDirectoryResult(
+        success: false,
+        message: _connectionHelpMessage(),
+      );
+    }
+    return const _AddressDirectoryResult(
+      success: false,
+      message: 'Address directory endpoint is not available yet.',
+    );
+  }
+
+  dynamic _decodeDynamicJson(String raw) {
+    if (raw.isEmpty) {
+      return null;
+    }
+    try {
+      return jsonDecode(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Map<String, Map<String, List<String>>> _extractLocationDirectory(
+    dynamic payload,
+  ) {
+    final temp = <String, Map<String, Set<String>>>{};
+
+    void addEntry(String province, String city, String barangay) {
+      final normalizedProvince = province.trim();
+      final normalizedCity = city.trim();
+      final normalizedBarangay = barangay.trim();
+      if (normalizedProvince.isEmpty ||
+          normalizedCity.isEmpty ||
+          normalizedBarangay.isEmpty) {
+        return;
+      }
+      temp.putIfAbsent(normalizedProvince, () => <String, Set<String>>{});
+      temp[normalizedProvince]!.putIfAbsent(
+        normalizedCity,
+        () => <String>{},
+      );
+      temp[normalizedProvince]![normalizedCity]!.add(normalizedBarangay);
+    }
+
+    String? readString(
+      Map<String, dynamic> node,
+      List<String> keys,
+    ) {
+      for (final key in keys) {
+        final value = node[key];
+        if (value is String && value.trim().isNotEmpty) {
+          return value.trim();
+        }
+      }
+      return null;
+    }
+
+    void parseFlatList(dynamic source) {
+      if (source is! List) {
+        return;
+      }
+      for (final item in source) {
+        if (item is! Map<String, dynamic>) {
+          continue;
+        }
+        final province = readString(item, const [
+          'province',
+          'province_name',
+          'prov_name',
+        ]);
+        final city = readString(item, const [
+          'city_municipality',
+          'city',
+          'municipality',
+          'city_name',
+        ]);
+        final barangay = readString(item, const [
+          'barangay',
+          'barangay_name',
+          'name',
+        ]);
+        if (province != null && city != null && barangay != null) {
+          addEntry(province, city, barangay);
+        }
+      }
+    }
+
+    void parseMapShape(dynamic source) {
+      if (source is! Map<String, dynamic>) {
+        return;
+      }
+      for (final provinceEntry in source.entries) {
+        if (provinceEntry.value is! Map<String, dynamic>) {
+          continue;
+        }
+        final cityMap = provinceEntry.value as Map<String, dynamic>;
+        for (final cityEntry in cityMap.entries) {
+          if (cityEntry.value is! List) {
+            continue;
+          }
+          final barangays = cityEntry.value as List;
+          for (final barangay in barangays) {
+            if (barangay is String && barangay.trim().isNotEmpty) {
+              addEntry(provinceEntry.key, cityEntry.key, barangay);
+            } else if (barangay is Map<String, dynamic>) {
+              final barangayName = readString(
+                barangay,
+                const ['name', 'barangay', 'barangay_name'],
+              );
+              if (barangayName != null) {
+                addEntry(provinceEntry.key, cityEntry.key, barangayName);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    void parseHierarchical(dynamic source) {
+      if (source is! List) {
+        return;
+      }
+      for (final provinceNode in source) {
+        if (provinceNode is! Map<String, dynamic>) {
+          continue;
+        }
+        final provinceName = readString(
+          provinceNode,
+          const ['name', 'province', 'province_name'],
+        );
+        if (provinceName == null) {
+          continue;
+        }
+        final cityNodes =
+            provinceNode['cities'] ??
+            provinceNode['city_municipalities'] ??
+            provinceNode['municipalities'];
+        if (cityNodes is! List) {
+          continue;
+        }
+        for (final cityNode in cityNodes) {
+          if (cityNode is! Map<String, dynamic>) {
+            continue;
+          }
+          final cityName = readString(
+            cityNode,
+            const ['name', 'city', 'city_municipality', 'municipality'],
+          );
+          if (cityName == null) {
+            continue;
+          }
+          final barangayNodes = cityNode['barangays'];
+          if (barangayNodes is! List) {
+            continue;
+          }
+          for (final barangayNode in barangayNodes) {
+            if (barangayNode is String && barangayNode.trim().isNotEmpty) {
+              addEntry(provinceName, cityName, barangayNode);
+              continue;
+            }
+            if (barangayNode is Map<String, dynamic>) {
+              final barangayName = readString(
+                barangayNode,
+                const ['name', 'barangay', 'barangay_name'],
+              );
+              if (barangayName != null) {
+                addEntry(provinceName, cityName, barangayName);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (payload is Map<String, dynamic>) {
+      parseMapShape(payload);
+      parseFlatList(payload['data']);
+      parseFlatList(payload['locations']);
+      parseFlatList(payload['records']);
+      parseHierarchical(payload['provinces']);
+      if (payload['data'] is Map<String, dynamic>) {
+        final data = payload['data'] as Map<String, dynamic>;
+        parseMapShape(data);
+        parseFlatList(data['locations']);
+        parseFlatList(data['records']);
+        parseHierarchical(data['provinces']);
+      }
+    } else {
+      parseFlatList(payload);
+      parseHierarchical(payload);
+    }
+
+    final location = <String, Map<String, List<String>>>{};
+    final sortedProvinces = temp.keys.toList()..sort();
+    for (final province in sortedProvinces) {
+      final cityMap = temp[province]!;
+      final sortedCities = cityMap.keys.toList()..sort();
+      location[province] = <String, List<String>>{};
+      for (final city in sortedCities) {
+        final sortedBarangays = cityMap[city]!.toList()..sort();
+        location[province]![city] = sortedBarangays;
+      }
+    }
+    return location;
   }
 }
 

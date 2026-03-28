@@ -8,6 +8,91 @@ const _actBorder = Color(0xFFE2E5EF);
 const _actText = Color(0xFF252A3D);
 const _actSubtext = Color(0xFF676E84);
 
+const List<String> _allPhilippineProvinces = [
+  'Abra',
+  'Agusan del Norte',
+  'Agusan del Sur',
+  'Aklan',
+  'Albay',
+  'Antique',
+  'Apayao',
+  'Aurora',
+  'Basilan',
+  'Bataan',
+  'Batanes',
+  'Batangas',
+  'Benguet',
+  'Biliran',
+  'Bohol',
+  'Bukidnon',
+  'Bulacan',
+  'Cagayan',
+  'Camarines Norte',
+  'Camarines Sur',
+  'Camiguin',
+  'Capiz',
+  'Catanduanes',
+  'Cavite',
+  'Cebu',
+  'Cotabato',
+  'Davao de Oro',
+  'Davao del Norte',
+  'Davao del Sur',
+  'Davao Occidental',
+  'Davao Oriental',
+  'Dinagat Islands',
+  'Eastern Samar',
+  'Guimaras',
+  'Ifugao',
+  'Ilocos Norte',
+  'Ilocos Sur',
+  'Iloilo',
+  'Isabela',
+  'Kalinga',
+  'La Union',
+  'Laguna',
+  'Lanao del Norte',
+  'Lanao del Sur',
+  'Leyte',
+  'Maguindanao del Norte',
+  'Maguindanao del Sur',
+  'Marinduque',
+  'Masbate',
+  'Misamis Occidental',
+  'Misamis Oriental',
+  'Mountain Province',
+  'Negros Occidental',
+  'Negros Oriental',
+  'Northern Samar',
+  'Nueva Ecija',
+  'Nueva Vizcaya',
+  'Occidental Mindoro',
+  'Oriental Mindoro',
+  'Palawan',
+  'Pampanga',
+  'Pangasinan',
+  'Quezon',
+  'Quirino',
+  'Rizal',
+  'Romblon',
+  'Samar',
+  'Sarangani',
+  'Siquijor',
+  'Sorsogon',
+  'South Cotabato',
+  'Southern Leyte',
+  'Sultan Kudarat',
+  'Sulu',
+  'Surigao del Norte',
+  'Surigao del Sur',
+  'Tarlac',
+  'Tawi-Tawi',
+  'Zambales',
+  'Zamboanga del Norte',
+  'Zamboanga del Sur',
+  'Zamboanga Sibugay',
+];
+
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
   @override
@@ -38,15 +123,9 @@ class ActivationFlow extends StatefulWidget {
 }
 
 class _ActivationFlowState extends State<ActivationFlow> {
-  late final Map<String, Map<String, List<String>>> _location = {
-    'Zambales': {
-      'City of Olongapo': _olongapoBarangayDirectory.map((e) => e.name).toList(),
-      'Subic': ['Calapacuan', 'Baraca-Camachile'],
-    },
-    'Bataan': {
-      'Balanga City': ['Bagumbayan', 'Poblacion'],
-    },
-  };
+  Map<String, Map<String, List<String>>> _location = _fallbackActivationLocation();
+  bool _isLoadingLocation = true;
+  String? _locationLoadMessage;
   static const List<(String, String)> _officials = [
     ('ROLANDO ALBA', 'Punong Barangay'),
     ('JOSE GALANG', 'Sangguniang Barangay Member'),
@@ -104,8 +183,20 @@ class _ActivationFlowState extends State<ActivationFlow> {
   List<String> get _barangays => (_province != null && _city != null)
       ? (_location[_province]?[_city] ?? const [])
       : const [];
+  List<String> get _provinces {
+    final merged = <String>{..._allPhilippineProvinces, ..._location.keys};
+    final sorted = merged.toList()..sort();
+    return sorted;
+  }
   _BarangayDirectoryEntry? get _selectedBarangayEntry =>
       _lookupBarangayDirectoryEntry(_province, _city, _barangay);
+
+  @override
+  void initState() {
+    super.initState();
+    _syncSelectedAddressWithLocation();
+    unawaited(_loadLocationDirectory());
+  }
 
   @override
   void dispose() {
@@ -127,6 +218,70 @@ class _ActivationFlowState extends State<ActivationFlow> {
     _latitude.dispose();
     _longitude.dispose();
     super.dispose();
+  }
+
+  static Map<String, Map<String, List<String>>> _fallbackActivationLocation() {
+    return {
+      'Zambales': {
+        'City of Olongapo': _olongapoBarangayDirectory.map((e) => e.name).toList(),
+        'Subic': ['Calapacuan', 'Baraca-Camachile'],
+      },
+      'Bataan': {
+        'Balanga City': ['Bagumbayan', 'Poblacion'],
+      },
+    };
+  }
+
+  Future<void> _loadLocationDirectory() async {
+    final result = await _AuthApi.instance.fetchActivationAddressDirectory();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isLoadingLocation = false;
+      if (result.success && result.location.isNotEmpty) {
+        _location = result.location;
+        _locationLoadMessage = null;
+      } else {
+        _location = _fallbackActivationLocation();
+        _locationLoadMessage = result.message;
+      }
+      _syncSelectedAddressWithLocation();
+    });
+  }
+
+  void _syncSelectedAddressWithLocation() {
+    final provinces = _provinces;
+    if (provinces.isEmpty) {
+      _province = null;
+      _city = null;
+      _barangay = null;
+      return;
+    }
+
+    if (_province == null || !provinces.contains(_province)) {
+      _province = provinces.first;
+    }
+
+    final cityMap = _location[_province] ?? const <String, List<String>>{};
+    if (cityMap.isEmpty) {
+      _city = null;
+      _barangay = null;
+      return;
+    }
+
+    if (_city == null || !cityMap.containsKey(_city)) {
+      _city = cityMap.keys.first;
+    }
+
+    final barangays = cityMap[_city] ?? const <String>[];
+    if (barangays.isEmpty) {
+      _barangay = null;
+      return;
+    }
+    if (_barangay == null || !barangays.contains(_barangay)) {
+      _barangay = barangays.first;
+    }
   }
 
   InputDecoration _field(String label, {String? hint}) => InputDecoration(
@@ -481,18 +636,32 @@ class _ActivationFlowState extends State<ActivationFlow> {
                 _ActivationAddressStep(
                   field: _field,
                   province: _province,
+                  provinces: _provinces,
                   city: _city,
                   barangay: _barangay,
                   selectedEntry: _selectedBarangayEntry,
                   cities: _cities,
                   barangays: _barangays,
                   location: _location,
+                  isLoadingLocation: _isLoadingLocation,
+                  locationLoadMessage: _locationLoadMessage,
+                  onRetryLoadLocation: _isLoadingLocation
+                      ? null
+                      : () {
+                          setState(() {
+                            _isLoadingLocation = true;
+                            _locationLoadMessage = null;
+                          });
+                          unawaited(_loadLocationDirectory());
+                        },
                   onProvince: (v) => setState(() {
                     _province = v;
                     final cities =
                         _location[v]?.keys.toList() ?? const <String>[];
                     _city = cities.isEmpty ? null : cities.first;
-                    _barangay = null;
+                    final barangays =
+                        _location[_province]?[_city] ?? const <String>[];
+                    _barangay = barangays.isEmpty ? null : barangays.first;
                   }),
                   onCity: (v) => setState(() {
                     _city = v;
@@ -646,24 +815,32 @@ class _ActivationTabs extends StatelessWidget {
 class _ActivationAddressStep extends StatelessWidget {
   final InputDecoration Function(String, {String? hint}) field;
   final String? province;
+  final List<String> provinces;
   final String? city;
   final String? barangay;
   final _BarangayDirectoryEntry? selectedEntry;
   final List<String> cities;
   final List<String> barangays;
   final Map<String, Map<String, List<String>>> location;
+  final bool isLoadingLocation;
+  final String? locationLoadMessage;
+  final VoidCallback? onRetryLoadLocation;
   final ValueChanged<String?> onProvince;
   final ValueChanged<String?> onCity;
   final ValueChanged<String?> onBarangay;
   const _ActivationAddressStep({
     required this.field,
     required this.province,
+    required this.provinces,
     required this.city,
     required this.barangay,
     required this.selectedEntry,
     required this.cities,
     required this.barangays,
     required this.location,
+    required this.isLoadingLocation,
+    required this.locationLoadMessage,
+    required this.onRetryLoadLocation,
     required this.onProvince,
     required this.onCity,
     required this.onBarangay,
@@ -686,13 +863,52 @@ class _ActivationAddressStep extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
+          if (isLoadingLocation)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: LinearProgressIndicator(
+                color: _actRed,
+                backgroundColor: _actBorder,
+                minHeight: 4,
+              ),
+            ),
+          if (locationLoadMessage != null)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF4E8),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFFFD9B2)),
+              ),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Using fallback address list. Check API location endpoint.',
+                      style: TextStyle(
+                        color: Color(0xFF8A4600),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: onRetryLoadLocation,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
           DropdownButtonFormField<String>(
             initialValue: province,
             decoration: field('1. Select Province'),
-            items: location.keys
+            items: provinces
                 .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                 .toList(),
-            onChanged: onProvince,
+            onChanged: isLoadingLocation ? null : onProvince,
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
@@ -701,7 +917,7 @@ class _ActivationAddressStep extends StatelessWidget {
             items: cities
                 .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                 .toList(),
-            onChanged: onCity,
+            onChanged: isLoadingLocation ? null : onCity,
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
@@ -710,7 +926,7 @@ class _ActivationAddressStep extends StatelessWidget {
             items: barangays
                 .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                 .toList(),
-            onChanged: onBarangay,
+            onChanged: isLoadingLocation ? null : onBarangay,
           ),
           const SizedBox(height: 14),
           Container(
