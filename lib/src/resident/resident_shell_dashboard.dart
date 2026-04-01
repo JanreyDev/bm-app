@@ -1442,8 +1442,17 @@ class _DashboardCommunityFeedPreviewState
     setState(() {});
   }
 
-  void _toggleLike(_CommunityPost post) {
-    _CommunityHub.toggleLike(post);
+  Future<void> _toggleLike(_CommunityPost post) async {
+    final result = await _CommunityApi.instance.toggleLike(postId: post.id);
+    if (!mounted) {
+      return;
+    }
+    if (!result.success || result.post == null) {
+      _showFeature(context, result.message, tone: _ToastTone.error);
+      return;
+    }
+    _CommunityHub.updatePost(result.post!);
+    _showFeature(context, result.message, tone: _ToastTone.success);
   }
 
   Future<void> _addComment(_CommunityPost post) async {
@@ -1451,11 +1460,194 @@ class _DashboardCommunityFeedPreviewState
     if (comment == null || !mounted) {
       return;
     }
-    _CommunityHub.addComment(post, comment);
+    final result = await _CommunityApi.instance.addComment(
+      postId: post.id,
+      message: comment,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (!result.success || result.post == null) {
+      _showFeature(context, result.message, tone: _ToastTone.error);
+      return;
+    }
+    _CommunityHub.updatePost(result.post!);
+    _showFeature(context, result.message, tone: _ToastTone.success);
   }
 
   Future<void> _showPostActions(_CommunityPost post) async {
-    await _showReportContentSheet(context, post: post);
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              16 + MediaQuery.of(sheetContext).padding.bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  post.author,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF2E344C),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  post.canManage
+                      ? 'Manage your community post.'
+                      : 'Choose an action for this community post.',
+                  style: const TextStyle(
+                    color: Color(0xFF69708A),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (post.canManage)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.edit_outlined, color: Color(0xFF335CF3)),
+                    title: const Text(
+                      'Edit post',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    subtitle: const Text('Update your post message'),
+                    onTap: () => Navigator.pop(sheetContext, 'edit'),
+                  )
+                else
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.flag_outlined, color: Color(0xFFCB1010)),
+                    title: const Text(
+                      'Report content',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    subtitle: const Text('Send this post to the moderation queue'),
+                    onTap: () => Navigator.pop(sheetContext, 'report'),
+                  ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.copy_all_rounded, color: Color(0xFF335CF3)),
+                  title: const Text(
+                    'Copy post text',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  subtitle: const Text('Copy this update to the clipboard'),
+                  onTap: () => Navigator.pop(sheetContext, 'copy'),
+                ),
+                if (post.canManage)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.delete_outline_rounded, color: Color(0xFFB42318)),
+                    title: const Text(
+                      'Delete post',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    subtitle: const Text('Remove this post from the community feed'),
+                    onTap: () => Navigator.pop(sheetContext, 'delete'),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (!mounted || action == null) {
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+    if (!mounted) {
+      return;
+    }
+
+    if (action == 'copy') {
+      await Clipboard.setData(ClipboardData(text: post.message));
+      if (mounted) {
+        _showFeature(context, 'Post text copied.');
+      }
+      return;
+    }
+
+    if (action == 'report') {
+      await _showReportContentSheet(context, post: post);
+      return;
+    }
+
+    if (action == 'edit') {
+      final editedMessage = await _promptEditCommunityPost(
+        context,
+        initialMessage: post.message,
+      );
+      if (editedMessage == null || !mounted) {
+        return;
+      }
+      final result = await _CommunityApi.instance.updatePost(
+        postId: post.id,
+        message: editedMessage,
+        imageBytes: post.photoBytes,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (!result.success || result.post == null) {
+        _showFeature(context, result.message, tone: _ToastTone.error);
+        return;
+      }
+      _CommunityHub.updatePost(result.post!);
+      _showFeature(context, result.message, tone: _ToastTone.success);
+      return;
+    }
+
+    if (action == 'delete') {
+      final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) {
+              return AlertDialog(
+                title: const Text('Delete Post?'),
+                content: const Text('This will permanently remove your post from the feed.'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext, false),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(dialogContext, true),
+                    style: FilledButton.styleFrom(backgroundColor: const Color(0xFFB42318)),
+                    child: const Text('Delete'),
+                  ),
+                ],
+              );
+            },
+          ) ??
+          false;
+      if (!confirmed || !mounted) {
+        return;
+      }
+      final result = await _CommunityApi.instance.deletePost(
+        postId: post.id,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (!result.success) {
+        _showFeature(context, result.message, tone: _ToastTone.error);
+        return;
+      }
+      _CommunityHub.removePost(post.id);
+      _showFeature(context, result.message, tone: _ToastTone.success);
+    }
   }
 
   @override

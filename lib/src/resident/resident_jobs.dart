@@ -1,5 +1,480 @@
 part of barangaymo_app;
 
+class _JobsFetchResult {
+  final bool success;
+  final String message;
+  final List<_ResidentJobData> jobs;
+
+  const _JobsFetchResult({
+    required this.success,
+    required this.message,
+    this.jobs = const <_ResidentJobData>[],
+  });
+}
+
+class _JobsPublishResult {
+  final bool success;
+  final String message;
+  final _ResidentJobData? job;
+
+  const _JobsPublishResult({
+    required this.success,
+    required this.message,
+    this.job,
+  });
+}
+
+class _JobHunterFetchResult {
+  final bool success;
+  final String message;
+  final List<_ResidentTalentPostData> profiles;
+
+  const _JobHunterFetchResult({
+    required this.success,
+    required this.message,
+    this.profiles = const <_ResidentTalentPostData>[],
+  });
+}
+
+class _JobHunterPublishResult {
+  final bool success;
+  final String message;
+  final _ResidentTalentPostData? profile;
+
+  const _JobHunterPublishResult({
+    required this.success,
+    required this.message,
+    this.profile,
+  });
+}
+
+class _JobsApi {
+  _JobsApi._();
+  static final _JobsApi instance = _JobsApi._();
+  static const Duration _requestTimeout = Duration(seconds: 6);
+
+  Future<_JobsFetchResult> fetchHiringPosts() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _JobsFetchResult(
+        success: false,
+        message: 'Please log in again to load hiring posts.',
+      );
+    }
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    for (final endpoint in _AuthApi.instance._endpointCandidates('jobs/hiring-posts')) {
+      try {
+        final response = await http
+            .get(
+              endpoint,
+              headers: {
+                'Accept': 'application/json',
+                'Authorization': 'Bearer $_authToken',
+              },
+            )
+            .timeout(_requestTimeout);
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        final body = decoded is Map<String, dynamic>
+            ? decoded
+            : const <String, dynamic>{};
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final rawJobs = body['jobs'];
+          if (rawJobs is! List) {
+            return const _JobsFetchResult(
+              success: false,
+              message: 'Jobs payload is invalid.',
+            );
+          }
+          final out = <_ResidentJobData>[];
+          for (final item in rawJobs) {
+            if (item is! Map<String, dynamic>) {
+              continue;
+            }
+            out.add(_mapJob(item));
+          }
+          return _JobsFetchResult(
+            success: true,
+            message: out.isEmpty ? 'No hiring posts yet.' : 'Hiring posts loaded.',
+            jobs: out,
+          );
+        }
+        return _JobsFetchResult(
+          success: false,
+          message: _extractApiMessage(body, fallback: 'Unable to load hiring posts.'),
+        );
+      } on TimeoutException {
+        sawTimeout = true;
+      } catch (_) {
+        sawConnectionError = true;
+      }
+    }
+
+    if (sawTimeout) {
+      return const _JobsFetchResult(
+        success: false,
+        message: 'Loading hiring posts timed out. Please retry.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _JobsFetchResult(
+        success: false,
+        message: 'Cannot connect to server to load hiring posts.',
+      );
+    }
+    return const _JobsFetchResult(
+      success: false,
+      message: 'Hiring posts endpoint is not available yet.',
+    );
+  }
+
+  Future<_JobsPublishResult> createHiringPost({
+    required String title,
+    required String company,
+    required String location,
+    required String salary,
+    required String schedule,
+    required String requirements,
+    required String postedBy,
+    required bool urgent,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _JobsPublishResult(
+        success: false,
+        message: 'Please log in again before publishing a hiring post.',
+      );
+    }
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    final payload = jsonEncode({
+      'title': title,
+      'company': company,
+      'location': location,
+      'salary': salary,
+      'schedule': schedule,
+      'requirements': requirements,
+      'posted_by': postedBy,
+      'urgent': urgent,
+    });
+
+    for (final endpoint in _AuthApi.instance._endpointCandidates('jobs/hiring-posts')) {
+      try {
+        final response = await http
+            .post(
+              endpoint,
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': 'Bearer $_authToken',
+              },
+              body: payload,
+            )
+            .timeout(_requestTimeout);
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        final body = decoded is Map<String, dynamic>
+            ? decoded
+            : const <String, dynamic>{};
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final rawJob = body['job'];
+          if (rawJob is! Map<String, dynamic>) {
+            return _JobsPublishResult(
+              success: false,
+              message: _extractApiMessage(
+                body,
+                fallback: 'Hiring post saved but no payload returned.',
+              ),
+            );
+          }
+          return _JobsPublishResult(
+            success: true,
+            message: _extractApiMessage(
+              body,
+              fallback: 'Hiring post published. Residents are notified.',
+            ),
+            job: _mapJob(rawJob),
+          );
+        }
+        return _JobsPublishResult(
+          success: false,
+          message: _extractApiMessage(body, fallback: 'Unable to publish hiring post.'),
+        );
+      } on TimeoutException {
+        sawTimeout = true;
+      } catch (_) {
+        sawConnectionError = true;
+      }
+    }
+
+    if (sawTimeout) {
+      return const _JobsPublishResult(
+        success: false,
+        message: 'Publish request timed out. Please retry.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _JobsPublishResult(
+        success: false,
+        message: 'Cannot connect to server to publish hiring post.',
+      );
+    }
+    return const _JobsPublishResult(
+      success: false,
+      message: 'Hiring post endpoint is not available yet.',
+    );
+  }
+
+  Future<_JobHunterFetchResult> fetchHunterProfiles() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _JobHunterFetchResult(
+        success: false,
+        message: 'Please log in again to load job hunter profiles.',
+      );
+    }
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    for (final endpoint in _AuthApi.instance._endpointCandidates('jobs/hunter-profiles')) {
+      try {
+        final response = await http
+            .get(
+              endpoint,
+              headers: {
+                'Accept': 'application/json',
+                'Authorization': 'Bearer $_authToken',
+              },
+            )
+            .timeout(_requestTimeout);
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        final body = decoded is Map<String, dynamic>
+            ? decoded
+            : const <String, dynamic>{};
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final rawProfiles = body['profiles'];
+          if (rawProfiles is! List) {
+            return const _JobHunterFetchResult(
+              success: false,
+              message: 'Job hunter profiles payload is invalid.',
+            );
+          }
+          final out = <_ResidentTalentPostData>[];
+          for (final item in rawProfiles) {
+            if (item is! Map<String, dynamic>) {
+              continue;
+            }
+            out.add(_mapHunterProfile(item));
+          }
+          return _JobHunterFetchResult(
+            success: true,
+            message: out.isEmpty
+                ? 'No job hunter profiles yet.'
+                : 'Job hunter profiles loaded.',
+            profiles: out,
+          );
+        }
+        return _JobHunterFetchResult(
+          success: false,
+          message: _extractApiMessage(
+            body,
+            fallback: 'Unable to load job hunter profiles.',
+          ),
+        );
+      } on TimeoutException {
+        sawTimeout = true;
+      } catch (_) {
+        sawConnectionError = true;
+      }
+    }
+
+    if (sawTimeout) {
+      return const _JobHunterFetchResult(
+        success: false,
+        message: 'Loading job hunter profiles timed out. Please retry.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _JobHunterFetchResult(
+        success: false,
+        message: 'Cannot connect to server to load job hunter profiles.',
+      );
+    }
+    return const _JobHunterFetchResult(
+      success: false,
+      message: 'Job hunter profiles endpoint is not available yet.',
+    );
+  }
+
+  Future<_JobHunterPublishResult> createHunterProfile({
+    required String fullName,
+    required String desiredJob,
+    required String skills,
+    required String preferredSetup,
+    required String expectedSalary,
+    required String barangayZone,
+    required bool availableNow,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _JobHunterPublishResult(
+        success: false,
+        message: 'Please log in again before publishing your profile.',
+      );
+    }
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    final payload = jsonEncode({
+      'full_name': fullName,
+      'desired_job': desiredJob,
+      'skills': skills,
+      'preferred_setup': preferredSetup,
+      'expected_salary': expectedSalary,
+      'barangay_zone': barangayZone,
+      'available_now': availableNow,
+    });
+
+    for (final endpoint in _AuthApi.instance._endpointCandidates('jobs/hunter-profiles')) {
+      try {
+        final response = await http
+            .post(
+              endpoint,
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': 'Bearer $_authToken',
+              },
+              body: payload,
+            )
+            .timeout(_requestTimeout);
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        final body = decoded is Map<String, dynamic>
+            ? decoded
+            : const <String, dynamic>{};
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final rawProfile = body['profile'];
+          if (rawProfile is! Map<String, dynamic>) {
+            return _JobHunterPublishResult(
+              success: false,
+              message: _extractApiMessage(
+                body,
+                fallback: 'Job hunter profile saved but no payload returned.',
+              ),
+            );
+          }
+          return _JobHunterPublishResult(
+            success: true,
+            message: _extractApiMessage(
+              body,
+              fallback: 'Job hunter profile published.',
+            ),
+            profile: _mapHunterProfile(rawProfile),
+          );
+        }
+        return _JobHunterPublishResult(
+          success: false,
+          message: _extractApiMessage(
+            body,
+            fallback: 'Unable to publish job hunter profile.',
+          ),
+        );
+      } on TimeoutException {
+        sawTimeout = true;
+      } catch (_) {
+        sawConnectionError = true;
+      }
+    }
+
+    if (sawTimeout) {
+      return const _JobHunterPublishResult(
+        success: false,
+        message: 'Publish request timed out. Please retry.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _JobHunterPublishResult(
+        success: false,
+        message: 'Cannot connect to server to publish job hunter profile.',
+      );
+    }
+    return const _JobHunterPublishResult(
+      success: false,
+      message: 'Job hunter profile endpoint is not available yet.',
+    );
+  }
+
+  _ResidentJobData _mapJob(Map<String, dynamic> raw) {
+    String read(String key, {String fallback = ''}) {
+      final value = raw[key];
+      if (value is String) {
+        final trimmed = value.trim();
+        if (trimmed.isNotEmpty) {
+          return trimmed;
+        }
+      }
+      return fallback;
+    }
+
+    return _ResidentJobData(
+      title: read('title', fallback: 'Hiring Role'),
+      company: read('company', fallback: 'Barangay Employer'),
+      location: read('location', fallback: _residentLocationSummary(fallback: 'Barangay')),
+      salary: read('salary', fallback: 'Negotiable'),
+      schedule: read('schedule', fallback: 'Full-time'),
+      postedBy: read('posted_by', fallback: 'Barangay Employer'),
+      requirements: read('requirements', fallback: 'See job details'),
+      urgent: raw['urgent'] == true || raw['urgent'] == 1 || raw['urgent'] == '1',
+    );
+  }
+
+  _ResidentTalentPostData _mapHunterProfile(Map<String, dynamic> raw) {
+    String read(String key, {String fallback = ''}) {
+      final value = raw[key];
+      if (value is String) {
+        final trimmed = value.trim();
+        if (trimmed.isNotEmpty) {
+          return trimmed;
+        }
+      }
+      return fallback;
+    }
+
+    return _ResidentTalentPostData(
+      fullName: read('full_name', fallback: 'Resident'),
+      desiredJob: read('desired_job', fallback: 'Job seeker'),
+      skills: read('skills', fallback: 'General skills'),
+      preferredSetup: read('preferred_setup', fallback: 'On-site'),
+      expectedSalary: read('expected_salary', fallback: 'Negotiable'),
+      barangayZone: read('barangay_zone', fallback: 'Zone 1'),
+      availableNow:
+          raw['available_now'] == true ||
+          raw['available_now'] == 1 ||
+          raw['available_now'] == '1',
+    );
+  }
+
+  String _extractApiMessage(
+    Map<String, dynamic> body, {
+    required String fallback,
+  }) {
+    final message = body['message'];
+    if (message is String && message.trim().isNotEmpty) {
+      return message.trim();
+    }
+    return fallback;
+  }
+}
+
 class ResidentJobsPage extends StatefulWidget {
   const ResidentJobsPage({super.key});
 
@@ -14,9 +489,42 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
   String _selectedFilter = 'All';
 
   @override
+  void initState() {
+    super.initState();
+    unawaited(_syncJobsBoardFromApi(showToast: false));
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _syncJobsBoardFromApi({bool showToast = false}) async {
+    final hiringResult = await _JobsApi.instance.fetchHiringPosts();
+    final hunterResult = await _JobsApi.instance.fetchHunterProfiles();
+    if (!mounted) {
+      return;
+    }
+    if (hiringResult.success) {
+      _ResidentJobsHub.replaceHiringPosts(hiringResult.jobs);
+    }
+    if (hunterResult.success) {
+      _ResidentJobsHub.replaceTalentPosts(hunterResult.profiles);
+    }
+    if (showToast) {
+      final allGood = hiringResult.success && hunterResult.success;
+      final message = allGood
+          ? 'Jobs board updated.'
+          : !hiringResult.success
+          ? hiringResult.message
+          : hunterResult.message;
+      _showFeature(
+        context,
+        message,
+        tone: allGood ? _ToastTone.success : _ToastTone.warning,
+      );
+    }
   }
 
   List<_ResidentJobData> _filteredJobs() {
@@ -66,6 +574,7 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
   }
 
   void _openPostHiringSheet(BuildContext context) {
+    final pageContext = this.context;
     final titleController = TextEditingController();
     final companyController = TextEditingController();
     final locationController = TextEditingController();
@@ -181,7 +690,7 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton.icon(
-                          onPressed: () {
+                          onPressed: () async {
                             final title = titleController.text.trim();
                             final company = companyController.text.trim();
                             final location = locationController.text.trim();
@@ -196,28 +705,47 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
                                 salary.isEmpty ||
                                 requirements.isEmpty ||
                                 postedBy.isEmpty) {
+                                _showFeature(
+                                  pageContext,
+                                  'Complete all fields before posting.',
+                                );
+                                return;
+                              }
+
+                            final result = await _JobsApi.instance
+                                .createHiringPost(
+                                  title: title,
+                                  company: company,
+                                  location: location,
+                                  salary: salary,
+                                  schedule: schedule,
+                                  requirements: requirements,
+                                  postedBy: postedBy,
+                                  urgent: urgent,
+                                );
+                            if (!this.context.mounted) {
+                              return;
+                            }
+                            if (!result.success || result.job == null) {
                               _showFeature(
-                                context,
-                                'Complete all fields before posting.',
+                                pageContext,
+                                result.message,
+                                tone: _ToastTone.error,
                               );
                               return;
                             }
-
-                            _ResidentJobsHub.addHiringPost(
-                              title: title,
-                              company: company,
-                              location: location,
-                              salary: salary,
-                              schedule: schedule,
-                              requirements: requirements,
-                              postedBy: postedBy,
-                              urgent: urgent,
+                            _ResidentJobsHub.mergeHiringPosts([result.job!]);
+                            FocusScope.of(sheetContext).unfocus();
+                            if (sheetContext.mounted) {
+                              Navigator.of(sheetContext).pop();
+                            }
+                            await Future<void>.delayed(
+                              const Duration(milliseconds: 220),
                             );
-                            Navigator.pop(context);
-                            _showFeature(
-                              this.context,
-                              'Hiring post published. Residents are notified.',
-                            );
+                            if (!this.context.mounted) {
+                              return;
+                            }
+                            _showFeature(pageContext, result.message);
                           },
                           style: FilledButton.styleFrom(
                             backgroundColor: const Color(0xFF3758DD),
@@ -245,6 +773,7 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
   }
 
   void _openJobHunterSheet(BuildContext context) {
+    final pageContext = this.context;
     final nameController = TextEditingController();
     final desiredController = TextEditingController();
     final skillsController = TextEditingController();
@@ -354,7 +883,7 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton.icon(
-                          onPressed: () {
+                          onPressed: () async {
                             final fullName = nameController.text.trim();
                             final desiredJob = desiredController.text.trim();
                             final skills = skillsController.text.trim();
@@ -365,26 +894,45 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
                                 skills.isEmpty ||
                                 expectedSalary.isEmpty ||
                                 zone.isEmpty) {
+                                _showFeature(
+                                  pageContext,
+                                  'Complete all fields before posting.',
+                                );
+                                return;
+                              }
+                            final result = await _JobsApi.instance
+                                .createHunterProfile(
+                                  fullName: fullName,
+                                  desiredJob: desiredJob,
+                                  skills: skills,
+                                  preferredSetup: setup,
+                                  expectedSalary: expectedSalary,
+                                  barangayZone: zone,
+                                  availableNow: availableNow,
+                                );
+                            if (!this.context.mounted) {
+                              return;
+                            }
+                            if (!result.success || result.profile == null) {
                               _showFeature(
-                                context,
-                                'Complete all fields before posting.',
+                                pageContext,
+                                result.message,
+                                tone: _ToastTone.error,
                               );
                               return;
                             }
-                            _ResidentJobsHub.addTalentPost(
-                              fullName: fullName,
-                              desiredJob: desiredJob,
-                              skills: skills,
-                              preferredSetup: setup,
-                              expectedSalary: expectedSalary,
-                              zone: zone,
-                              availableNow: availableNow,
+                            _ResidentJobsHub.mergeTalentPosts([result.profile!]);
+                            FocusScope.of(sheetContext).unfocus();
+                            if (sheetContext.mounted) {
+                              Navigator.of(sheetContext).pop();
+                            }
+                            await Future<void>.delayed(
+                              const Duration(milliseconds: 220),
                             );
-                            Navigator.pop(context);
-                            _showFeature(
-                              this.context,
-                              'Job hunter profile published.',
-                            );
+                            if (!this.context.mounted) {
+                              return;
+                            }
+                            _showFeature(pageContext, result.message);
                           },
                           style: FilledButton.styleFrom(
                             backgroundColor: const Color(0xFF7E46D7),
@@ -435,7 +983,9 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
                   colors: [Color(0xFFF6F8FF), Color(0xFFF9F0F0)],
                 ),
               ),
-              child: ListView(
+              child: RefreshIndicator(
+                onRefresh: () => _syncJobsBoardFromApi(showToast: false),
+                child: ListView(
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
                 children: [
                   Row(
@@ -726,6 +1276,7 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
                   const SizedBox(height: 8),
                   ...talents.map((talent) => _talentCard(context, talent)),
                 ],
+              ),
               ),
             );
           },

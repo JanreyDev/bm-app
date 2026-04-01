@@ -359,57 +359,9 @@ IconData _merchantProductIcon(String category) {
 class _ResidentJobsHub {
   static final ValueNotifier<int> refresh = ValueNotifier<int>(0);
 
-  static final List<_ResidentJobData> jobs = [
-    const _ResidentJobData(
-      title: 'Barangay Administrative Aide',
-      company: 'Barangay Hall - Personnel Office',
-      location: 'Old Cabalan, Olongapo',
-      salary: 'PHP 18,000 / month',
-      schedule: 'Full-time',
-      urgent: true,
-      postedBy: 'Barangay HR Desk',
-      requirements:
-          'MS Office, records management, and resident-facing support.',
-    ),
-    const _ResidentJobData(
-      title: 'Community Health Volunteer',
-      company: 'Barangay Health Unit',
-      location: 'Health Center Annex',
-      salary: 'PHP 450 / day allowance',
-      schedule: 'Part-time',
-      postedBy: 'RHU Coordinator',
-      requirements: 'Basic first aid, house-to-house support, and reporting.',
-    ),
-    const _ResidentJobData(
-      title: 'Digital Records Encoder',
-      company: 'Barangay Information Desk',
-      location: 'Remote + On-site',
-      salary: 'PHP 650 / day',
-      schedule: 'Contract',
-      postedBy: 'Info Desk Team',
-      requirements:
-          'Fast typing, document validation, and secure data handling.',
-    ),
-  ];
+  static final List<_ResidentJobData> jobs = [];
 
-  static final List<_ResidentTalentPostData> talents = [
-    const _ResidentTalentPostData(
-      fullName: 'J. Santos',
-      desiredJob: 'Office Staff / Data Encoder',
-      skills: 'Excel, Google Docs, Canva, resident support',
-      preferredSetup: 'On-site',
-      expectedSalary: 'PHP 16,000 / month',
-      barangayZone: 'Zone 2',
-    ),
-    const _ResidentTalentPostData(
-      fullName: 'R. Villanueva',
-      desiredJob: 'Barangay Utility / Maintenance',
-      skills: 'Electrical repair, carpentry, preventive maintenance',
-      preferredSetup: 'Field-based',
-      expectedSalary: 'PHP 700 / day',
-      barangayZone: 'Zone 5',
-    ),
-  ];
+  static final List<_ResidentTalentPostData> talents = [];
 
   static final List<_ResidentJobNotificationData> notifications = [
     _ResidentJobNotificationData(
@@ -484,6 +436,32 @@ class _ResidentJobsHub {
     _emit();
   }
 
+  static bool _containsJob(_ResidentJobData job) {
+    final key = _residentJobKey(job);
+    return jobs.any((entry) => _residentJobKey(entry) == key);
+  }
+
+  static void mergeHiringPosts(List<_ResidentJobData> incoming) {
+    var changed = false;
+    for (final job in incoming) {
+      if (_containsJob(job)) {
+        continue;
+      }
+      jobs.insert(0, job);
+      changed = true;
+    }
+    if (changed) {
+      _emit();
+    }
+  }
+
+  static void replaceHiringPosts(List<_ResidentJobData> incoming) {
+    jobs
+      ..clear()
+      ..addAll(incoming);
+    _emit();
+  }
+
   static void addTalentPost({
     required String fullName,
     required String desiredJob,
@@ -515,6 +493,36 @@ class _ResidentJobsHub {
         createdAt: DateTime.now(),
       ),
     );
+    _emit();
+  }
+
+  static bool _containsTalent(_ResidentTalentPostData talent) {
+    return talents.any(
+      (entry) =>
+          entry.fullName == talent.fullName &&
+          entry.desiredJob == talent.desiredJob &&
+          entry.barangayZone == talent.barangayZone,
+    );
+  }
+
+  static void mergeTalentPosts(List<_ResidentTalentPostData> incoming) {
+    var changed = false;
+    for (final talent in incoming) {
+      if (_containsTalent(talent)) {
+        continue;
+      }
+      talents.insert(0, talent);
+      changed = true;
+    }
+    if (changed) {
+      _emit();
+    }
+  }
+
+  static void replaceTalentPosts(List<_ResidentTalentPostData> incoming) {
+    talents
+      ..clear()
+      ..addAll(incoming);
     _emit();
   }
 

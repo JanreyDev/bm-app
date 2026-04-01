@@ -335,6 +335,22 @@ class _CommunityHub {
     _emit('Live feed updated: ${post.author} posted a new community update.');
   }
 
+  static void updatePost(_CommunityPost post) {
+    ensureSeeded();
+    final index = _posts.indexWhere((entry) => entry.id == post.id);
+    if (index < 0) {
+      return;
+    }
+    _posts[index] = post;
+    refresh.value += 1;
+  }
+
+  static void removePost(int postId) {
+    ensureSeeded();
+    _posts.removeWhere((entry) => entry.id == postId);
+    refresh.value += 1;
+  }
+
   static void replacePosts(List<_CommunityPost> posts) {
     ensureSeeded();
     _posts
@@ -437,6 +453,28 @@ class _CommunityPostCreateResult {
   final _CommunityPost? post;
 
   const _CommunityPostCreateResult({
+    required this.success,
+    required this.message,
+    this.post,
+  });
+}
+
+class _CommunityPostDeleteResult {
+  final bool success;
+  final String message;
+
+  const _CommunityPostDeleteResult({
+    required this.success,
+    required this.message,
+  });
+}
+
+class _CommunityPostFetchResult {
+  final bool success;
+  final String message;
+  final _CommunityPost? post;
+
+  const _CommunityPostFetchResult({
     required this.success,
     required this.message,
     this.post,
@@ -621,6 +659,399 @@ class _CommunityApi {
     );
   }
 
+  Future<_CommunityPostCreateResult> updatePost({
+    required int postId,
+    required String message,
+    Uint8List? imageBytes,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _CommunityPostCreateResult(
+        success: false,
+        message: 'Please log in again before editing a post.',
+      );
+    }
+
+    var sawConnectionError = false;
+    var sawTimeout = false;
+    final imagePayload = imageBytes == null ? null : base64Encode(imageBytes);
+    for (final endpoint in _AuthApi.instance._endpointCandidates('community/posts/$postId')) {
+      try {
+        final response = await http
+            .patch(
+              endpoint,
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': 'Bearer $_authToken',
+              },
+              body: jsonEncode({
+                'message': message,
+                if (imagePayload != null && imagePayload.isNotEmpty)
+                  'image_base64': imagePayload,
+              }),
+            )
+            .timeout(_requestTimeout);
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        final body = decoded is Map<String, dynamic>
+            ? decoded
+            : const <String, dynamic>{};
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final rawPost = body['post'];
+          if (rawPost is! Map<String, dynamic>) {
+            return _CommunityPostCreateResult(
+              success: false,
+              message: _extractApiMessage(
+                body,
+                fallback: 'Post updated but no payload was returned.',
+              ),
+            );
+          }
+          return _CommunityPostCreateResult(
+            success: true,
+            message: _extractApiMessage(body, fallback: 'Post updated.'),
+            post: _fromApiPost(rawPost),
+          );
+        }
+        return _CommunityPostCreateResult(
+          success: false,
+          message: _extractApiMessage(
+            body,
+            fallback: 'Unable to update post right now.',
+          ),
+        );
+      } on TimeoutException {
+        sawTimeout = true;
+      } catch (_) {
+        sawConnectionError = true;
+      }
+    }
+
+    if (sawTimeout) {
+      return const _CommunityPostCreateResult(
+        success: false,
+        message: 'Update request timed out. Please retry.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _CommunityPostCreateResult(
+        success: false,
+        message: 'Cannot connect to server to update the post.',
+      );
+    }
+    return const _CommunityPostCreateResult(
+      success: false,
+      message: 'Community update endpoint is not available yet.',
+    );
+  }
+
+  Future<_CommunityPostDeleteResult> deletePost({
+    required int postId,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _CommunityPostDeleteResult(
+        success: false,
+        message: 'Please log in again before deleting a post.',
+      );
+    }
+
+    var sawConnectionError = false;
+    var sawTimeout = false;
+    for (final endpoint in _AuthApi.instance._endpointCandidates('community/posts/$postId')) {
+      try {
+        final response = await http
+            .delete(
+              endpoint,
+              headers: {
+                'Accept': 'application/json',
+                'Authorization': 'Bearer $_authToken',
+              },
+            )
+            .timeout(_requestTimeout);
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        final body = decoded is Map<String, dynamic>
+            ? decoded
+            : const <String, dynamic>{};
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          return _CommunityPostDeleteResult(
+            success: true,
+            message: _extractApiMessage(body, fallback: 'Post deleted.'),
+          );
+        }
+        return _CommunityPostDeleteResult(
+          success: false,
+          message: _extractApiMessage(
+            body,
+            fallback: 'Unable to delete post right now.',
+          ),
+        );
+      } on TimeoutException {
+        sawTimeout = true;
+      } catch (_) {
+        sawConnectionError = true;
+      }
+    }
+
+    if (sawTimeout) {
+      return const _CommunityPostDeleteResult(
+        success: false,
+        message: 'Delete request timed out. Please retry.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _CommunityPostDeleteResult(
+        success: false,
+        message: 'Cannot connect to server to delete the post.',
+      );
+    }
+    return const _CommunityPostDeleteResult(
+      success: false,
+      message: 'Community delete endpoint is not available yet.',
+    );
+  }
+
+  Future<_CommunityPostFetchResult> fetchPost({
+    required int postId,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _CommunityPostFetchResult(
+        success: false,
+        message: 'Please log in again to load this post.',
+      );
+    }
+
+    var sawConnectionError = false;
+    var sawTimeout = false;
+    for (final endpoint in _AuthApi.instance._endpointCandidates('community/posts/$postId')) {
+      try {
+        final response = await http
+            .get(
+              endpoint,
+              headers: {
+                'Accept': 'application/json',
+                'Authorization': 'Bearer $_authToken',
+              },
+            )
+            .timeout(_requestTimeout);
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        final body = decoded is Map<String, dynamic>
+            ? decoded
+            : const <String, dynamic>{};
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final rawPost = body['post'];
+          if (rawPost is! Map<String, dynamic>) {
+            return _CommunityPostFetchResult(
+              success: false,
+              message: _extractApiMessage(
+                body,
+                fallback: 'Post loaded with an invalid payload.',
+              ),
+            );
+          }
+          return _CommunityPostFetchResult(
+            success: true,
+            message: _extractApiMessage(body, fallback: 'Post loaded.'),
+            post: _fromApiPost(rawPost),
+          );
+        }
+        return _CommunityPostFetchResult(
+          success: false,
+          message: _extractApiMessage(body, fallback: 'Unable to load this post.'),
+        );
+      } on TimeoutException {
+        sawTimeout = true;
+      } catch (_) {
+        sawConnectionError = true;
+      }
+    }
+
+    if (sawTimeout) {
+      return const _CommunityPostFetchResult(
+        success: false,
+        message: 'Loading post timed out. Please retry.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _CommunityPostFetchResult(
+        success: false,
+        message: 'Cannot connect to server to load this post.',
+      );
+    }
+    return const _CommunityPostFetchResult(
+      success: false,
+      message: 'Community post endpoint is not available yet.',
+    );
+  }
+
+  Future<_CommunityPostCreateResult> addComment({
+    required int postId,
+    required String message,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _CommunityPostCreateResult(
+        success: false,
+        message: 'Please log in again before adding a comment.',
+      );
+    }
+
+    var sawConnectionError = false;
+    var sawTimeout = false;
+    for (final endpoint in _AuthApi.instance._endpointCandidates('community/posts/$postId/comments')) {
+      try {
+        final response = await http
+            .post(
+              endpoint,
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': 'Bearer $_authToken',
+              },
+              body: jsonEncode({'message': message}),
+            )
+            .timeout(_requestTimeout);
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        final body = decoded is Map<String, dynamic>
+            ? decoded
+            : const <String, dynamic>{};
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final rawPost = body['post'];
+          if (rawPost is! Map<String, dynamic>) {
+            return _CommunityPostCreateResult(
+              success: false,
+              message: _extractApiMessage(
+                body,
+                fallback: 'Comment added but no post payload was returned.',
+              ),
+            );
+          }
+          return _CommunityPostCreateResult(
+            success: true,
+            message: _extractApiMessage(body, fallback: 'Comment added.'),
+            post: _fromApiPost(rawPost),
+          );
+        }
+        return _CommunityPostCreateResult(
+          success: false,
+          message: _extractApiMessage(
+            body,
+            fallback: 'Unable to add comment right now.',
+          ),
+        );
+      } on TimeoutException {
+        sawTimeout = true;
+      } catch (_) {
+        sawConnectionError = true;
+      }
+    }
+
+    if (sawTimeout) {
+      return const _CommunityPostCreateResult(
+        success: false,
+        message: 'Comment request timed out. Please retry.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _CommunityPostCreateResult(
+        success: false,
+        message: 'Cannot connect to server to add your comment.',
+      );
+    }
+    return const _CommunityPostCreateResult(
+      success: false,
+      message: 'Community comments endpoint is not available yet.',
+    );
+  }
+
+  Future<_CommunityPostCreateResult> toggleLike({
+    required int postId,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _CommunityPostCreateResult(
+        success: false,
+        message: 'Please log in again before liking a post.',
+      );
+    }
+
+    var sawConnectionError = false;
+    var sawTimeout = false;
+    for (final endpoint in _AuthApi.instance._endpointCandidates('community/posts/$postId/likes/toggle')) {
+      try {
+        final response = await http
+            .post(
+              endpoint,
+              headers: {
+                'Accept': 'application/json',
+                'Authorization': 'Bearer $_authToken',
+              },
+            )
+            .timeout(_requestTimeout);
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        final body = decoded is Map<String, dynamic>
+            ? decoded
+            : const <String, dynamic>{};
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final rawPost = body['post'];
+          if (rawPost is! Map<String, dynamic>) {
+            return _CommunityPostCreateResult(
+              success: false,
+              message: _extractApiMessage(
+                body,
+                fallback: 'Like action completed but no post payload was returned.',
+              ),
+            );
+          }
+          return _CommunityPostCreateResult(
+            success: true,
+            message: _extractApiMessage(body, fallback: 'Post reaction updated.'),
+            post: _fromApiPost(rawPost),
+          );
+        }
+        return _CommunityPostCreateResult(
+          success: false,
+          message: _extractApiMessage(
+            body,
+            fallback: 'Unable to update like right now.',
+          ),
+        );
+      } on TimeoutException {
+        sawTimeout = true;
+      } catch (_) {
+        sawConnectionError = true;
+      }
+    }
+
+    if (sawTimeout) {
+      return const _CommunityPostCreateResult(
+        success: false,
+        message: 'Like request timed out. Please retry.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _CommunityPostCreateResult(
+        success: false,
+        message: 'Cannot connect to server to like this post.',
+      );
+    }
+    return const _CommunityPostCreateResult(
+      success: false,
+      message: 'Community likes endpoint is not available yet.',
+    );
+  }
+
   _CommunityPost _fromApiPost(Map<String, dynamic> raw) {
     int parseInt(dynamic value, {int fallback = 0}) {
       if (value is int) {
@@ -653,8 +1084,36 @@ class _CommunityApi {
     final author = ((raw['author'] as String?) ?? '').trim();
     final barangay = ((raw['barangay'] as String?) ?? '').trim();
     final official = parseBool(raw['is_official']);
+    final canManage = parseBool(raw['can_manage']);
     final imageBase64 = ((raw['image_base64'] as String?) ?? '').trim();
     final decodedImage = _decodeImageBase64(imageBase64);
+    final rawLikesCount = raw['likes_count'];
+    final likesCount = parseInt(rawLikesCount, fallback: parseInt(raw['likes']));
+    final likedByMe = parseBool(raw['liked_by_me']) || parseBool(raw['likedByMe']);
+    final rawCommentsCount = raw['comments_count'];
+    final commentsCount = parseInt(rawCommentsCount);
+    final rawComments = raw['comments'];
+
+    final commentEntries = <_CommunityComment>[];
+    if (rawComments is List) {
+      for (final item in rawComments) {
+        if (item is! Map<String, dynamic>) {
+          continue;
+        }
+        final parsed = _parseComment(item);
+        if (parsed != null) {
+          commentEntries.add(parsed);
+        }
+      }
+    } else {
+      final latestRaw = raw['latest_comment'];
+      if (latestRaw is Map<String, dynamic>) {
+        final parsed = _parseComment(latestRaw);
+        if (parsed != null) {
+          commentEntries.add(parsed);
+        }
+      }
+    }
 
     return _CommunityPost(
       id: parseInt(raw['id'], fallback: DateTime.now().millisecondsSinceEpoch),
@@ -667,9 +1126,13 @@ class _CommunityApi {
       photoBytes: decodedImage,
       isOfficial: official,
       isVerifiedResident: !official,
+      canManage: canManage,
       neighborhood: barangay.isEmpty ? null : barangay,
-      likes: parseInt(raw['likes']),
-      comments: parseInt(raw['comments']),
+      likes: likesCount,
+      likedByMe: likedByMe,
+      comments: commentsCount,
+      commentEntries: commentEntries,
+      commentCount: commentsCount,
     );
   }
 
@@ -704,6 +1167,26 @@ class _CommunityApi {
     } catch (_) {
       return null;
     }
+  }
+
+  _CommunityComment? _parseComment(Map<String, dynamic> raw) {
+    final author = ((raw['author'] as String?) ?? '').trim();
+    final message = ((raw['message'] as String?) ?? '').trim();
+    if (message.isEmpty) {
+      return null;
+    }
+    final postedRaw = raw['posted_at'];
+    final postedAt = postedRaw is String
+        ? DateTime.tryParse(postedRaw)?.toLocal()
+        : null;
+    final isMine = raw['is_mine'] == true || raw['is_mine'] == 1 || raw['is_mine'] == '1';
+
+    return _CommunityComment(
+      author: author.isEmpty ? 'Resident' : author,
+      message: message,
+      postedAt: postedAt ?? DateTime.now(),
+      isMine: isMine,
+    );
   }
 }
 
@@ -890,7 +1373,6 @@ class _CommunityPageState extends State<CommunityPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   StreamSubscription<_CommunityLiveSignal>? _liveSubscription;
-  Timer? _livePulseTimer;
   String _liveBanner = 'Live community updates ready.';
   bool _loading = true;
 
@@ -909,16 +1391,11 @@ class _CommunityPageState extends State<CommunityPage>
       }
       setState(() => _liveBanner = signal.message);
     });
-    _livePulseTimer = Timer.periodic(
-      const Duration(seconds: 18),
-      (_) => _CommunityHub.simulateRemotePulse(),
-    );
     unawaited(_refreshCommunity(showToast: false));
   }
 
   @override
   void dispose() {
-    _livePulseTimer?.cancel();
     _liveSubscription?.cancel();
     _CommunityHub.refresh.removeListener(_handleHubRefresh);
     _tabController.dispose();
@@ -1001,7 +1478,7 @@ class _CommunityPageState extends State<CommunityPage>
   }
 
   Future<void> _showPostActions(_CommunityPost post) async {
-    await showModalBottomSheet<void>(
+    final action = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
@@ -1030,27 +1507,38 @@ class _CommunityPageState extends State<CommunityPage>
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  'Choose a moderation action for this community post.',
+                Text(
+                  post.canManage
+                      ? 'Manage your community post.'
+                      : 'Choose a moderation action for this community post.',
                   style: TextStyle(
                     color: Color(0xFF69708A),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 12),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.flag_outlined, color: Color(0xFFCB1010)),
-                  title: const Text(
-                    'Report content',
-                    style: TextStyle(fontWeight: FontWeight.w800),
+                if (post.canManage)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.edit_outlined, color: Color(0xFF335CF3)),
+                    title: const Text(
+                      'Edit post',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    subtitle: const Text('Update your post message'),
+                    onTap: () => Navigator.pop(sheetContext, 'edit'),
+                  )
+                else
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.flag_outlined, color: Color(0xFFCB1010)),
+                    title: const Text(
+                      'Report content',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    subtitle: const Text('Send this post to the moderation queue'),
+                    onTap: () => Navigator.pop(sheetContext, 'report'),
                   ),
-                  subtitle: const Text('Send this post to the moderation queue'),
-                  onTap: () async {
-                    Navigator.pop(sheetContext);
-                    await _showReportContentSheet(context, post: post);
-                  },
-                ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.copy_all_rounded, color: Color(0xFF335CF3)),
@@ -1059,22 +1547,112 @@ class _CommunityPageState extends State<CommunityPage>
                     style: TextStyle(fontWeight: FontWeight.w800),
                   ),
                   subtitle: const Text('Copy this update to the clipboard'),
-                  onTap: () async {
-                    await Clipboard.setData(ClipboardData(text: post.message));
-                    if (sheetContext.mounted) {
-                      Navigator.pop(sheetContext);
-                    }
-                    if (context.mounted) {
-                      _showFeature(context, 'Post text copied.');
-                    }
-                  },
+                  onTap: () => Navigator.pop(sheetContext, 'copy'),
                 ),
+                if (post.canManage)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.delete_outline_rounded, color: Color(0xFFB42318)),
+                    title: const Text(
+                      'Delete post',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    subtitle: const Text('Remove this post from the community feed'),
+                    onTap: () => Navigator.pop(sheetContext, 'delete'),
+                  ),
               ],
             ),
           ),
         );
       },
     );
+    if (!mounted || action == null) {
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+    if (!mounted) {
+      return;
+    }
+    switch (action) {
+      case 'edit':
+        await _editPost(post);
+        break;
+      case 'delete':
+        await _deletePost(post);
+        break;
+      case 'report':
+        await _showReportContentSheet(context, post: post);
+        break;
+      case 'copy':
+        await Clipboard.setData(ClipboardData(text: post.message));
+        if (mounted) {
+          _showFeature(context, 'Post text copied.');
+        }
+        break;
+    }
+  }
+
+  Future<void> _editPost(_CommunityPost post) async {
+    final editedMessage = await _promptEditCommunityPost(
+      context,
+      initialMessage: post.message,
+    );
+    if (editedMessage == null || !mounted) {
+      return;
+    }
+
+    final result = await _CommunityApi.instance.updatePost(
+      postId: post.id,
+      message: editedMessage,
+      imageBytes: post.photoBytes,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (!result.success || result.post == null) {
+      _showFeature(context, result.message, tone: _ToastTone.error);
+      return;
+    }
+    _CommunityHub.updatePost(result.post!);
+    _showFeature(context, result.message, tone: _ToastTone.success);
+  }
+
+  Future<void> _deletePost(_CommunityPost post) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) {
+            return AlertDialog(
+              title: const Text('Delete Post?'),
+              content: const Text('This will permanently remove your post from the feed.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  style: FilledButton.styleFrom(backgroundColor: const Color(0xFFB42318)),
+                  child: const Text('Delete'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    final result = await _CommunityApi.instance.deletePost(postId: post.id);
+    if (!mounted) {
+      return;
+    }
+    if (!result.success) {
+      _showFeature(context, result.message, tone: _ToastTone.error);
+      return;
+    }
+    _CommunityHub.removePost(post.id);
+    _showFeature(context, result.message, tone: _ToastTone.success);
   }
 
   Widget _composerCard() {
@@ -1135,10 +1713,16 @@ class _CommunityPageState extends State<CommunityPage>
   }
 
   Future<void> _toggleLike(_CommunityPost post) async {
-    _CommunityHub.toggleLike(post);
-    if (mounted) {
-      _showFeature(context, post.likedByMe ? 'Post liked.' : 'Like removed.');
+    final result = await _CommunityApi.instance.toggleLike(postId: post.id);
+    if (!mounted) {
+      return;
     }
+    if (!result.success || result.post == null) {
+      _showFeature(context, result.message, tone: _ToastTone.error);
+      return;
+    }
+    _CommunityHub.updatePost(result.post!);
+    _showFeature(context, result.message, tone: _ToastTone.success);
   }
 
   Future<void> _addComment(_CommunityPost post) async {
@@ -1146,8 +1730,19 @@ class _CommunityPageState extends State<CommunityPage>
     if (comment == null || !mounted) {
       return;
     }
-    _CommunityHub.addComment(post, comment);
-    _showFeature(context, 'Comment added.');
+    final result = await _CommunityApi.instance.addComment(
+      postId: post.id,
+      message: comment,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (!result.success || result.post == null) {
+      _showFeature(context, result.message, tone: _ToastTone.error);
+      return;
+    }
+    _CommunityHub.updatePost(result.post!);
+    _showFeature(context, result.message, tone: _ToastTone.success);
   }
 
   @override
@@ -1768,6 +2363,8 @@ class _CommunityPostDetailPage extends StatefulWidget {
 }
 
 class _CommunityPostDetailPageState extends State<_CommunityPostDetailPage> {
+  late _CommunityPost _post;
+
   void _handleHubRefresh() {
     if (mounted) {
       setState(() {});
@@ -1777,7 +2374,9 @@ class _CommunityPostDetailPageState extends State<_CommunityPostDetailPage> {
   @override
   void initState() {
     super.initState();
+    _post = widget.post;
     _CommunityHub.refresh.addListener(_handleHubRefresh);
+    unawaited(_loadPost());
   }
 
   @override
@@ -1787,10 +2386,17 @@ class _CommunityPostDetailPageState extends State<_CommunityPostDetailPage> {
   }
 
   Future<void> _toggleLike() async {
-    _CommunityHub.toggleLike(widget.post);
-    if (mounted) {
-      _showFeature(context, widget.post.likedByMe ? 'Post liked.' : 'Like removed.');
+    final result = await _CommunityApi.instance.toggleLike(postId: _post.id);
+    if (!mounted) {
+      return;
     }
+    if (!result.success || result.post == null) {
+      _showFeature(context, result.message, tone: _ToastTone.error);
+      return;
+    }
+    _CommunityHub.updatePost(result.post!);
+    setState(() => _post = result.post!);
+    _showFeature(context, result.message, tone: _ToastTone.success);
   }
 
   Future<void> _addComment() async {
@@ -1798,17 +2404,38 @@ class _CommunityPostDetailPageState extends State<_CommunityPostDetailPage> {
     if (comment == null || !mounted) {
       return;
     }
-    _CommunityHub.addComment(widget.post, comment);
-    _showFeature(context, 'Comment added.');
+    final result = await _CommunityApi.instance.addComment(
+      postId: _post.id,
+      message: comment,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (!result.success || result.post == null) {
+      _showFeature(context, result.message, tone: _ToastTone.error);
+      return;
+    }
+    _CommunityHub.updatePost(result.post!);
+    setState(() => _post = result.post!);
+    _showFeature(context, result.message, tone: _ToastTone.success);
   }
 
   Future<void> _reportPost() async {
-    await _showReportContentSheet(context, post: widget.post);
+    await _showReportContentSheet(context, post: _post);
+  }
+
+  Future<void> _loadPost() async {
+    final result = await _CommunityApi.instance.fetchPost(postId: _post.id);
+    if (!mounted || !result.success || result.post == null) {
+      return;
+    }
+    _CommunityHub.updatePost(result.post!);
+    setState(() => _post = result.post!);
   }
 
   @override
   Widget build(BuildContext context) {
-    final post = widget.post;
+    final post = _post;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Community'),
@@ -2160,12 +2787,14 @@ class _CommunityPost {
   final List<_CommunityComment> commentEntries;
   final bool isOfficial;
   final bool isVerifiedResident;
+  final bool canManage;
   final String? neighborhood;
   final String? badgeLabel;
+  int commentCount;
   int reports;
   final List<String> reportReasons;
 
-  int get comments => commentEntries.length;
+  int get comments => math.max(commentCount, commentEntries.length);
   bool get underReview => reports > 0;
   _CommunityComment? get latestComment =>
       commentEntries.isEmpty ? null : commentEntries.first;
@@ -2185,8 +2814,10 @@ class _CommunityPost {
     List<_CommunityComment>? commentEntries,
     this.isOfficial = false,
     this.isVerifiedResident = false,
+    this.canManage = false,
     this.neighborhood,
     this.badgeLabel,
+    int? commentCount,
     this.reports = 0,
     List<String>? reportReasons,
   }) : id = id ?? _nextId++,
@@ -2196,6 +2827,7 @@ class _CommunityPost {
              comments,
              (index) => _CommunityComment.seed(index, postedAt),
             ),
+       commentCount = commentCount ?? comments,
        reportReasons = reportReasons ?? <String>[];
 
   void toggleLike() {
@@ -2224,6 +2856,7 @@ class _CommunityPost {
         isMine: isMine,
       ),
     );
+    commentCount += 1;
   }
 }
 
@@ -3316,86 +3949,208 @@ class _CommunityComment {
 }
 
 Future<String?> _promptCommunityComment(BuildContext context) async {
-  final controller = TextEditingController();
-  final formKey = GlobalKey<FormState>();
-  final text = await showModalBottomSheet<String>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.white,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+  return Navigator.of(context).push<String>(
+    MaterialPageRoute(
+      builder: (_) => const _CommunityCommentComposerPage(),
     ),
-    builder: (sheetContext) {
-      final inset = MediaQuery.of(sheetContext).viewInsets.bottom;
-      return Padding(
-        padding: EdgeInsets.fromLTRB(14, 14, 14, 14 + inset),
-        child: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Add Comment',
-                style: TextStyle(
-                  color: Color(0xFF2F344C),
-                  fontSize: 19,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: controller,
-                minLines: 2,
-                maxLines: 4,
-                autofocus: true,
-                decoration: InputDecoration(
-                  hintText: 'Write your comment...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().length < 2) {
-                    return 'Please enter at least 2 characters.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(sheetContext),
-                      child: const Text('Cancel'),
+  );
+}
+
+class _CommunityCommentComposerPage extends StatefulWidget {
+  const _CommunityCommentComposerPage();
+
+  @override
+  State<_CommunityCommentComposerPage> createState() =>
+      _CommunityCommentComposerPageState();
+}
+
+class _CommunityCommentComposerPageState
+    extends State<_CommunityCommentComposerPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_formKey.currentState?.validate() != true) {
+      return;
+    }
+    Navigator.pop(context, _controller.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Add Comment'),
+        backgroundColor: const Color(0xFFF7F8FF),
+        foregroundColor: const Color(0xFF2F3248),
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                TextFormField(
+                  controller: _controller,
+                  minLines: 4,
+                  maxLines: 8,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText: 'Write your comment...',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () {
-                        if (formKey.currentState?.validate() != true) {
-                          return;
-                        }
-                        Navigator.pop(sheetContext, controller.text.trim());
-                      },
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFFCB1010),
+                  validator: (value) {
+                    if (value == null || value.trim().length < 2) {
+                      return 'Please enter at least 2 characters.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
                       ),
-                      child: const Text('Post'),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _submit,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFFCB1010),
+                        ),
+                        child: const Text('Post'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
-      );
-    },
+      ),
+    );
+  }
+}
+
+Future<String?> _promptEditCommunityPost(
+  BuildContext context, {
+  required String initialMessage,
+}) async {
+  return Navigator.of(context).push<String>(
+    MaterialPageRoute(
+      builder: (_) => _CommunityEditPostPage(initialMessage: initialMessage),
+    ),
   );
-  controller.dispose();
-  return text;
+}
+
+class _CommunityEditPostPage extends StatefulWidget {
+  final String initialMessage;
+
+  const _CommunityEditPostPage({
+    required this.initialMessage,
+  });
+
+  @override
+  State<_CommunityEditPostPage> createState() => _CommunityEditPostPageState();
+}
+
+class _CommunityEditPostPageState extends State<_CommunityEditPostPage> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialMessage);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    if (_formKey.currentState?.validate() != true) {
+      return;
+    }
+    Navigator.pop(context, _controller.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Edit Post'),
+        backgroundColor: const Color(0xFFF7F8FF),
+        foregroundColor: const Color(0xFF2F3248),
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                TextFormField(
+                  controller: _controller,
+                  minLines: 6,
+                  maxLines: 12,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText: 'Update your post...',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().length < 5) {
+                      return 'Please enter at least 5 characters.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _save,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFFCB1010),
+                        ),
+                        child: const Text('Save'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 String _relativeTime(DateTime dateTime) {
