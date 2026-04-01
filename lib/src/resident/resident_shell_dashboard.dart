@@ -1386,7 +1386,14 @@ class _DashboardCommunityFeedPreviewState
   void initState() {
     super.initState();
     _CommunityHub.ensureSeeded();
+    _CommunityHub.replacePosts(const <_CommunityPost>[]);
     _CommunityHub.refresh.addListener(_handleHubRefresh);
+    unawaited(_CommunityApi.instance.fetchPosts().then((result) {
+      if (!mounted || !result.success) {
+        return;
+      }
+      _CommunityHub.replacePosts(result.posts);
+    }));
   }
 
   @override
@@ -1409,8 +1416,19 @@ class _DashboardCommunityFeedPreviewState
     if (createdPost == null || !mounted) {
       return;
     }
-    _CommunityHub.addPost(createdPost);
-    _showFeature(context, 'Post published to community feed.');
+    final result = await _CommunityApi.instance.createPost(
+      message: createdPost.message,
+      imageBytes: createdPost.photoBytes,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (!result.success || result.post == null) {
+      _showFeature(context, result.message, tone: _ToastTone.error);
+      return;
+    }
+    _CommunityHub.addPost(result.post!);
+    _showFeature(context, result.message, tone: _ToastTone.success);
   }
 
   Future<void> _openPost(_CommunityPost post) async {

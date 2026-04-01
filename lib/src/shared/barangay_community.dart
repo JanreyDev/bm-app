@@ -335,6 +335,14 @@ class _CommunityHub {
     _emit('Live feed updated: ${post.author} posted a new community update.');
   }
 
+  static void replacePosts(List<_CommunityPost> posts) {
+    ensureSeeded();
+    _posts
+      ..clear()
+      ..addAll(posts);
+    refresh.value += 1;
+  }
+
   static void toggleLike(_CommunityPost post) {
     post.toggleLike();
     _emit(post.likedByMe
@@ -408,6 +416,294 @@ class _CommunityGuidelinesStore {
   static Future<void> markAccepted() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_guidelineKey, true);
+  }
+}
+
+class _CommunityPostsFetchResult {
+  final bool success;
+  final String message;
+  final List<_CommunityPost> posts;
+
+  const _CommunityPostsFetchResult({
+    required this.success,
+    required this.message,
+    this.posts = const <_CommunityPost>[],
+  });
+}
+
+class _CommunityPostCreateResult {
+  final bool success;
+  final String message;
+  final _CommunityPost? post;
+
+  const _CommunityPostCreateResult({
+    required this.success,
+    required this.message,
+    this.post,
+  });
+}
+
+class _CommunityApi {
+  _CommunityApi._();
+  static final _CommunityApi instance = _CommunityApi._();
+  static const Duration _requestTimeout = Duration(seconds: 6);
+
+  Future<_CommunityPostsFetchResult> fetchPosts() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _CommunityPostsFetchResult(
+        success: false,
+        message: 'Please log in again to load community posts.',
+      );
+    }
+
+    var sawConnectionError = false;
+    var sawTimeout = false;
+    for (final endpoint in _AuthApi.instance._endpointCandidates('community/posts')) {
+      try {
+        final response = await http
+            .get(
+              endpoint,
+              headers: {
+                'Accept': 'application/json',
+                'Authorization': 'Bearer $_authToken',
+              },
+            )
+            .timeout(_requestTimeout);
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        final body = decoded is Map<String, dynamic>
+            ? decoded
+            : const <String, dynamic>{};
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final rawPosts = body['posts'];
+          if (rawPosts is! List) {
+            return const _CommunityPostsFetchResult(
+              success: false,
+              message: 'Community feed is not available yet.',
+            );
+          }
+          final posts = <_CommunityPost>[];
+          for (final item in rawPosts) {
+            if (item is! Map<String, dynamic>) {
+              continue;
+            }
+            posts.add(_fromApiPost(item));
+          }
+          return _CommunityPostsFetchResult(
+            success: true,
+            message: _extractApiMessage(
+              body,
+              fallback: posts.isEmpty
+                  ? 'No community posts yet in your barangay.'
+                  : 'Community posts loaded.',
+            ),
+            posts: posts,
+          );
+        }
+        return _CommunityPostsFetchResult(
+          success: false,
+          message: _extractApiMessage(
+            body,
+            fallback: 'Unable to load community posts.',
+          ),
+        );
+      } on TimeoutException {
+        sawTimeout = true;
+      } catch (_) {
+        sawConnectionError = true;
+      }
+    }
+
+    if (sawTimeout) {
+      return const _CommunityPostsFetchResult(
+        success: false,
+        message: 'Loading community posts timed out. Please try again.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _CommunityPostsFetchResult(
+        success: false,
+        message: 'Cannot connect to server to load community posts.',
+      );
+    }
+    return const _CommunityPostsFetchResult(
+      success: false,
+      message: 'Community endpoint is not available yet.',
+    );
+  }
+
+  Future<_CommunityPostCreateResult> createPost({
+    required String message,
+    Uint8List? imageBytes,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _CommunityPostCreateResult(
+        success: false,
+        message: 'Please log in again before publishing a post.',
+      );
+    }
+
+    var sawConnectionError = false;
+    var sawTimeout = false;
+    final imagePayload = imageBytes == null ? null : base64Encode(imageBytes);
+    for (final endpoint in _AuthApi.instance._endpointCandidates('community/posts')) {
+      try {
+        final response = await http
+            .post(
+              endpoint,
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': 'Bearer $_authToken',
+              },
+              body: jsonEncode({
+                'message': message,
+                if (imagePayload != null && imagePayload.isNotEmpty)
+                  'image_base64': imagePayload,
+              }),
+            )
+            .timeout(_requestTimeout);
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        final body = decoded is Map<String, dynamic>
+            ? decoded
+            : const <String, dynamic>{};
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final rawPost = body['post'];
+          if (rawPost is! Map<String, dynamic>) {
+            return _CommunityPostCreateResult(
+              success: false,
+              message: _extractApiMessage(
+                body,
+                fallback: 'Post was accepted but no post payload was returned.',
+              ),
+            );
+          }
+          return _CommunityPostCreateResult(
+            success: true,
+            message: _extractApiMessage(body, fallback: 'Post published.'),
+            post: _fromApiPost(rawPost),
+          );
+        }
+        return _CommunityPostCreateResult(
+          success: false,
+          message: _extractApiMessage(
+            body,
+            fallback: 'Unable to publish post right now.',
+          ),
+        );
+      } on TimeoutException {
+        sawTimeout = true;
+      } catch (_) {
+        sawConnectionError = true;
+      }
+    }
+
+    if (sawTimeout) {
+      return const _CommunityPostCreateResult(
+        success: false,
+        message: 'Publish request timed out. Please retry.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _CommunityPostCreateResult(
+        success: false,
+        message: 'Cannot connect to server to publish the post.',
+      );
+    }
+    return const _CommunityPostCreateResult(
+      success: false,
+      message: 'Community posting endpoint is not available yet.',
+    );
+  }
+
+  _CommunityPost _fromApiPost(Map<String, dynamic> raw) {
+    int parseInt(dynamic value, {int fallback = 0}) {
+      if (value is int) {
+        return value;
+      }
+      if (value is String) {
+        return int.tryParse(value) ?? fallback;
+      }
+      return fallback;
+    }
+
+    bool parseBool(dynamic value) {
+      if (value is bool) {
+        return value;
+      }
+      if (value is num) {
+        return value != 0;
+      }
+      if (value is String) {
+        return value.toLowerCase() == 'true' || value == '1';
+      }
+      return false;
+    }
+
+    final postedRaw = raw['posted_at'];
+    final postedAt = postedRaw is String
+        ? DateTime.tryParse(postedRaw)?.toLocal()
+        : null;
+    final message = ((raw['message'] as String?) ?? '').trim();
+    final author = ((raw['author'] as String?) ?? '').trim();
+    final barangay = ((raw['barangay'] as String?) ?? '').trim();
+    final official = parseBool(raw['is_official']);
+    final imageBase64 = ((raw['image_base64'] as String?) ?? '').trim();
+    final decodedImage = _decodeImageBase64(imageBase64);
+
+    return _CommunityPost(
+      id: parseInt(raw['id'], fallback: DateTime.now().millisecondsSinceEpoch),
+      author: author.isEmpty
+          ? (official ? 'Barangay Update' : 'Verified Resident')
+          : author,
+      message: message,
+      postedAt: postedAt ?? DateTime.now(),
+      hasPhoto: decodedImage != null,
+      photoBytes: decodedImage,
+      isOfficial: official,
+      isVerifiedResident: !official,
+      neighborhood: barangay.isEmpty ? null : barangay,
+      likes: parseInt(raw['likes']),
+      comments: parseInt(raw['comments']),
+    );
+  }
+
+  String _extractApiMessage(
+    Map<String, dynamic> body, {
+    required String fallback,
+  }) {
+    final message = body['message'];
+    if (message is String && message.trim().isNotEmpty) {
+      return message.trim();
+    }
+    return fallback;
+  }
+
+  Uint8List? _decodeImageBase64(String value) {
+    if (value.isEmpty) {
+      return null;
+    }
+
+    String normalized = value;
+    final commaIndex = normalized.indexOf(',');
+    if (normalized.startsWith('data:image/') && commaIndex >= 0) {
+      normalized = normalized.substring(commaIndex + 1);
+    }
+    normalized = normalized.replaceAll(RegExp(r'\s+'), '');
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    try {
+      return base64Decode(normalized);
+    } catch (_) {
+      return null;
+    }
   }
 }
 
@@ -604,6 +900,7 @@ class _CommunityPageState extends State<CommunityPage>
   void initState() {
     super.initState();
     _CommunityHub.ensureSeeded();
+    _CommunityHub.replacePosts(const <_CommunityPost>[]);
     _tabController = TabController(length: 4, vsync: this);
     _CommunityHub.refresh.addListener(_handleHubRefresh);
     _liveSubscription = _CommunityHub.liveUpdates.stream.listen((signal) {
@@ -636,18 +933,16 @@ class _CommunityPageState extends State<CommunityPage>
 
   Future<void> _refreshCommunity({bool showToast = true}) async {
     setState(() => _loading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 520));
-    _CommunityHub.simulateRemotePulse();
+    final result = await _CommunityApi.instance.fetchPosts();
     if (!mounted) {
       return;
     }
+    if (result.success) {
+      _CommunityHub.replacePosts(result.posts);
+    }
     setState(() => _loading = false);
     if (showToast) {
-      _showFeature(
-        context,
-        _appText('Community feed refreshed.', 'Na-refresh ang community feed.'),
-        tone: _ToastTone.success,
-      );
+      _showFeature(context, result.message, tone: result.success ? _ToastTone.success : _ToastTone.warning);
     }
   }
 
@@ -659,9 +954,20 @@ class _CommunityPageState extends State<CommunityPage>
     if (createdPost == null || !mounted) {
       return;
     }
-    _CommunityHub.addPost(createdPost);
+    final result = await _CommunityApi.instance.createPost(
+      message: createdPost.message,
+      imageBytes: createdPost.photoBytes,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (!result.success || result.post == null) {
+      _showFeature(context, result.message, tone: _ToastTone.error);
+      return;
+    }
+    _CommunityHub.addPost(result.post!);
     _tabController.animateTo(0);
-    _showFeature(context, 'Post published to community feed.');
+    _showFeature(context, result.message, tone: _ToastTone.success);
   }
 
   Future<void> _openPost(_CommunityPost post) async {
