@@ -105,6 +105,7 @@ class _ResidentJobInvitationData {
 }
 
 class _ResidentCommercialRegistrationData {
+  final String id;
   final String businessName;
   final String ownerName;
   final String businessType;
@@ -114,8 +115,10 @@ class _ResidentCommercialRegistrationData {
   final String businessPermitNumber;
   final String businessPermitFileName;
   final bool merchantVerified;
+  final String verificationStatus;
 
   const _ResidentCommercialRegistrationData({
+    this.id = '',
     required this.businessName,
     required this.ownerName,
     required this.businessType,
@@ -125,6 +128,7 @@ class _ResidentCommercialRegistrationData {
     required this.businessPermitNumber,
     required this.businessPermitFileName,
     this.merchantVerified = false,
+    this.verificationStatus = 'Pending Review',
   });
 }
 
@@ -261,6 +265,11 @@ class _ResidentCommercialSellerHub {
     _emit();
   }
 
+  static void replaceBusinessRegistration(_ResidentCommercialRegistrationData? data) {
+    registration = data;
+    _emit();
+  }
+
   static double ratingForSeller(String sellerName, {double fallback = 4.8}) {
     final items = feedback.where((item) => item.sellerName == sellerName).toList();
     if (items.isEmpty) {
@@ -363,6 +372,13 @@ class _ResidentCommercialSellerHub {
       return;
     }
     inventoryProducts.removeAt(index);
+    _emit();
+  }
+
+  static void replaceInventoryProducts(List<_ResidentProductData> incoming) {
+    inventoryProducts
+      ..clear()
+      ..addAll(incoming);
     _emit();
   }
 }

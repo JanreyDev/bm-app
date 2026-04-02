@@ -485,6 +485,7 @@ class _CommunityApi {
   _CommunityApi._();
   static final _CommunityApi instance = _CommunityApi._();
   static const Duration _requestTimeout = Duration(seconds: 6);
+  static const int _maxImagePayloadChars = 1800000;
 
   Future<_CommunityPostsFetchResult> fetchPosts() async {
     if (_authToken == null || _authToken!.isEmpty) {
@@ -586,6 +587,12 @@ class _CommunityApi {
     var sawConnectionError = false;
     var sawTimeout = false;
     final imagePayload = imageBytes == null ? null : base64Encode(imageBytes);
+    if (imagePayload != null && imagePayload.length > _maxImagePayloadChars) {
+      return const _CommunityPostCreateResult(
+        success: false,
+        message: 'Image is too large. Please choose a smaller image.',
+      );
+    }
     for (final endpoint in _AuthApi.instance._endpointCandidates('community/posts')) {
       try {
         final response = await http
@@ -674,6 +681,12 @@ class _CommunityApi {
     var sawConnectionError = false;
     var sawTimeout = false;
     final imagePayload = imageBytes == null ? null : base64Encode(imageBytes);
+    if (imagePayload != null && imagePayload.length > _maxImagePayloadChars) {
+      return const _CommunityPostCreateResult(
+        success: false,
+        message: 'Image is too large. Please choose a smaller image.',
+      );
+    }
     for (final endpoint in _AuthApi.instance._endpointCandidates('community/posts/$postId')) {
       try {
         final response = await http
@@ -1143,6 +1156,20 @@ class _CommunityApi {
     final message = body['message'];
     if (message is String && message.trim().isNotEmpty) {
       return message.trim();
+    }
+    final errors = body['errors'];
+    if (errors is Map<String, dynamic>) {
+      for (final entry in errors.values) {
+        if (entry is List && entry.isNotEmpty) {
+          final first = entry.first;
+          if (first is String && first.trim().isNotEmpty) {
+            return first.trim();
+          }
+        }
+        if (entry is String && entry.trim().isNotEmpty) {
+          return entry.trim();
+        }
+      }
     }
     return fallback;
   }
@@ -2147,11 +2174,22 @@ class _CommunityComposerSheetState extends State<_CommunityComposerSheet> {
   }
 
   Future<void> _pickImage() async {
-    final image = await ImagePicker().pickImage(source: ImageSource.gallery);
+    final image = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 72,
+    );
     if (image == null) {
       return;
     }
     final bytes = await image.readAsBytes();
+    if (bytes.isEmpty) {
+      if (mounted) {
+        _showFeature(context, 'Selected image is invalid. Please choose another.');
+      }
+      return;
+    }
     if (!mounted) {
       return;
     }

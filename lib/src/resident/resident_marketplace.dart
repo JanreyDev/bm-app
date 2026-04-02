@@ -69,6 +69,68 @@ const _residentMarketplaceProducts = [
   ),
 ];
 
+bool _isHttpImageSource(String source) {
+  return source.startsWith('http://') || source.startsWith('https://');
+}
+
+Uint8List? _decodeDataImageSource(String source) {
+  if (!source.startsWith('data:image')) {
+    return null;
+  }
+  final comma = source.indexOf(',');
+  if (comma < 0 || comma >= source.length - 1) {
+    return null;
+  }
+  try {
+    return base64Decode(source.substring(comma + 1));
+  } catch (_) {
+    return null;
+  }
+}
+
+Widget _buildMarketProductImage({
+  required String source,
+  required IconData fallbackIcon,
+  required BoxFit fit,
+  Widget Function()? fallbackBuilder,
+}) {
+  final fallback =
+      fallbackBuilder?.call() ??
+      Center(
+        child: Icon(
+          fallbackIcon,
+          size: 48,
+          color: const Color(0xFF4650B4),
+        ),
+      );
+  if (source.trim().isEmpty) {
+    return fallback;
+  }
+  if (_isHttpImageSource(source)) {
+    return Image.network(
+      source,
+      width: double.infinity,
+      fit: fit,
+      errorBuilder: (_, __, ___) => fallback,
+    );
+  }
+  final dataBytes = _decodeDataImageSource(source);
+  if (dataBytes != null) {
+    return Image.memory(
+      dataBytes,
+      width: double.infinity,
+      fit: fit,
+      errorBuilder: (_, __, ___) => fallback,
+    );
+  }
+  return Image.asset(
+    source,
+    width: double.infinity,
+    fit: fit,
+    errorBuilder: (_, __, ___) => fallback,
+  );
+}
+
 class ResidentMarketPage extends StatefulWidget {
   const ResidentMarketPage({super.key});
 
@@ -87,11 +149,14 @@ class _ResidentMarketPageState extends State<ResidentMarketPage> {
   final TextEditingController _searchController = TextEditingController();
   String _selectedCategory = 'All';
   String _selectedSort = _sortOptions.first;
+  bool _apiCatalogReady = false;
+  bool _apiSyncWarned = false;
 
   @override
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+    unawaited(_syncMarketProductsFromApi());
   }
 
   @override
@@ -104,6 +169,28 @@ class _ResidentMarketPageState extends State<ResidentMarketPage> {
 
   void _onSearchChanged() => setState(() {});
 
+  Future<void> _syncMarketProductsFromApi() async {
+    final result = await _SellerApi.instance.fetchMarketProducts();
+    if (!mounted) {
+      return;
+    }
+    if (!result.success) {
+      if (!_apiSyncWarned) {
+        _apiSyncWarned = true;
+        _showFeature(
+          context,
+          'Marketplace backend sync unavailable: ${result.message}',
+          tone: _ToastTone.warning,
+        );
+      }
+      return;
+    }
+    _ResidentCommercialSellerHub.replaceInventoryProducts(result.products);
+    if (mounted) {
+      setState(() => _apiCatalogReady = true);
+    }
+  }
+
   List<String> get _categories {
     final values = <String>{'All'};
     values.addAll(_ResidentCommercialSellerHub.managedCategories);
@@ -113,10 +200,10 @@ class _ResidentMarketPageState extends State<ResidentMarketPage> {
     return values.toList();
   }
 
-  List<_ResidentProductData> get _marketplaceCatalog => [
-    ..._ResidentCommercialSellerHub.inventoryProducts,
-    ..._residentMarketplaceProducts,
-  ];
+  List<_ResidentProductData> get _marketplaceCatalog {
+    final dynamicProducts = _ResidentCommercialSellerHub.inventoryProducts;
+    return dynamicProducts;
+  }
 
   List<_ResidentProductData> get _visibleProducts {
     final query = _searchController.text.trim().toLowerCase();
@@ -727,17 +814,10 @@ class _ResidentMarketPageState extends State<ResidentMarketPage> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(13),
-                    child: Image.asset(
-                      item.imageAsset,
-                      width: double.infinity,
+                    child: _buildMarketProductImage(
+                      source: item.imageAsset,
+                      fallbackIcon: item.icon,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Center(
-                        child: Icon(
-                          item.icon,
-                          size: 48,
-                          color: const Color(0xFF4650B4),
-                        ),
-                      ),
                     ),
                   ),
                 ),
@@ -1005,11 +1085,11 @@ class _ResidentProductPreviewPageState
                 borderRadius: BorderRadius.circular(20),
                 child: SizedBox(
                   height: 230,
-                  child: Image.asset(
-                    item.imageAsset,
-                    width: double.infinity,
+                  child: _buildMarketProductImage(
+                    source: item.imageAsset,
+                    fallbackIcon: item.icon,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    fallbackBuilder: () => Container(
                       color: Colors.grey.shade300,
                       child: Icon(
                         item.icon,

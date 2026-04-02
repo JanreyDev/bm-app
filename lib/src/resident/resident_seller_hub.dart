@@ -1,5 +1,587 @@
 part of barangaymo_app;
 
+class _MerchantRegistrationFetchResult {
+  final bool success;
+  final String message;
+  final _ResidentCommercialRegistrationData? registration;
+
+  const _MerchantRegistrationFetchResult({
+    required this.success,
+    required this.message,
+    this.registration,
+  });
+}
+
+class _MerchantRegistrationSubmitResult {
+  final bool success;
+  final String message;
+  final _ResidentCommercialRegistrationData? registration;
+
+  const _MerchantRegistrationSubmitResult({
+    required this.success,
+    required this.message,
+    this.registration,
+  });
+}
+
+class _MarketProductsFetchResult {
+  final bool success;
+  final String message;
+  final List<_ResidentProductData> products;
+
+  const _MarketProductsFetchResult({
+    required this.success,
+    required this.message,
+    this.products = const <_ResidentProductData>[],
+  });
+}
+
+class _MarketProductSubmitResult {
+  final bool success;
+  final String message;
+  final _ResidentProductData? product;
+
+  const _MarketProductSubmitResult({
+    required this.success,
+    required this.message,
+    this.product,
+  });
+}
+
+class _SellerApi {
+  _SellerApi._();
+  static final _SellerApi instance = _SellerApi._();
+  static const Duration _requestTimeout = Duration(seconds: 8);
+
+  String _normalizedProductImageSource(String rawSource, String category) {
+    final source = rawSource.trim();
+    if (source.isEmpty) {
+      return _merchantProductAsset(category);
+    }
+    if (source.startsWith('data:image')) {
+      return source;
+    }
+    if (source.startsWith('http://') || source.startsWith('https://')) {
+      return source;
+    }
+    if (source.startsWith('public/')) {
+      return source;
+    }
+
+    final bases = _AuthApi.instance._baseUrlCandidates();
+    final base = bases.isNotEmpty ? bases.first : _configuredApiBaseUrl;
+    final trimmedBase = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+    final trimmedPath = source.startsWith('/') ? source.substring(1) : source;
+    return '$trimmedBase/$trimmedPath';
+  }
+
+  Future<_MerchantRegistrationFetchResult> fetchMerchantRegistration() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _MerchantRegistrationFetchResult(
+        success: false,
+        message: 'Please log in again to load merchant registration.',
+      );
+    }
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    final paths = <String>[
+      'market/merchant-registration',
+      'merchant-registration',
+      'market/merchant',
+    ];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http
+              .get(
+                endpoint,
+                headers: {
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $_authToken',
+                },
+              )
+              .timeout(_requestTimeout);
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          final body = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final raw = body['registration'];
+            _ResidentCommercialRegistrationData? registration;
+            if (raw is Map<String, dynamic>) {
+              registration = _mapRegistration(raw);
+            }
+            return _MerchantRegistrationFetchResult(
+              success: true,
+              message: _extractApiMessage(body, fallback: 'Merchant registration loaded.'),
+              registration: registration,
+            );
+          }
+          return _MerchantRegistrationFetchResult(
+            success: false,
+            message: _extractApiMessage(body, fallback: 'Unable to load merchant registration.'),
+          );
+        } on TimeoutException {
+          sawTimeout = true;
+        } catch (_) {
+          sawConnectionError = true;
+        }
+      }
+    }
+    if (sawTimeout) {
+      return const _MerchantRegistrationFetchResult(
+        success: false,
+        message: 'Loading merchant registration timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _MerchantRegistrationFetchResult(
+        success: false,
+        message: 'Cannot connect to server to load merchant registration.',
+      );
+    }
+    return const _MerchantRegistrationFetchResult(
+      success: false,
+      message: 'Merchant registration endpoint is not available yet.',
+    );
+  }
+
+  Future<_MerchantRegistrationSubmitResult> submitMerchantRegistration({
+    required String businessName,
+    required String ownerName,
+    required String businessType,
+    required String contactNumber,
+    required String address,
+    required String meetupSpot,
+    required String businessPermitNumber,
+    required String businessPermitFileName,
+    String permitImageBase64 = '',
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _MerchantRegistrationSubmitResult(
+        success: false,
+        message: 'Please log in again before merchant registration.',
+      );
+    }
+
+    final payload = jsonEncode({
+      'business_name': businessName.trim(),
+      'owner_name': ownerName.trim(),
+      'business_type': businessType.trim(),
+      'contact_number': contactNumber.trim(),
+      'address': address.trim(),
+      'meetup_spot': meetupSpot.trim(),
+      'business_permit_number': businessPermitNumber.trim(),
+      'business_permit_file_name': businessPermitFileName.trim(),
+      if (permitImageBase64.trim().isNotEmpty)
+        'business_permit_image_base64': permitImageBase64.trim(),
+    });
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    final paths = <String>[
+      'market/merchant-registration',
+      'merchant-registration',
+      'market/merchant',
+    ];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http
+              .post(
+                endpoint,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $_authToken',
+                },
+                body: payload,
+              )
+              .timeout(_requestTimeout);
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          final body = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final raw = body['registration'];
+            _ResidentCommercialRegistrationData? registration;
+            if (raw is Map<String, dynamic>) {
+              registration = _mapRegistration(raw);
+            }
+            return _MerchantRegistrationSubmitResult(
+              success: true,
+              message: _extractApiMessage(
+                body,
+                fallback: 'Commercial seller registration submitted.',
+              ),
+              registration: registration,
+            );
+          }
+          return _MerchantRegistrationSubmitResult(
+            success: false,
+            message: _extractApiMessage(
+              body,
+              fallback: 'Unable to submit merchant registration.',
+            ),
+          );
+        } on TimeoutException {
+          sawTimeout = true;
+        } catch (_) {
+          sawConnectionError = true;
+        }
+      }
+    }
+
+    if (sawTimeout) {
+      return const _MerchantRegistrationSubmitResult(
+        success: false,
+        message: 'Submitting registration timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _MerchantRegistrationSubmitResult(
+        success: false,
+        message: 'Cannot connect to server to submit registration.',
+      );
+    }
+    return const _MerchantRegistrationSubmitResult(
+      success: false,
+      message: 'Merchant registration endpoint is not available yet.',
+    );
+  }
+
+  Future<_MarketProductsFetchResult> fetchMarketProducts() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _MarketProductsFetchResult(
+        success: false,
+        message: 'Please log in again to load market products.',
+      );
+    }
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    final paths = <String>['market/products', 'products'];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http
+              .get(
+                endpoint,
+                headers: {
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $_authToken',
+                },
+              )
+              .timeout(_requestTimeout);
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          final body = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final rawList = body['products'] ?? body['data'];
+            if (rawList is! List) {
+              return const _MarketProductsFetchResult(
+                success: false,
+                message: 'Market products payload is invalid.',
+              );
+            }
+            final out = <_ResidentProductData>[];
+            for (final item in rawList) {
+              if (item is! Map<String, dynamic>) {
+                continue;
+              }
+              final mapped = _mapProduct(item);
+              if (mapped != null) {
+                out.add(mapped);
+              }
+            }
+            return _MarketProductsFetchResult(
+              success: true,
+              message: _extractApiMessage(body, fallback: 'Market products loaded.'),
+              products: out,
+            );
+          }
+          return _MarketProductsFetchResult(
+            success: false,
+            message: _extractApiMessage(body, fallback: 'Unable to load market products.'),
+          );
+        } on TimeoutException {
+          sawTimeout = true;
+        } catch (_) {
+          sawConnectionError = true;
+        }
+      }
+    }
+
+    if (sawTimeout) {
+      return const _MarketProductsFetchResult(
+        success: false,
+        message: 'Loading market products timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _MarketProductsFetchResult(
+        success: false,
+        message: 'Cannot connect to server to load market products.',
+      );
+    }
+    return const _MarketProductsFetchResult(
+      success: false,
+      message: 'Market products endpoint is not available yet.',
+    );
+  }
+
+  Future<_MarketProductSubmitResult> submitMarketProduct({
+    required String title,
+    required String category,
+    required String description,
+    required double price,
+    double? originalPrice,
+    required int stock,
+    required String eta,
+    required String sellerZone,
+    required String sellerPurok,
+    String thumbnailBase64 = '',
+    String thumbnailFileName = '',
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _MarketProductSubmitResult(
+        success: false,
+        message: 'Please log in again before adding a product.',
+      );
+    }
+
+    final payload = jsonEncode({
+      'title': title.trim(),
+      'category': category.trim(),
+      'description': description.trim(),
+      'price': price,
+      if (originalPrice != null) 'original_price': originalPrice,
+      'stock': stock,
+      'eta': eta.trim(),
+      'seller_zone': sellerZone.trim(),
+      'seller_purok': sellerPurok.trim(),
+      if (thumbnailBase64.trim().isNotEmpty)
+        'thumbnail_base64': thumbnailBase64.trim(),
+      if (thumbnailFileName.trim().isNotEmpty)
+        'thumbnail_file_name': thumbnailFileName.trim(),
+    });
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    final paths = <String>['market/products', 'products'];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http
+              .post(
+                endpoint,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $_authToken',
+                },
+                body: payload,
+              )
+              .timeout(_requestTimeout);
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          final body = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final raw = body['product'] ?? body['data'];
+            _ResidentProductData? product;
+            if (raw is Map<String, dynamic>) {
+              product = _mapProduct(raw);
+            }
+            return _MarketProductSubmitResult(
+              success: true,
+              message: _extractApiMessage(body, fallback: 'Product saved successfully.'),
+              product: product,
+            );
+          }
+          return _MarketProductSubmitResult(
+            success: false,
+            message: _extractApiMessage(body, fallback: 'Unable to save product.'),
+          );
+        } on TimeoutException {
+          sawTimeout = true;
+        } catch (_) {
+          sawConnectionError = true;
+        }
+      }
+    }
+
+    if (sawTimeout) {
+      return const _MarketProductSubmitResult(
+        success: false,
+        message: 'Saving product timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _MarketProductSubmitResult(
+        success: false,
+        message: 'Cannot connect to server to save product.',
+      );
+    }
+    return const _MarketProductSubmitResult(
+      success: false,
+      message: 'Market products endpoint is not available yet.',
+    );
+  }
+
+  _ResidentProductData? _mapProduct(Map<String, dynamic> raw) {
+    String read(String key, {String fallback = ''}) {
+      final value = raw[key];
+      if (value == null) {
+        return fallback;
+      }
+      if (value is String) {
+        final trimmed = value.trim();
+        return trimmed.isEmpty ? fallback : trimmed;
+      }
+      final text = value.toString().trim();
+      return text.isEmpty ? fallback : text;
+    }
+
+    double readDouble(String key, {double fallback = 0}) {
+      final value = raw[key];
+      if (value is num) {
+        return value.toDouble();
+      }
+      if (value is String) {
+        return double.tryParse(value.trim()) ?? fallback;
+      }
+      return fallback;
+    }
+
+    int readInt(String key, {int fallback = 0}) {
+      final value = raw[key];
+      if (value is num) {
+        return value.toInt();
+      }
+      if (value is String) {
+        return int.tryParse(value.trim()) ?? fallback;
+      }
+      return fallback;
+    }
+
+    final title = read('title');
+    if (title.isEmpty) {
+      return null;
+    }
+    final category = read('category', fallback: 'Retail');
+    final originalPriceRaw = readDouble('original_price', fallback: 0);
+    final originalPrice = originalPriceRaw > 0 ? originalPriceRaw : null;
+    final imageCandidate = read(
+      'thumbnail_url',
+      fallback: read(
+        'thumbnail_path',
+        fallback: read(
+          'thumbnail',
+          fallback: read(
+            'image_url',
+            fallback: read('image_asset', fallback: _merchantProductAsset(category)),
+          ),
+        ),
+      ),
+    );
+    final imageAsset = _normalizedProductImageSource(imageCandidate, category);
+    return _ResidentProductData(
+      title: title,
+      seller: read('seller', fallback: read('seller_name', fallback: 'Commercial Seller')),
+      price: readDouble('price', fallback: 0),
+      originalPrice: originalPrice,
+      icon: _merchantProductIcon(category),
+      imageAsset: imageAsset,
+      description: read('description', fallback: 'Marketplace product'),
+      category: category,
+      rating: readDouble('rating', fallback: 4.8),
+      reviews: readInt('reviews', fallback: 0),
+      sold: readInt('sold', fallback: 0),
+      stock: readInt('stock', fallback: 0),
+      eta: read('eta', fallback: 'Available soon'),
+      verified: raw['verified'] == true || raw['verified'] == 1 || raw['verified'] == '1',
+      sellerZone: read('seller_zone', fallback: _marketDeliveryZones.first),
+      sellerPurok: read('seller_purok', fallback: _marketDeliveryPuroks.first),
+    );
+  }
+
+  _ResidentCommercialRegistrationData _mapRegistration(Map<String, dynamic> raw) {
+    String read(String key, {String fallback = ''}) {
+      final value = raw[key];
+      if (value == null) {
+        return fallback;
+      }
+      if (value is String) {
+        final trimmed = value.trim();
+        return trimmed.isEmpty ? fallback : trimmed;
+      }
+      final text = value.toString().trim();
+      return text.isEmpty ? fallback : text;
+    }
+
+    final verifiedRaw = raw['merchant_verified'];
+    final verified =
+        verifiedRaw == true ||
+        verifiedRaw == 1 ||
+        verifiedRaw == '1' ||
+        (verifiedRaw is String && verifiedRaw.toLowerCase() == 'true');
+
+    return _ResidentCommercialRegistrationData(
+      id: read('id'),
+      businessName: read('business_name'),
+      ownerName: read('owner_name'),
+      businessType: read('business_type'),
+      contactNumber: read('contact_number'),
+      address: read('address'),
+      meetupSpot: read('meetup_spot'),
+      businessPermitNumber: read('business_permit_number'),
+      businessPermitFileName: read('business_permit_file_name'),
+      merchantVerified: verified,
+      verificationStatus: read(
+        'verification_status',
+        fallback: verified ? 'Verified' : 'Pending Review',
+      ),
+    );
+  }
+
+  String _extractApiMessage(
+    Map<String, dynamic> body, {
+    required String fallback,
+  }) {
+    final message = body['message'];
+    if (message is String && message.trim().isNotEmpty) {
+      return message.trim();
+    }
+    final errors = body['errors'];
+    if (errors is Map<String, dynamic>) {
+      for (final value in errors.values) {
+        if (value is List && value.isNotEmpty) {
+          final first = value.first;
+          if (first is String && first.trim().isNotEmpty) {
+            return first.trim();
+          }
+        }
+      }
+    }
+    return fallback;
+  }
+}
+
 class ResidentSellHubPage extends StatefulWidget {
   final int initialTab;
   const ResidentSellHubPage({super.key, this.initialTab = 0});
@@ -15,6 +597,15 @@ class _ResidentSellHubPageState extends State<ResidentSellHubPage> {
   void initState() {
     super.initState();
     selected = widget.initialTab;
+    unawaited(_syncMerchantRegistrationFromApi());
+  }
+
+  Future<void> _syncMerchantRegistrationFromApi() async {
+    final result = await _SellerApi.instance.fetchMerchantRegistration();
+    if (!mounted || !result.success) {
+      return;
+    }
+    _ResidentCommercialSellerHub.replaceBusinessRegistration(result.registration);
   }
 
   @override
@@ -164,6 +755,7 @@ class ResidentCommercialPage extends StatelessWidget {
           valueListenable: _ResidentCommercialSellerHub.refresh,
           builder: (_, ___, ____) {
             final registration = _ResidentCommercialSellerHub.registration;
+            final canAccessCommercial = verified || registration?.merchantVerified == true;
             final inventory = _ResidentCommercialSellerHub.inventoryProducts;
             final sellerName = registration?.businessName ?? 'Commercial Seller';
             final salesCount = _ResidentCommercialSellerHub.salesCountForSeller(
@@ -212,7 +804,7 @@ class ResidentCommercialPage extends StatelessWidget {
                             child: Text(
                               registration.merchantVerified
                                   ? 'Verified Merchant'
-                                  : 'Permit Pending',
+                                  : registration.verificationStatus,
                               style: TextStyle(
                                 color: registration.merchantVerified
                                     ? const Color(0xFF197A46)
@@ -224,7 +816,7 @@ class ResidentCommercialPage extends StatelessWidget {
                           ),
                   ),
                 ),
-                if (!verified)
+                if (!canAccessCommercial)
                   _CommercialGateCard(
                     icon: Icons.verified_user,
                     title: 'RBI Verification Required',
@@ -544,7 +1136,11 @@ Future<void> _openMerchantCategoryManager(BuildContext context) async {
       );
     },
   );
-  controller.dispose();
+  unawaited(
+    Future<void>.delayed(const Duration(milliseconds: 300), () {
+      controller.dispose();
+    }),
+  );
 }
 
 Future<void> _openMerchantBannerManager(BuildContext context) async {
@@ -654,8 +1250,12 @@ Future<void> _openMerchantBannerManager(BuildContext context) async {
       );
     },
   );
-  titleController.dispose();
-  subtitleController.dispose();
+  unawaited(
+    Future<void>.delayed(const Duration(milliseconds: 300), () {
+      titleController.dispose();
+      subtitleController.dispose();
+    }),
+  );
 }
 
 class _CommercialGateCard extends StatelessWidget {
@@ -765,14 +1365,23 @@ class ResidentCommercialRegistrationPage extends StatefulWidget {
 
 class _ResidentCommercialRegistrationPageState
     extends State<ResidentCommercialRegistrationPage> {
+  static const int _maxPermitBase64Chars = 1800000;
   final _businessController = TextEditingController();
-  final _ownerController = TextEditingController(text: 'Shamira Balandra');
-  final _contactController = TextEditingController(text: '09123456789');
+  final _ownerController = TextEditingController();
+  final _contactController = TextEditingController();
   final _addressController = TextEditingController();
   final _meetupController = TextEditingController(text: 'Barangay Hall Gate');
   final _permitNumberController = TextEditingController();
   String _businessType = 'Retail Store';
   XFile? _permitAttachment;
+  bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ownerController.text = _currentResidentProfile?.displayName ?? '';
+    _contactController.text = _currentResidentProfile?.mobile ?? '';
+  }
 
   @override
   void dispose() {
@@ -785,7 +1394,10 @@ class _ResidentCommercialRegistrationPageState
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (_submitting) {
+      return;
+    }
     if (!_ResidentProfileVerificationHub.isVerified) {
       _showFeature(context, 'RBI verification is required before registration.');
       return;
@@ -806,6 +1418,54 @@ class _ResidentCommercialRegistrationPageState
       _showFeature(context, 'Complete all business registration fields.');
       return;
     }
+    setState(() => _submitting = true);
+    String permitImageBase64 = '';
+    try {
+      final bytes = await _permitAttachment!.readAsBytes();
+      if (bytes.isNotEmpty) {
+        permitImageBase64 = base64Encode(bytes);
+        if (permitImageBase64.length > _maxPermitBase64Chars) {
+          if (!mounted) {
+            return;
+          }
+          setState(() => _submitting = false);
+          _showFeature(
+            context,
+            'Permit image is too large. Please choose a smaller image.',
+            tone: _ToastTone.warning,
+          );
+          return;
+        }
+      }
+    } catch (_) {}
+
+    final apiResult = await _SellerApi.instance.submitMerchantRegistration(
+      businessName: business,
+      ownerName: owner,
+      businessType: _businessType,
+      contactNumber: contact,
+      address: address,
+      meetupSpot: meetup,
+      businessPermitNumber: permitNumber,
+      businessPermitFileName: _permitAttachment!.name,
+      permitImageBase64: permitImageBase64,
+    );
+    if (!mounted) {
+      return;
+    }
+
+    if (apiResult.success && apiResult.registration != null) {
+      _ResidentCommercialSellerHub.replaceBusinessRegistration(apiResult.registration);
+      final parentContext = Navigator.of(context).context;
+      Navigator.pop(context);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (parentContext.mounted) {
+          _showFeature(parentContext, apiResult.message);
+        }
+      });
+      return;
+    }
+
     final verified = permitNumber.toUpperCase().startsWith('BP-') ||
         permitNumber.length >= 10;
     _ResidentCommercialSellerHub.registerBusiness(
@@ -819,15 +1479,20 @@ class _ResidentCommercialRegistrationPageState
         businessPermitNumber: permitNumber,
         businessPermitFileName: _permitAttachment!.name,
         merchantVerified: verified,
+        verificationStatus: verified ? 'Verified' : 'Pending Review',
       ),
     );
+    final parentContext = Navigator.of(context).context;
     Navigator.pop(context);
-    _showFeature(
-      context,
-      verified
-          ? 'Commercial seller registration submitted and verified.'
-          : 'Commercial seller registration submitted for permit review.',
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (parentContext.mounted) {
+        _showFeature(
+          parentContext,
+          'Saved locally only: ${apiResult.message}',
+          tone: _ToastTone.warning,
+        );
+      }
+    });
   }
 
   @override
@@ -901,6 +1566,9 @@ class _ResidentCommercialRegistrationPageState
             onPressed: () async {
               final picked = await ImagePicker().pickImage(
                 source: ImageSource.gallery,
+                maxWidth: 1600,
+                maxHeight: 1600,
+                imageQuality: 70,
               );
               if (picked == null) {
                 return;
@@ -945,11 +1613,11 @@ class _ResidentCommercialRegistrationPageState
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
           child: FilledButton(
-            onPressed: _submit,
+            onPressed: _submitting ? null : _submit,
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFF2E35D3),
             ),
-            child: const Text('Submit Registration'),
+            child: Text(_submitting ? 'Submitting...' : 'Submit Registration'),
           ),
         ),
       ),
@@ -1163,6 +1831,7 @@ class ResidentCommercialAddProductPage extends StatefulWidget {
 
 class _ResidentCommercialAddProductPageState
     extends State<ResidentCommercialAddProductPage> {
+  static const int _maxThumbnailBytes = 2 * 1024 * 1024;
   late final TextEditingController _nameController;
   late final TextEditingController _categoryController;
   late final TextEditingController _descriptionController;
@@ -1170,6 +1839,8 @@ class _ResidentCommercialAddProductPageState
   late final TextEditingController _originalPriceController;
   late final TextEditingController _stockController;
   late final TextEditingController _etaController;
+  XFile? _thumbnailAttachment;
+  Uint8List? _thumbnailBytes;
 
   @override
   void initState() {
@@ -1194,6 +1865,14 @@ class _ResidentCommercialAddProductPageState
     _etaController = TextEditingController(
       text: existing?.eta ?? 'Pickup at Brgy Hall today',
     );
+    if (existing != null && existing.imageAsset.startsWith('data:image')) {
+      try {
+        final comma = existing.imageAsset.indexOf(',');
+        if (comma > -1 && comma < existing.imageAsset.length - 1) {
+          _thumbnailBytes = base64Decode(existing.imageAsset.substring(comma + 1));
+        }
+      } catch (_) {}
+    }
   }
 
   @override
@@ -1208,7 +1887,62 @@ class _ResidentCommercialAddProductPageState
     super.dispose();
   }
 
-  void _save() {
+  String _thumbnailMimeType(String fileName) {
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.png')) {
+      return 'image/png';
+    }
+    if (lower.endsWith('.webp')) {
+      return 'image/webp';
+    }
+    if (lower.endsWith('.gif')) {
+      return 'image/gif';
+    }
+    return 'image/jpeg';
+  }
+
+  Future<void> _pickThumbnail() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+      maxWidth: 1400,
+      maxHeight: 1400,
+    );
+    if (picked == null || !mounted) {
+      return;
+    }
+    try {
+      final bytes = await picked.readAsBytes();
+      if (bytes.isEmpty) {
+        _showFeature(context, 'Selected image is empty.', tone: _ToastTone.warning);
+        return;
+      }
+      if (bytes.length > _maxThumbnailBytes) {
+        _showFeature(
+          context,
+          'Thumbnail is too large. Please use an image below 2 MB.',
+          tone: _ToastTone.warning,
+        );
+        return;
+      }
+      setState(() {
+        _thumbnailAttachment = picked;
+        _thumbnailBytes = bytes;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showFeature(
+        context,
+        'Unable to read thumbnail image.',
+        tone: _ToastTone.warning,
+      );
+    }
+  }
+
+  Future<void> _save() async {
     final registration = _ResidentCommercialSellerHub.registration;
     final title = _nameController.text.trim();
     final category = _categoryController.text.trim();
@@ -1228,9 +1962,66 @@ class _ResidentCommercialAddProductPageState
         stock == null ||
         stock < 1 ||
         eta.isEmpty) {
-      _showFeature(context, 'Complete product details, price, stock, and ETA.');
+      _showFeature(
+        context,
+        'Please complete all fields. Product description must be at least 8 characters.',
+      );
       return;
     }
+    final sellerZone = widget.existingProduct?.sellerZone ?? _marketDeliveryZones.first;
+    final sellerPurok = widget.existingProduct?.sellerPurok ?? _marketDeliveryPuroks.first;
+    final thumbnailBase64 = _thumbnailBytes == null
+        ? ''
+        : base64Encode(_thumbnailBytes!);
+    final thumbnailFileName = _thumbnailAttachment?.name ?? '';
+
+    final apiResult = await _SellerApi.instance.submitMarketProduct(
+      title: title,
+      category: category,
+      description: description,
+      price: price,
+      originalPrice: original,
+      stock: stock,
+      eta: eta,
+      sellerZone: sellerZone,
+      sellerPurok: sellerPurok,
+      thumbnailBase64: thumbnailBase64,
+      thumbnailFileName: thumbnailFileName,
+    );
+
+    if (!mounted) {
+      return;
+    }
+    if (apiResult.success) {
+      final refreshed = await _SellerApi.instance.fetchMarketProducts();
+      if (refreshed.success) {
+        _ResidentCommercialSellerHub.replaceInventoryProducts(refreshed.products);
+      } else if (apiResult.product != null) {
+        _ResidentCommercialSellerHub.saveInventoryProduct(
+          apiResult.product!,
+          editIndex: widget.editIndex,
+        );
+      }
+      if (!mounted) {
+        return;
+      }
+      final parentContext = Navigator.of(context).context;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const ResidentCommercialSavedPage()),
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (parentContext.mounted) {
+          _showFeature(parentContext, apiResult.message, tone: _ToastTone.success);
+        }
+      });
+      return;
+    }
+
+    final localImageAsset = _thumbnailBytes == null
+        ? _merchantProductAsset(category)
+        : 'data:${_thumbnailMimeType(thumbnailFileName)};base64,$thumbnailBase64';
+
     _ResidentCommercialSellerHub.saveInventoryProduct(
       _ResidentProductData(
         title: title,
@@ -1238,7 +2029,7 @@ class _ResidentCommercialAddProductPageState
         price: price,
         originalPrice: original,
         icon: _merchantProductIcon(category),
-        imageAsset: _merchantProductAsset(category),
+        imageAsset: localImageAsset,
         description: description,
         category: category,
         rating: widget.existingProduct?.rating ?? 4.8,
@@ -1247,16 +2038,25 @@ class _ResidentCommercialAddProductPageState
         stock: stock,
         eta: eta,
         verified: registration.merchantVerified,
-        sellerZone: widget.existingProduct?.sellerZone ?? _marketDeliveryZones.first,
-        sellerPurok:
-            widget.existingProduct?.sellerPurok ?? _marketDeliveryPuroks.first,
+        sellerZone: sellerZone,
+        sellerPurok: sellerPurok,
       ),
       editIndex: widget.editIndex,
     );
+    final parentContext = Navigator.of(context).context;
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const ResidentCommercialSavedPage()),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (parentContext.mounted) {
+        _showFeature(
+          parentContext,
+          'Saved locally only: ${apiResult.message}',
+          tone: _ToastTone.warning,
+        );
+      }
+    });
   }
 
   @override
@@ -1311,6 +2111,69 @@ class _ResidentCommercialAddProductPageState
               onPressed: () => _openMerchantCategoryManager(context),
               icon: const Icon(Icons.add_circle_outline_rounded),
               label: const Text('Manage Categories'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFF),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE2E6F4)),
+            ),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: SizedBox(
+                    width: 72,
+                    height: 72,
+                    child: _thumbnailBytes != null
+                        ? Image.memory(_thumbnailBytes!, fit: BoxFit.cover)
+                        : const DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Color(0xFFE8EAFF), Color(0xFFF4F5FF)],
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.photo_size_select_actual_rounded,
+                              color: Color(0xFF4A55C8),
+                              size: 28,
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Product thumbnail',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF2C3552),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _thumbnailAttachment?.name ?? 'No image selected',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF69728D),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                FilledButton.tonal(
+                  onPressed: _pickThumbnail,
+                  child: const Text('Choose'),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 8),
