@@ -483,6 +483,7 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
   }
 
   Future<void> _openRequestComposer(_ResidentRequestActionEntry entry) async {
+    final parentContext = context;
     final purposeController = TextEditingController();
     final detailsController = TextEditingController();
     var submitting = false;
@@ -493,11 +494,11 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         return StatefulBuilder(
-          builder: (context, setModal) {
+          builder: (modalContext, setModal) {
             return AnimatedPadding(
               duration: const Duration(milliseconds: 180),
               padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
+                bottom: MediaQuery.of(modalContext).viewInsets.bottom,
               ),
               child: Container(
                 margin: const EdgeInsets.fromLTRB(10, 20, 10, 10),
@@ -555,7 +556,7 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
                                 final purpose = purposeController.text.trim();
                                 if (purpose.length < 4) {
                                   _showFeature(
-                                    context,
+                                    modalContext,
                                     'Please enter a clear purpose (at least 4 characters).',
                                     tone: _ToastTone.warning,
                                   );
@@ -579,7 +580,7 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
                                   _history.insert(0, result.entry!);
                                   setState(() {});
                                   _showFeature(
-                                    this.context,
+                                    parentContext,
                                     result.message,
                                     tone: _ToastTone.success,
                                   );
@@ -597,7 +598,7 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
                                 _history.insert(0, local);
                                 setState(() {});
                                 _showFeature(
-                                  this.context,
+                                  parentContext,
                                   'Saved locally: ${result.message}',
                                   tone: _ToastTone.warning,
                                 );
@@ -617,8 +618,12 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
       },
     );
 
-    purposeController.dispose();
-    detailsController.dispose();
+    unawaited(
+      Future<void>.delayed(const Duration(milliseconds: 300), () {
+        purposeController.dispose();
+        detailsController.dispose();
+      }),
+    );
   }
 
   @override
