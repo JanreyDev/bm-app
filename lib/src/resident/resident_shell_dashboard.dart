@@ -593,6 +593,7 @@ class _ResidentHighlightData {
 }
 
 class _ResidentJobData {
+  final String id;
   final String title;
   final String company;
   final String location;
@@ -602,6 +603,7 @@ class _ResidentJobData {
   final String postedBy;
   final String requirements;
   const _ResidentJobData({
+    this.id = '',
     required this.title,
     required this.company,
     required this.location,

@@ -2,6 +2,7 @@ part of barangaymo_app;
 
 class _ResidentTalentPostData {
   final String fullName;
+  final String mobileNumber;
   final String desiredJob;
   final String skills;
   final String preferredSetup;
@@ -11,6 +12,7 @@ class _ResidentTalentPostData {
 
   const _ResidentTalentPostData({
     required this.fullName,
+    this.mobileNumber = '',
     required this.desiredJob,
     required this.skills,
     required this.preferredSetup,
@@ -39,24 +41,56 @@ class _ResidentJobNotificationData {
 }
 
 class _ResidentJobApplicationData {
+  final String id;
+  final String jobId;
   final String jobTitle;
   final String company;
+  final String postedBy;
   final String applicantName;
   final String mobileNumber;
   final String coverLetter;
   final String attachmentName;
+  final String attachmentPath;
   final DateTime submittedAt;
   final String status;
 
   const _ResidentJobApplicationData({
+    this.id = '',
+    this.jobId = '',
     required this.jobTitle,
     required this.company,
+    this.postedBy = '',
     required this.applicantName,
     required this.mobileNumber,
     required this.coverLetter,
     required this.attachmentName,
+    this.attachmentPath = '',
     required this.submittedAt,
     this.status = 'Submitted',
+  });
+}
+
+class _ResidentJobInvitationData {
+  final String id;
+  final String talentName;
+  final String talentMobile;
+  final String talentDesiredJob;
+  final String inviterName;
+  final String inviterMobile;
+  final String message;
+  final DateTime createdAt;
+  final String status;
+
+  const _ResidentJobInvitationData({
+    required this.id,
+    required this.talentName,
+    required this.talentMobile,
+    required this.talentDesiredJob,
+    required this.inviterName,
+    required this.inviterMobile,
+    required this.message,
+    required this.createdAt,
+    this.status = 'Pending',
   });
 }
 
@@ -323,7 +357,13 @@ class _ResidentCommercialSellerHub {
   }
 }
 
-String _residentJobKey(_ResidentJobData job) => '${job.title}|${job.company}';
+String _residentJobKey(_ResidentJobData job) {
+  final id = job.id.trim();
+  if (id.isNotEmpty) {
+    return 'id:$id';
+  }
+  return '${job.title}|${job.company}';
+}
 
 String _merchantProductAsset(String category) {
   final normalized = category.trim().toLowerCase();
@@ -358,6 +398,11 @@ IconData _merchantProductIcon(String category) {
 
 class _ResidentJobsHub {
   static final ValueNotifier<int> refresh = ValueNotifier<int>(0);
+  static const String _savedJobsStoragePrefix = 'resident_saved_jobs_v1_';
+  static const String _applicationsStoragePrefix = 'resident_job_apps_v1_';
+  static const String _globalApplicationsStorageKey = 'resident_job_apps_global_v1';
+  static const String _ownedJobsStoragePrefix = 'resident_owned_jobs_v1_';
+  static const String _globalInvitationsStorageKey = 'resident_job_invites_global_v1';
 
   static final List<_ResidentJobData> jobs = [];
 
@@ -375,7 +420,366 @@ class _ResidentJobsHub {
   ];
 
   static final Set<String> savedJobKeys = <String>{};
+  static final Set<String> ownedJobKeys = <String>{};
+  static final List<_ResidentJobData> _savedJobs = [];
   static final List<_ResidentJobApplicationData> applications = [];
+  static final List<_ResidentJobApplicationData> _allApplications = [];
+  static final List<_ResidentJobInvitationData> _allInvitations = [];
+
+  static String _savedJobsStorageKey() {
+    final mobile = _normalizeMobileForKey(_currentResidentProfile?.mobile ?? '');
+    return '$_savedJobsStoragePrefix${mobile.isEmpty ? 'guest' : mobile}';
+  }
+
+  static String _applicationsStorageKey() {
+    final mobile = _normalizeMobileForKey(_currentResidentProfile?.mobile ?? '');
+    return '$_applicationsStoragePrefix${mobile.isEmpty ? 'guest' : mobile}';
+  }
+
+  static String _ownedJobsStorageKey() {
+    final mobile = _normalizeMobileForKey(_currentResidentProfile?.mobile ?? '');
+    return '$_ownedJobsStoragePrefix${mobile.isEmpty ? 'guest' : mobile}';
+  }
+
+  static String _applicationUniqueKey(_ResidentJobApplicationData application) {
+    return '${application.jobTitle}|${application.company}|${application.mobileNumber}|${application.submittedAt.millisecondsSinceEpoch}';
+  }
+
+  static String _normalizedIdentityName(String value) {
+    return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
+  static Map<String, dynamic> _jobToJson(_ResidentJobData job) {
+    return <String, dynamic>{
+      'id': job.id,
+      'title': job.title,
+      'company': job.company,
+      'location': job.location,
+      'salary': job.salary,
+      'schedule': job.schedule,
+      'urgent': job.urgent,
+      'posted_by': job.postedBy,
+      'requirements': job.requirements,
+    };
+  }
+
+  static _ResidentJobData? _jobFromJson(dynamic raw) {
+    if (raw is! Map<String, dynamic>) {
+      return null;
+    }
+    String read(String key) {
+      final value = raw[key];
+      return value is String ? value.trim() : '';
+    }
+
+    final title = read('title');
+    final company = read('company');
+    if (title.isEmpty || company.isEmpty) {
+      return null;
+    }
+    return _ResidentJobData(
+      id: read('id'),
+      title: title,
+      company: company,
+      location: read('location'),
+      salary: read('salary'),
+      schedule: read('schedule'),
+      urgent: raw['urgent'] == true || raw['urgent'] == 1 || raw['urgent'] == '1',
+      postedBy: read('posted_by'),
+      requirements: read('requirements'),
+    );
+  }
+
+  static Future<void> loadSavedJobsFromStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_savedJobsStorageKey());
+    final loaded = <_ResidentJobData>[];
+    final keys = <String>{};
+
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          for (final item in decoded) {
+            final job = _jobFromJson(item);
+            if (job == null) {
+              continue;
+            }
+            final key = _residentJobKey(job);
+            if (keys.add(key)) {
+              loaded.add(job);
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    _savedJobs
+      ..clear()
+      ..addAll(loaded);
+    savedJobKeys
+      ..clear()
+      ..addAll(keys);
+    _emit();
+  }
+
+  static Future<void> _persistSavedJobs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final payload = jsonEncode(_savedJobs.map(_jobToJson).toList());
+    await prefs.setString(_savedJobsStorageKey(), payload);
+  }
+
+  static Map<String, dynamic> _applicationToJson(
+    _ResidentJobApplicationData application,
+  ) {
+    return <String, dynamic>{
+      'id': application.id,
+      'job_id': application.jobId,
+      'job_title': application.jobTitle,
+      'company': application.company,
+      'posted_by': application.postedBy,
+      'applicant_name': application.applicantName,
+      'mobile_number': application.mobileNumber,
+      'cover_letter': application.coverLetter,
+      'attachment_name': application.attachmentName,
+      'attachment_path': application.attachmentPath,
+      'submitted_at': application.submittedAt.toIso8601String(),
+      'status': application.status,
+    };
+  }
+
+  static _ResidentJobApplicationData? _applicationFromJson(dynamic raw) {
+    if (raw is! Map<String, dynamic>) {
+      return null;
+    }
+
+    String read(String key) {
+      final value = raw[key];
+      return value is String ? value.trim() : '';
+    }
+
+    final title = read('job_title');
+    final company = read('company');
+    if (title.isEmpty || company.isEmpty) {
+      return null;
+    }
+
+    final submittedRaw = read('submitted_at');
+    final submittedAt =
+        DateTime.tryParse(submittedRaw) ??
+        DateTime.now().subtract(const Duration(seconds: 1));
+
+    return _ResidentJobApplicationData(
+      id: read('id'),
+      jobId: read('job_id'),
+      jobTitle: title,
+      company: company,
+      postedBy: read('posted_by'),
+      applicantName: read('applicant_name'),
+      mobileNumber: read('mobile_number'),
+      coverLetter: read('cover_letter'),
+      attachmentName: read('attachment_name'),
+      attachmentPath: read('attachment_path'),
+      submittedAt: submittedAt,
+      status: read('status').isEmpty ? 'Submitted' : read('status'),
+    );
+  }
+
+  static Future<void> loadApplicationsFromStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final loaded = <_ResidentJobApplicationData>[];
+    final loadedGlobal = <_ResidentJobApplicationData>[];
+    final personalRaw = prefs.getString(_applicationsStorageKey());
+    final globalRaw = prefs.getString(_globalApplicationsStorageKey);
+
+    void parseInto(
+      String? raw,
+      List<_ResidentJobApplicationData> target, {
+      bool allowMultiplePerJob = false,
+    }) {
+      if (raw == null || raw.isEmpty) {
+        return;
+      }
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is! List) {
+          return;
+        }
+        final keys = <String>{};
+        for (final item in decoded) {
+          final application = _applicationFromJson(item);
+          if (application == null) {
+            continue;
+          }
+          final key = allowMultiplePerJob
+              ? _applicationUniqueKey(application)
+              : '${application.jobTitle}|${application.company}';
+          if (!keys.add(key)) {
+            continue;
+          }
+          target.add(application);
+        }
+      } catch (_) {}
+    }
+
+    parseInto(personalRaw, loaded);
+    parseInto(globalRaw, loadedGlobal, allowMultiplePerJob: true);
+    applications
+      ..clear()
+      ..addAll(loaded);
+    _allApplications
+      ..clear()
+      ..addAll(loadedGlobal);
+    _emit();
+  }
+
+  static Future<void> _persistApplications() async {
+    final prefs = await SharedPreferences.getInstance();
+    final payload = jsonEncode(applications.map(_applicationToJson).toList());
+    await prefs.setString(_applicationsStorageKey(), payload);
+  }
+
+  static Future<void> _persistGlobalApplications() async {
+    final prefs = await SharedPreferences.getInstance();
+    final payload = jsonEncode(_allApplications.map(_applicationToJson).toList());
+    await prefs.setString(_globalApplicationsStorageKey, payload);
+  }
+
+  static Future<void> loadOwnedJobsFromStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final values = prefs.getStringList(_ownedJobsStorageKey()) ?? const <String>[];
+    ownedJobKeys
+      ..clear()
+      ..addAll(values.where((item) => item.trim().isNotEmpty));
+    _emit();
+  }
+
+  static Future<void> _persistOwnedJobs() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_ownedJobsStorageKey(), ownedJobKeys.toList());
+  }
+
+  static Map<String, dynamic> _invitationToJson(_ResidentJobInvitationData invite) {
+    return <String, dynamic>{
+      'id': invite.id,
+      'talent_name': invite.talentName,
+      'talent_mobile': invite.talentMobile,
+      'talent_desired_job': invite.talentDesiredJob,
+      'inviter_name': invite.inviterName,
+      'inviter_mobile': invite.inviterMobile,
+      'message': invite.message,
+      'created_at': invite.createdAt.toIso8601String(),
+      'status': invite.status,
+    };
+  }
+
+  static _ResidentJobInvitationData? _invitationFromJson(dynamic raw) {
+    if (raw is! Map<String, dynamic>) {
+      return null;
+    }
+    String read(String key) {
+      final value = raw[key];
+      return value is String ? value.trim() : '';
+    }
+    final id = read('id');
+    final talentName = read('talent_name');
+    if (id.isEmpty || talentName.isEmpty) {
+      return null;
+    }
+    final createdAt = DateTime.tryParse(read('created_at')) ?? DateTime.now();
+    return _ResidentJobInvitationData(
+      id: id,
+      talentName: talentName,
+      talentMobile: read('talent_mobile'),
+      talentDesiredJob: read('talent_desired_job'),
+      inviterName: read('inviter_name'),
+      inviterMobile: read('inviter_mobile'),
+      message: read('message'),
+      createdAt: createdAt,
+      status: read('status').isEmpty ? 'Pending' : read('status'),
+    );
+  }
+
+  static Future<void> loadInvitationsFromStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_globalInvitationsStorageKey);
+    final loaded = <_ResidentJobInvitationData>[];
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          final seen = <String>{};
+          for (final item in decoded) {
+            final invite = _invitationFromJson(item);
+            if (invite == null) {
+              continue;
+            }
+            if (!seen.add(invite.id)) {
+              continue;
+            }
+            loaded.add(invite);
+          }
+        }
+      } catch (_) {}
+    }
+    _allInvitations
+      ..clear()
+      ..addAll(loaded);
+    _emit();
+  }
+
+  static void replaceInvitations(List<_ResidentJobInvitationData> incoming) {
+    final dedup = <String, _ResidentJobInvitationData>{};
+    for (final invite in incoming) {
+      dedup[invite.id] = invite;
+    }
+    _allInvitations
+      ..clear()
+      ..addAll(dedup.values);
+    _emit();
+  }
+
+  static void replaceApplications(List<_ResidentJobApplicationData> incoming) {
+    final currentMobile = _normalizeMobileForKey(_currentResidentProfile?.mobile ?? '');
+    final currentName = _normalizedIdentityName(
+      (_currentResidentProfile?.displayName ?? '').trim(),
+    );
+    final personal = incoming.where((entry) {
+      final appMobile = _normalizeMobileForKey(entry.mobileNumber);
+      if (currentMobile.isNotEmpty && appMobile.isNotEmpty) {
+        return appMobile == currentMobile;
+      }
+      if (currentName.isNotEmpty) {
+        return _normalizedIdentityName(entry.applicantName.trim()) == currentName;
+      }
+      return false;
+    }).toList();
+    applications
+      ..clear()
+      ..addAll(personal);
+    _allApplications
+      ..clear()
+      ..addAll(incoming);
+    unawaited(_persistApplications());
+    unawaited(_persistGlobalApplications());
+    _emit();
+  }
+
+  static void mergeInvitation(_ResidentJobInvitationData invite) {
+    final existingIndex = _allInvitations.indexWhere((item) => item.id == invite.id);
+    if (existingIndex >= 0) {
+      _allInvitations[existingIndex] = invite;
+    } else {
+      _allInvitations.insert(0, invite);
+    }
+    _emit();
+  }
+
+  static Future<void> _persistInvitations() async {
+    final prefs = await SharedPreferences.getInstance();
+    final payload = jsonEncode(_allInvitations.map(_invitationToJson).toList());
+    await prefs.setString(_globalInvitationsStorageKey, payload);
+  }
 
   static int get unreadCount =>
       notifications.where((item) => item.unread).length;
@@ -459,6 +863,7 @@ class _ResidentJobsHub {
     jobs
       ..clear()
       ..addAll(incoming);
+    _refreshSavedJobsFromKeys();
     _emit();
   }
 
@@ -530,16 +935,32 @@ class _ResidentJobsHub {
     return savedJobKeys.contains(_residentJobKey(job));
   }
 
+  static void replaceSavedJobKeys(Set<String> keys) {
+    savedJobKeys
+      ..clear()
+      ..addAll(keys);
+    _refreshSavedJobsFromKeys();
+    unawaited(_persistSavedJobs());
+    _emit();
+  }
+
   static List<_ResidentJobData> get savedJobs =>
-      jobs.where((job) => isSaved(job)).toList();
+      List<_ResidentJobData>.unmodifiable(_savedJobs);
 
   static void toggleSaved(_ResidentJobData job) {
     final key = _residentJobKey(job);
     final saved = savedJobKeys.contains(key);
     if (saved) {
       savedJobKeys.remove(key);
+      _savedJobs.removeWhere((entry) => _residentJobKey(entry) == key);
     } else {
       savedJobKeys.add(key);
+      final alreadySaved = _savedJobs.any(
+        (entry) => _residentJobKey(entry) == key,
+      );
+      if (!alreadySaved) {
+        _savedJobs.insert(0, job);
+      }
       notifications.insert(
         0,
         _ResidentJobNotificationData(
@@ -551,7 +972,27 @@ class _ResidentJobsHub {
         ),
       );
     }
+    unawaited(_persistSavedJobs());
     _emit();
+  }
+
+  static void _refreshSavedJobsFromKeys() {
+    final byKey = <String, _ResidentJobData>{};
+    for (final job in jobs) {
+      final key = _residentJobKey(job);
+      if (savedJobKeys.contains(key)) {
+        byKey[key] = job;
+      }
+    }
+    for (final saved in _savedJobs) {
+      final key = _residentJobKey(saved);
+      if (savedJobKeys.contains(key) && !byKey.containsKey(key)) {
+        byKey[key] = saved;
+      }
+    }
+    _savedJobs
+      ..clear()
+      ..addAll(byKey.values);
   }
 
   static void submitApplication({
@@ -560,19 +1001,46 @@ class _ResidentJobsHub {
     required String mobileNumber,
     required String coverLetter,
     required String attachmentName,
+    String attachmentPath = '',
   }) {
-    applications.insert(
-      0,
-      _ResidentJobApplicationData(
-        jobTitle: job.title,
-        company: job.company,
-        applicantName: applicantName,
-        mobileNumber: mobileNumber,
-        coverLetter: coverLetter,
-        attachmentName: attachmentName,
-        submittedAt: DateTime.now(),
-      ),
+    final application = _ResidentJobApplicationData(
+      id: 'app-${DateTime.now().microsecondsSinceEpoch}',
+      jobId: job.id,
+      jobTitle: job.title,
+      company: job.company,
+      postedBy: job.postedBy,
+      applicantName: applicantName,
+      mobileNumber: mobileNumber,
+      coverLetter: coverLetter,
+      attachmentName: attachmentName,
+      attachmentPath: attachmentPath,
+      submittedAt: DateTime.now(),
     );
+    final matchKey = job.id.trim().isNotEmpty
+        ? job.id.trim()
+        : '${job.title}|${job.company}';
+    final alreadyInPersonal = applications.any(
+      (entry) =>
+          (entry.jobId.trim().isNotEmpty ? entry.jobId.trim() : '${entry.jobTitle}|${entry.company}') ==
+          matchKey,
+    );
+    if (!alreadyInPersonal) {
+      applications.insert(0, application);
+    } else {
+      applications.removeWhere(
+        (entry) =>
+            (entry.jobId.trim().isNotEmpty ? entry.jobId.trim() : '${entry.jobTitle}|${entry.company}') ==
+            matchKey,
+      );
+      applications.insert(0, application);
+    }
+    final unique = _applicationUniqueKey(application);
+    final alreadyInGlobal = _allApplications.any(
+      (entry) => _applicationUniqueKey(entry) == unique,
+    );
+    if (!alreadyInGlobal) {
+      _allApplications.insert(0, application);
+    }
     notifications.insert(
       0,
       _ResidentJobNotificationData(
@@ -583,6 +1051,174 @@ class _ResidentJobsHub {
         createdAt: DateTime.now(),
       ),
     );
+    unawaited(_persistApplications());
+    unawaited(_persistGlobalApplications());
     _emit();
+  }
+
+  static bool isTalentOwnedByCurrentUser(_ResidentTalentPostData talent) {
+    final currentMobile = _normalizeMobileForKey(_currentResidentProfile?.mobile ?? '');
+    final talentMobile = _normalizeMobileForKey(talent.mobileNumber);
+    if (currentMobile.isNotEmpty && talentMobile.isNotEmpty) {
+      return currentMobile == talentMobile;
+    }
+    final currentName =
+        (_currentResidentProfile?.displayName ?? '').trim().toLowerCase();
+    return currentName.isNotEmpty &&
+        talent.fullName.trim().toLowerCase() == currentName;
+  }
+
+  static void sendInvitation({
+    required _ResidentTalentPostData talent,
+    required String message,
+  }) {
+    final inviterName = (_currentResidentProfile?.displayName ?? '').trim();
+    final inviterMobile = (_currentResidentProfile?.mobile ?? '').trim();
+    final normalizedMessage = message.trim();
+    if (normalizedMessage.isEmpty || inviterName.isEmpty) {
+      return;
+    }
+    final invitation = _ResidentJobInvitationData(
+      id: 'inv-${DateTime.now().microsecondsSinceEpoch}',
+      talentName: talent.fullName.trim(),
+      talentMobile: talent.mobileNumber.trim(),
+      talentDesiredJob: talent.desiredJob.trim(),
+      inviterName: inviterName,
+      inviterMobile: inviterMobile,
+      message: normalizedMessage,
+      createdAt: DateTime.now(),
+    );
+    _allInvitations.insert(0, invitation);
+    notifications.insert(
+      0,
+      _ResidentJobNotificationData(
+        title: 'Invitation sent',
+        subtitle: 'You invited ${talent.fullName} for ${talent.desiredJob}.',
+        icon: Icons.mail_outline_rounded,
+        accent: const Color(0xFF5A62D6),
+        createdAt: DateTime.now(),
+      ),
+    );
+    unawaited(_persistInvitations());
+    _emit();
+  }
+
+  static List<_ResidentJobInvitationData> invitationsForTalent(
+    _ResidentTalentPostData talent,
+  ) {
+    final normalizedTalentMobile = _normalizeMobileForKey(talent.mobileNumber);
+    final normalizedTalentName = _normalizedIdentityName(talent.fullName.trim());
+    return _allInvitations.where((invite) {
+      final inviteMobile = _normalizeMobileForKey(invite.talentMobile);
+      if (normalizedTalentMobile.isNotEmpty && inviteMobile.isNotEmpty) {
+        return inviteMobile == normalizedTalentMobile;
+      }
+      return _normalizedIdentityName(invite.talentName.trim()) ==
+          normalizedTalentName;
+    }).toList();
+  }
+
+  static List<_ResidentJobInvitationData> invitationsForCurrentResident() {
+    final currentMobile = _normalizeMobileForKey(_currentResidentProfile?.mobile ?? '');
+    final currentName = _normalizedIdentityName(
+      (_currentResidentProfile?.displayName ?? '').trim(),
+    );
+    if (currentMobile.isEmpty && currentName.isEmpty) {
+      return const <_ResidentJobInvitationData>[];
+    }
+    return _allInvitations.where((invite) {
+      final inviteMobile = _normalizeMobileForKey(invite.talentMobile);
+      final mobileMatch =
+          currentMobile.isNotEmpty &&
+          inviteMobile.isNotEmpty &&
+          inviteMobile == currentMobile;
+      final nameMatch =
+          currentName.isNotEmpty &&
+          _normalizedIdentityName(invite.talentName.trim()) == currentName;
+      return mobileMatch || nameMatch;
+    }).toList();
+  }
+
+  static bool hasCurrentUserInvitedTalent(_ResidentTalentPostData talent) {
+    final currentMobile = _normalizeMobileForKey(_currentResidentProfile?.mobile ?? '');
+    final currentName = _normalizedIdentityName(
+      (_currentResidentProfile?.displayName ?? '').trim(),
+    );
+    if (currentMobile.isEmpty && currentName.isEmpty) {
+      return false;
+    }
+    final talentMobile = _normalizeMobileForKey(talent.mobileNumber);
+    final talentName = _normalizedIdentityName(talent.fullName.trim());
+    return _allInvitations.any((invite) {
+      final inviterMobile = _normalizeMobileForKey(invite.inviterMobile);
+      final inviterName = _normalizedIdentityName(invite.inviterName.trim());
+      final inviterMatch =
+          (currentMobile.isNotEmpty &&
+              inviterMobile.isNotEmpty &&
+              inviterMobile == currentMobile) ||
+          (currentName.isNotEmpty && inviterName == currentName);
+      if (!inviterMatch) {
+        return false;
+      }
+      final inviteTalentMobile = _normalizeMobileForKey(invite.talentMobile);
+      final inviteTalentName = _normalizedIdentityName(invite.talentName.trim());
+      final talentMatch =
+          (talentMobile.isNotEmpty &&
+              inviteTalentMobile.isNotEmpty &&
+              inviteTalentMobile == talentMobile) ||
+          inviteTalentName == talentName;
+      return talentMatch;
+    });
+  }
+
+  static bool hasApplied(_ResidentJobData job) {
+    final key = _residentJobKey(job);
+    final jobId = job.id.trim();
+    return applications.any(
+      (entry) {
+        final entryJobId = entry.jobId.trim();
+        if (jobId.isNotEmpty && entryJobId.isNotEmpty) {
+          return entryJobId == jobId;
+        }
+        return '${entry.jobTitle}|${entry.company}' == key;
+      },
+    );
+  }
+
+  static void markOwnedJob(_ResidentJobData job) {
+    final key = _residentJobKey(job);
+    if (ownedJobKeys.add(key)) {
+      unawaited(_persistOwnedJobs());
+      _emit();
+    }
+  }
+
+  static bool isOwnedByCurrentUser(_ResidentJobData job) {
+    final key = _residentJobKey(job);
+    if (ownedJobKeys.contains(key)) {
+      return true;
+    }
+    final owner = job.postedBy.trim().toLowerCase();
+    final currentName =
+        (_currentResidentProfile?.displayName ?? '').trim().toLowerCase();
+    return owner.isNotEmpty && currentName.isNotEmpty && owner == currentName;
+  }
+
+  static List<_ResidentJobApplicationData> submissionsForJob(_ResidentJobData job) {
+    final key = _residentJobKey(job);
+    final jobId = job.id.trim();
+    return _allApplications
+        .where((entry) {
+          final entryJobId = entry.jobId.trim();
+          if (jobId.isNotEmpty && entryJobId.isNotEmpty) {
+            return entryJobId == jobId;
+          }
+          return '${entry.jobTitle}|${entry.company}' == key;
+        })
+        .toList();
+  }
+
+  static int submissionCountForJob(_ResidentJobData job) {
+    return submissionsForJob(job).length;
   }
 }

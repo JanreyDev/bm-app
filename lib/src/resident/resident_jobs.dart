@@ -48,6 +48,78 @@ class _JobHunterPublishResult {
   });
 }
 
+class _InvitationsFetchResult {
+  final bool success;
+  final String message;
+  final List<_ResidentJobInvitationData> invitations;
+
+  const _InvitationsFetchResult({
+    required this.success,
+    required this.message,
+    this.invitations = const <_ResidentJobInvitationData>[],
+  });
+}
+
+class _InvitationSendResult {
+  final bool success;
+  final String message;
+  final _ResidentJobInvitationData? invitation;
+
+  const _InvitationSendResult({
+    required this.success,
+    required this.message,
+    this.invitation,
+  });
+}
+
+class _ApplicationsFetchResult {
+  final bool success;
+  final String message;
+  final List<_ResidentJobApplicationData> applications;
+
+  const _ApplicationsFetchResult({
+    required this.success,
+    required this.message,
+    this.applications = const <_ResidentJobApplicationData>[],
+  });
+}
+
+class _ApplicationSendResult {
+  final bool success;
+  final String message;
+  final _ResidentJobApplicationData? application;
+
+  const _ApplicationSendResult({
+    required this.success,
+    required this.message,
+    this.application,
+  });
+}
+
+class _SavedJobsFetchResult {
+  final bool success;
+  final String message;
+  final Set<String> savedKeys;
+
+  const _SavedJobsFetchResult({
+    required this.success,
+    required this.message,
+    this.savedKeys = const <String>{},
+  });
+}
+
+class _SavedToggleResult {
+  final bool success;
+  final String message;
+  final bool? saved;
+
+  const _SavedToggleResult({
+    required this.success,
+    required this.message,
+    this.saved,
+  });
+}
+
 class _JobsApi {
   _JobsApi._();
   static final _JobsApi instance = _JobsApi._();
@@ -315,6 +387,7 @@ class _JobsApi {
 
   Future<_JobHunterPublishResult> createHunterProfile({
     required String fullName,
+    required String mobileNumber,
     required String desiredJob,
     required String skills,
     required String preferredSetup,
@@ -333,6 +406,8 @@ class _JobsApi {
     var sawConnectionError = false;
     final payload = jsonEncode({
       'full_name': fullName,
+      'mobile': mobileNumber,
+      'contact_number': mobileNumber,
       'desired_job': desiredJob,
       'skills': skills,
       'preferred_setup': preferredSetup,
@@ -378,7 +453,10 @@ class _JobsApi {
               body,
               fallback: 'Job hunter profile published.',
             ),
-            profile: _mapHunterProfile(rawProfile),
+            profile: _mapHunterProfile(
+              rawProfile,
+              fallbackMobile: mobileNumber,
+            ),
           );
         }
         return _JobHunterPublishResult(
@@ -413,6 +491,584 @@ class _JobsApi {
     );
   }
 
+  Future<_InvitationsFetchResult> fetchInvitations() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _InvitationsFetchResult(
+        success: false,
+        message: 'Please log in again to load invitations.',
+      );
+    }
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    final paths = <String>[
+      'jobs/invitations',
+      'invitations',
+      'jobs/invites',
+      'invites',
+    ];
+
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http
+              .get(
+                endpoint,
+                headers: {
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $_authToken',
+                },
+              )
+              .timeout(_requestTimeout);
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          final body = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final rawList = body['invitations'] ?? body['invites'] ?? body['data'];
+            if (rawList is! List) {
+              return const _InvitationsFetchResult(
+                success: false,
+                message: 'Invitations payload is invalid.',
+              );
+            }
+            final out = <_ResidentJobInvitationData>[];
+            for (final item in rawList) {
+              if (item is! Map<String, dynamic>) {
+                continue;
+              }
+              final mapped = _mapInvitation(item);
+              if (mapped != null) {
+                out.add(mapped);
+              }
+            }
+            return _InvitationsFetchResult(
+              success: true,
+              message: 'Invitations loaded.',
+              invitations: out,
+            );
+          }
+          return _InvitationsFetchResult(
+            success: false,
+            message: _extractApiMessage(body, fallback: 'Unable to load invitations.'),
+          );
+        } on TimeoutException {
+          sawTimeout = true;
+        } catch (_) {
+          sawConnectionError = true;
+        }
+      }
+    }
+
+    if (sawTimeout) {
+      return const _InvitationsFetchResult(
+        success: false,
+        message: 'Loading invitations timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _InvitationsFetchResult(
+        success: false,
+        message: 'Cannot connect to server to load invitations.',
+      );
+    }
+    return const _InvitationsFetchResult(
+      success: false,
+      message: 'Invitations endpoint is not available yet.',
+    );
+  }
+
+  Future<_InvitationSendResult> sendInvitation({
+    required _ResidentTalentPostData talent,
+    required String message,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _InvitationSendResult(
+        success: false,
+        message: 'Please log in again before sending an invitation.',
+      );
+    }
+    final inviterName = (_currentResidentProfile?.displayName ?? '').trim();
+    final inviterMobile = (_currentResidentProfile?.mobile ?? '').trim();
+    final payload = jsonEncode({
+      'talent_name': talent.fullName.trim(),
+      'talent_mobile': talent.mobileNumber.trim(),
+      'talent_desired_job': talent.desiredJob.trim(),
+      'inviter_name': inviterName,
+      'inviter_mobile': inviterMobile,
+      'message': message.trim(),
+    });
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    final paths = <String>[
+      'jobs/invitations',
+      'invitations',
+      'jobs/invites',
+      'invites',
+    ];
+
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http
+              .post(
+                endpoint,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $_authToken',
+                },
+                body: payload,
+              )
+              .timeout(_requestTimeout);
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          final body = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final rawInvite = body['invitation'] ?? body['invite'] ?? body['data'];
+            _ResidentJobInvitationData? mapped;
+            if (rawInvite is Map<String, dynamic>) {
+              mapped = _mapInvitation(rawInvite);
+            }
+            return _InvitationSendResult(
+              success: true,
+              message: _extractApiMessage(
+                body,
+                fallback: 'Invitation sent successfully.',
+              ),
+              invitation: mapped,
+            );
+          }
+          return _InvitationSendResult(
+            success: false,
+            message: _extractApiMessage(body, fallback: 'Unable to send invitation.'),
+          );
+        } on TimeoutException {
+          sawTimeout = true;
+        } catch (_) {
+          sawConnectionError = true;
+        }
+      }
+    }
+
+    if (sawTimeout) {
+      return const _InvitationSendResult(
+        success: false,
+        message: 'Sending invitation timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _InvitationSendResult(
+        success: false,
+        message: 'Cannot connect to server to send invitation.',
+      );
+    }
+    return const _InvitationSendResult(
+      success: false,
+      message: 'Invitations endpoint is not available yet.',
+    );
+  }
+
+  Future<_ApplicationsFetchResult> fetchApplications() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _ApplicationsFetchResult(
+        success: false,
+        message: 'Please log in again to load applications.',
+      );
+    }
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    final paths = <String>[
+      'jobs/applications',
+      'applications',
+      'jobs/submissions',
+      'submissions',
+    ];
+
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http
+              .get(
+                endpoint,
+                headers: {
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $_authToken',
+                },
+              )
+              .timeout(_requestTimeout);
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          final body = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final rawList =
+                body['applications'] ?? body['submissions'] ?? body['data'];
+            if (rawList is! List) {
+              return const _ApplicationsFetchResult(
+                success: false,
+                message: 'Applications payload is invalid.',
+              );
+            }
+            final out = <_ResidentJobApplicationData>[];
+            for (final item in rawList) {
+              if (item is! Map<String, dynamic>) {
+                continue;
+              }
+              final mapped = _mapApplication(item);
+              if (mapped != null) {
+                out.add(mapped);
+              }
+            }
+            return _ApplicationsFetchResult(
+              success: true,
+              message: 'Applications loaded.',
+              applications: out,
+            );
+          }
+          return _ApplicationsFetchResult(
+            success: false,
+            message: _extractApiMessage(body, fallback: 'Unable to load applications.'),
+          );
+        } on TimeoutException {
+          sawTimeout = true;
+        } catch (_) {
+          sawConnectionError = true;
+        }
+      }
+    }
+
+    if (sawTimeout) {
+      return const _ApplicationsFetchResult(
+        success: false,
+        message: 'Loading applications timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _ApplicationsFetchResult(
+        success: false,
+        message: 'Cannot connect to server to load applications.',
+      );
+    }
+    return const _ApplicationsFetchResult(
+      success: false,
+      message: 'Applications endpoint is not available yet.',
+    );
+  }
+
+  Future<_ApplicationSendResult> sendApplication({
+    required _ResidentJobData job,
+    required String applicantName,
+    required String mobileNumber,
+    required String coverLetter,
+    required String attachmentName,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _ApplicationSendResult(
+        success: false,
+        message: 'Please log in again before submitting application.',
+      );
+    }
+
+    final payload = jsonEncode({
+      'job_id': int.tryParse(job.id),
+      'job_title': job.title.trim(),
+      'company': job.company.trim(),
+      'posted_by': job.postedBy.trim(),
+      'applicant_name': applicantName.trim(),
+      'mobile_number': mobileNumber.trim(),
+      'cover_letter': coverLetter.trim(),
+      'attachment_name': attachmentName.trim(),
+    });
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    final paths = <String>[
+      'jobs/applications',
+      'applications',
+      'jobs/submissions',
+      'submissions',
+    ];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http
+              .post(
+                endpoint,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $_authToken',
+                },
+                body: payload,
+              )
+              .timeout(_requestTimeout);
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          final body = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final rawItem = body['application'] ?? body['submission'] ?? body['data'];
+            _ResidentJobApplicationData? mapped;
+            if (rawItem is Map<String, dynamic>) {
+              mapped = _mapApplication(rawItem);
+            }
+            return _ApplicationSendResult(
+              success: true,
+              message: _extractApiMessage(
+                body,
+                fallback: 'Application submitted successfully.',
+              ),
+              application: mapped,
+            );
+          }
+          return _ApplicationSendResult(
+            success: false,
+            message: _extractApiMessage(body, fallback: 'Unable to submit application.'),
+          );
+        } on TimeoutException {
+          sawTimeout = true;
+        } catch (_) {
+          sawConnectionError = true;
+        }
+      }
+    }
+
+    if (sawTimeout) {
+      return const _ApplicationSendResult(
+        success: false,
+        message: 'Submitting application timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _ApplicationSendResult(
+        success: false,
+        message: 'Cannot connect to server to submit application.',
+      );
+    }
+    return const _ApplicationSendResult(
+      success: false,
+      message: 'Applications endpoint is not available yet.',
+    );
+  }
+
+  Future<_SavedJobsFetchResult> fetchSavedJobs() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _SavedJobsFetchResult(
+        success: false,
+        message: 'Please log in again to load saved jobs.',
+      );
+    }
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    final paths = <String>['jobs/saved', 'saved-jobs', 'jobs/saved-jobs', 'saved'];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http
+              .get(
+                endpoint,
+                headers: {
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $_authToken',
+                },
+              )
+              .timeout(_requestTimeout);
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          final body = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final rawList = body['saved_jobs'] ?? body['saved'] ?? body['data'];
+            if (rawList is! List) {
+              return const _SavedJobsFetchResult(
+                success: false,
+                message: 'Saved jobs payload is invalid.',
+              );
+            }
+            final keys = <String>{};
+            for (final item in rawList) {
+              if (item is! Map<String, dynamic>) {
+                continue;
+              }
+              final key = _savedJobKeyFromRaw(item);
+              if (key.isNotEmpty) {
+                keys.add(key);
+              }
+            }
+            return _SavedJobsFetchResult(
+              success: true,
+              message: 'Saved jobs loaded.',
+              savedKeys: keys,
+            );
+          }
+          return _SavedJobsFetchResult(
+            success: false,
+            message: _extractApiMessage(body, fallback: 'Unable to load saved jobs.'),
+          );
+        } on TimeoutException {
+          sawTimeout = true;
+        } catch (_) {
+          sawConnectionError = true;
+        }
+      }
+    }
+
+    if (sawTimeout) {
+      return const _SavedJobsFetchResult(
+        success: false,
+        message: 'Loading saved jobs timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _SavedJobsFetchResult(
+        success: false,
+        message: 'Cannot connect to server to load saved jobs.',
+      );
+    }
+    return const _SavedJobsFetchResult(
+      success: false,
+      message: 'Saved jobs endpoint is not available yet.',
+    );
+  }
+
+  Future<_SavedToggleResult> toggleSavedJob(_ResidentJobData job) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _SavedToggleResult(
+        success: false,
+        message: 'Please log in again before saving jobs.',
+      );
+    }
+
+    final payload = jsonEncode({
+      'job_id': int.tryParse(job.id),
+      'job_title': job.title.trim(),
+      'company': job.company.trim(),
+    });
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    final paths = <String>[
+      'jobs/saved/toggle',
+      'saved-jobs/toggle',
+      'jobs/saved',
+      'saved',
+    ];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http
+              .post(
+                endpoint,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $_authToken',
+                },
+                body: payload,
+              )
+              .timeout(_requestTimeout);
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          final body = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final savedRaw = body['saved'];
+            bool? saved;
+            if (savedRaw is bool) {
+              saved = savedRaw;
+            } else if (savedRaw is num) {
+              saved = savedRaw != 0;
+            } else if (savedRaw is String) {
+              final normalized = savedRaw.trim().toLowerCase();
+              if (normalized == 'true' || normalized == '1') {
+                saved = true;
+              } else if (normalized == 'false' || normalized == '0') {
+                saved = false;
+              }
+            }
+            return _SavedToggleResult(
+              success: true,
+              message: _extractApiMessage(body, fallback: 'Saved jobs updated.'),
+              saved: saved,
+            );
+          }
+          return _SavedToggleResult(
+            success: false,
+            message: _extractApiMessage(body, fallback: 'Unable to update saved job.'),
+          );
+        } on TimeoutException {
+          sawTimeout = true;
+        } catch (_) {
+          sawConnectionError = true;
+        }
+      }
+    }
+
+    if (sawTimeout) {
+      return const _SavedToggleResult(
+        success: false,
+        message: 'Updating saved job timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _SavedToggleResult(
+        success: false,
+        message: 'Cannot connect to server to update saved job.',
+      );
+    }
+    return const _SavedToggleResult(
+      success: false,
+      message: 'Saved jobs endpoint is not available yet.',
+    );
+  }
+
+  String _savedJobKeyFromRaw(Map<String, dynamic> raw) {
+    String read(String key) {
+      final value = raw[key];
+      if (value == null) {
+        return '';
+      }
+      if (value is String) {
+        return value.trim();
+      }
+      return value.toString().trim();
+    }
+
+    final id = read('job_id');
+    if (id.isNotEmpty) {
+      return 'id:$id';
+    }
+    final title = read('job_title');
+    final company = read('company');
+    if (title.isEmpty || company.isEmpty) {
+      return '';
+    }
+    return '$title|$company';
+  }
+
   _ResidentJobData _mapJob(Map<String, dynamic> raw) {
     String read(String key, {String fallback = ''}) {
       final value = raw[key];
@@ -425,7 +1081,18 @@ class _JobsApi {
       return fallback;
     }
 
+    String dynamicId(dynamic value) {
+      if (value == null) {
+        return '';
+      }
+      if (value is String) {
+        return value.trim();
+      }
+      return value.toString();
+    }
+
     return _ResidentJobData(
+      id: dynamicId(raw['id']),
       title: read('title', fallback: 'Hiring Role'),
       company: read('company', fallback: 'Barangay Employer'),
       location: read('location', fallback: _residentLocationSummary(fallback: 'Barangay')),
@@ -437,7 +1104,10 @@ class _JobsApi {
     );
   }
 
-  _ResidentTalentPostData _mapHunterProfile(Map<String, dynamic> raw) {
+  _ResidentTalentPostData _mapHunterProfile(
+    Map<String, dynamic> raw, {
+    String fallbackMobile = '',
+  }) {
     String read(String key, {String fallback = ''}) {
       final value = raw[key];
       if (value is String) {
@@ -449,8 +1119,26 @@ class _JobsApi {
       return fallback;
     }
 
+    final fullName = read('full_name', fallback: 'Resident');
+    var mobileNumber = read(
+      'mobile',
+      fallback: read(
+        'contact_number',
+        fallback: read('phone', fallback: fallbackMobile.trim()),
+      ),
+    );
+    if (mobileNumber.isEmpty) {
+      final currentName = (_currentResidentProfile?.displayName ?? '')
+          .trim()
+          .toLowerCase();
+      if (currentName.isNotEmpty && fullName.trim().toLowerCase() == currentName) {
+        mobileNumber = _currentResidentProfile?.mobile ?? '';
+      }
+    }
+
     return _ResidentTalentPostData(
-      fullName: read('full_name', fallback: 'Resident'),
+      fullName: fullName,
+      mobileNumber: mobileNumber,
       desiredJob: read('desired_job', fallback: 'Job seeker'),
       skills: read('skills', fallback: 'General skills'),
       preferredSetup: read('preferred_setup', fallback: 'On-site'),
@@ -460,6 +1148,85 @@ class _JobsApi {
           raw['available_now'] == true ||
           raw['available_now'] == 1 ||
           raw['available_now'] == '1',
+    );
+  }
+
+  _ResidentJobApplicationData? _mapApplication(Map<String, dynamic> raw) {
+    String read(String key, {String fallback = ''}) {
+      final value = raw[key];
+      if (value == null) {
+        return fallback;
+      }
+      if (value is String) {
+        final trimmed = value.trim();
+        if (trimmed.isNotEmpty) {
+          return trimmed;
+        }
+        return fallback;
+      }
+      final asText = value.toString().trim();
+      return asText.isEmpty ? fallback : asText;
+    }
+
+    final jobTitle = read('job_title', fallback: read('title'));
+    final company = read('company');
+    if (jobTitle.isEmpty || company.isEmpty) {
+      return null;
+    }
+    final submittedRaw = read(
+      'submitted_at',
+      fallback: read('created_at', fallback: read('createdAt')),
+    );
+    final submittedAt = DateTime.tryParse(submittedRaw) ?? DateTime.now();
+
+    return _ResidentJobApplicationData(
+      id: read('id'),
+      jobId: read('job_id'),
+      jobTitle: jobTitle,
+      company: company,
+      postedBy: read('posted_by'),
+      applicantName: read('applicant_name', fallback: read('name')),
+      mobileNumber: read('mobile_number', fallback: read('applicant_mobile')),
+      coverLetter: read('cover_letter', fallback: read('message')),
+      attachmentName: read('attachment_name'),
+      attachmentPath: read('attachment_path'),
+      submittedAt: submittedAt,
+      status: read('status', fallback: 'Submitted'),
+    );
+  }
+
+  _ResidentJobInvitationData? _mapInvitation(Map<String, dynamic> raw) {
+    String read(String key, {String fallback = ''}) {
+      final value = raw[key];
+      if (value is String) {
+        final trimmed = value.trim();
+        if (trimmed.isNotEmpty) {
+          return trimmed;
+        }
+      }
+      return fallback;
+    }
+
+    final id = read(
+      'id',
+      fallback: read('uuid', fallback: 'inv-${DateTime.now().microsecondsSinceEpoch}'),
+    );
+    final talentName = read('talent_name', fallback: read('job_hunter_name'));
+    if (talentName.isEmpty) {
+      return null;
+    }
+    final createdAtRaw = read('created_at', fallback: read('createdAt'));
+    final createdAt = DateTime.tryParse(createdAtRaw) ?? DateTime.now();
+    return _ResidentJobInvitationData(
+      id: id,
+      talentName: talentName,
+      talentMobile: read('talent_mobile', fallback: read('job_hunter_mobile')),
+      talentDesiredJob: read('talent_desired_job', fallback: read('desired_job')),
+      inviterName: read('inviter_name'),
+      inviterMobile: read('inviter_mobile'),
+      message: read('message'),
+      createdAt: createdAt,
+      status: read('status', fallback: 'Pending'),
     );
   }
 
@@ -491,6 +1258,13 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
   @override
   void initState() {
     super.initState();
+    unawaited(_ResidentJobsHub.loadSavedJobsFromStorage());
+    unawaited(_ResidentJobsHub.loadApplicationsFromStorage());
+    unawaited(_ResidentJobsHub.loadOwnedJobsFromStorage());
+    unawaited(_ResidentJobsHub.loadInvitationsFromStorage());
+    unawaited(_syncSavedJobsFromApi(showToast: false));
+    unawaited(_syncApplicationsFromApi(showToast: false));
+    unawaited(_syncInvitationsFromApi(showToast: false));
     unawaited(_syncJobsBoardFromApi(showToast: false));
   }
 
@@ -580,7 +1354,9 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
     final locationController = TextEditingController();
     final salaryController = TextEditingController();
     final requirementsController = TextEditingController();
-    final postedByController = TextEditingController(text: 'Barangay Employer');
+    final postedByController = TextEditingController(
+      text: _currentResidentProfile?.displayName ?? 'Barangay Employer',
+    );
     String schedule = 'Full-time';
     bool urgent = false;
 
@@ -735,6 +1511,7 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
                               return;
                             }
                             _ResidentJobsHub.mergeHiringPosts([result.job!]);
+                            _ResidentJobsHub.markOwnedJob(result.job!);
                             FocusScope.of(sheetContext).unfocus();
                             if (sheetContext.mounted) {
                               Navigator.of(sheetContext).pop();
@@ -763,13 +1540,85 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
         );
       },
     ).whenComplete(() {
-      titleController.dispose();
-      companyController.dispose();
-      locationController.dispose();
-      salaryController.dispose();
-      requirementsController.dispose();
-      postedByController.dispose();
+      _disposeSheetControllers([
+        titleController,
+        companyController,
+        locationController,
+        salaryController,
+        requirementsController,
+        postedByController,
+      ]);
     });
+  }
+
+  Future<void> _syncInvitationsFromApi({bool showToast = false}) async {
+    final result = await _JobsApi.instance.fetchInvitations();
+    if (!mounted) {
+      return;
+    }
+    if (result.success) {
+      _ResidentJobsHub.replaceInvitations(result.invitations);
+      if (showToast) {
+        _showFeature(
+          context,
+          result.message,
+          tone: _ToastTone.success,
+        );
+      }
+      return;
+    }
+    if (showToast) {
+      _showFeature(context, result.message, tone: _ToastTone.warning);
+    }
+  }
+
+  Future<void> _syncApplicationsFromApi({bool showToast = false}) async {
+    final result = await _JobsApi.instance.fetchApplications();
+    if (!mounted) {
+      return;
+    }
+    if (result.success) {
+      _ResidentJobsHub.replaceApplications(result.applications);
+      if (showToast) {
+        _showFeature(
+          context,
+          result.message,
+          tone: _ToastTone.success,
+        );
+      }
+      return;
+    }
+    if (showToast) {
+      _showFeature(context, result.message, tone: _ToastTone.warning);
+    }
+  }
+
+  Future<void> _syncSavedJobsFromApi({bool showToast = false}) async {
+    final result = await _JobsApi.instance.fetchSavedJobs();
+    if (!mounted) {
+      return;
+    }
+    if (result.success) {
+      _ResidentJobsHub.replaceSavedJobKeys(result.savedKeys);
+      if (showToast) {
+        _showFeature(context, result.message, tone: _ToastTone.success);
+      }
+      return;
+    }
+    if (showToast) {
+      _showFeature(context, result.message, tone: _ToastTone.warning);
+    }
+  }
+
+  void _disposeSheetControllers(List<TextEditingController> controllers) {
+    // Dispose after close animation so text-field listeners detach first.
+    unawaited(
+      Future<void>.delayed(const Duration(milliseconds: 300), () {
+        for (final controller in controllers) {
+          controller.dispose();
+        }
+      }),
+    );
   }
 
   void _openJobHunterSheet(BuildContext context) {
@@ -903,6 +1752,8 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
                             final result = await _JobsApi.instance
                                 .createHunterProfile(
                                   fullName: fullName,
+                                  mobileNumber:
+                                      _currentResidentProfile?.mobile ?? '',
                                   desiredJob: desiredJob,
                                   skills: skills,
                                   preferredSetup: setup,
@@ -950,11 +1801,13 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
         );
       },
     ).whenComplete(() {
-      nameController.dispose();
-      desiredController.dispose();
-      skillsController.dispose();
-      salaryController.dispose();
-      zoneController.dispose();
+      _disposeSheetControllers([
+        nameController,
+        desiredController,
+        skillsController,
+        salaryController,
+        zoneController,
+      ]);
     });
   }
 
@@ -1405,6 +2258,9 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
 
   Widget _jobCard(BuildContext context, _ResidentJobData job) {
     final isSaved = _ResidentJobsHub.isSaved(job);
+    final isApplied = _ResidentJobsHub.hasApplied(job);
+    final isOwner = _ResidentJobsHub.isOwnedByCurrentUser(job);
+    final submissionCount = _ResidentJobsHub.submissionCountForJob(job);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
@@ -1519,14 +2375,30 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () {
+                    onPressed: () async {
+                      final result = await _JobsApi.instance.toggleSavedJob(job);
+                      if (!context.mounted) {
+                        return;
+                      }
+                      if (result.success) {
+                        await _syncSavedJobsFromApi(showToast: false);
+                        if (!context.mounted) {
+                          return;
+                        }
+                        final nowSaved = result.saved ?? _ResidentJobsHub.isSaved(job);
+                        _showFeature(
+                          context,
+                          nowSaved
+                              ? 'Saved "${job.title}" to Saved Jobs.'
+                              : 'Removed "${job.title}" from Saved Jobs.',
+                        );
+                        return;
+                      }
                       _ResidentJobsHub.toggleSaved(job);
-                      final nowSaved = _ResidentJobsHub.isSaved(job);
                       _showFeature(
                         context,
-                        nowSaved
-                            ? 'Saved "${job.title}" to Saved Jobs.'
-                            : 'Removed "${job.title}" from Saved Jobs.',
+                        'Saved locally only: ${result.message}',
+                        tone: _ToastTone.warning,
                       );
                     },
                     icon: Icon(
@@ -1542,16 +2414,35 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: FilledButton(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ResidentJobApplicationPage(job: job),
-                      ),
-                    ),
+                    onPressed: isOwner
+                        ? () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ResidentJobSubmissionsPage(job: job),
+                            ),
+                          )
+                        : isApplied
+                        ? null
+                        : () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ResidentJobApplicationPage(job: job),
+                            ),
+                          ),
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF3946BD),
+                      backgroundColor: isOwner
+                          ? const Color(0xFF3555A7)
+                          : isApplied
+                          ? const Color(0xFF7B86B8)
+                          : const Color(0xFF3946BD),
                     ),
-                    child: const Text('Apply'),
+                    child: Text(
+                      isOwner
+                          ? 'View Submissions ($submissionCount)'
+                          : isApplied
+                          ? 'Applied'
+                          : 'Apply',
+                    ),
                   ),
                 ),
               ],
@@ -1569,6 +2460,177 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
         .where((item) => item.isNotEmpty)
         .take(4)
         .toList();
+
+    final isOwnProfile =
+        talent.fullName.trim().toLowerCase() ==
+        (_currentResidentProfile?.displayName ?? '').trim().toLowerCase();
+    final fallbackMobile = isOwnProfile ? (_currentResidentProfile?.mobile ?? '') : '';
+    final mobileForSms = (talent.mobileNumber.isNotEmpty
+            ? talent.mobileNumber
+            : fallbackMobile)
+        .replaceAll(RegExp(r'\s+'), '')
+        .trim();
+    final isTalentOwner = _ResidentJobsHub.isTalentOwnedByCurrentUser(talent);
+    List<_ResidentJobInvitationData> invitationsForCard() {
+      if (!isTalentOwner) {
+        return _ResidentJobsHub.invitationsForTalent(talent);
+      }
+      final byTalent = _ResidentJobsHub.invitationsForTalent(talent);
+      final byCurrent = _ResidentJobsHub.invitationsForCurrentResident();
+      final map = <String, _ResidentJobInvitationData>{};
+      for (final invite in [...byTalent, ...byCurrent]) {
+        map[invite.id] = invite;
+      }
+      return map.values.toList();
+    }
+
+    final invitationCount = invitationsForCard().length;
+    final hasInvited = !isTalentOwner &&
+        _ResidentJobsHub.hasCurrentUserInvitedTalent(talent);
+
+    Future<void> openSmsComposer() async {
+      if (mobileForSms.isEmpty) {
+        _showFeature(
+          context,
+          'No mobile number available for ${talent.fullName}.',
+          tone: _ToastTone.warning,
+        );
+        return;
+      }
+      final messageBody =
+          'Hello ${talent.fullName}, I would like to discuss your ${talent.desiredJob} profile on BarangayMo.';
+      final smsUri = Uri(
+        scheme: 'sms',
+        path: mobileForSms,
+        queryParameters: <String, String>{'body': messageBody},
+      );
+      final launched = await launchUrl(
+        smsUri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched && context.mounted) {
+        _showFeature(
+          context,
+          'Unable to open SMS app for $mobileForSms.',
+          tone: _ToastTone.error,
+        );
+      }
+    }
+
+    Future<void> openInviteModal() async {
+      final controller = TextEditingController();
+      final result = await showModalBottomSheet<String>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) {
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+            ),
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(12, 24, 12, 12),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9F8FF),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Invite ${talent.fullName}',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF2F334A),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Write your invitation message for ${talent.desiredJob}.',
+                    style: const TextStyle(
+                      color: Color(0xFF626B88),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: controller,
+                    minLines: 4,
+                    maxLines: 6,
+                    decoration: const InputDecoration(
+                      labelText: 'Invitation message / cover note',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        final message = controller.text.trim();
+                        if (message.isEmpty) {
+                          _showFeature(
+                            sheetContext,
+                            'Please enter your invitation message.',
+                            tone: _ToastTone.warning,
+                          );
+                          return;
+                        }
+                        Navigator.of(sheetContext).pop(message);
+                      },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF7E46D7),
+                      ),
+                      icon: const Icon(Icons.send_rounded, size: 16),
+                      label: const Text('Send Invite'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+      unawaited(
+        Future<void>.delayed(const Duration(milliseconds: 300), () {
+          controller.dispose();
+        }),
+      );
+      if (result == null || result.trim().isEmpty || !mounted) {
+        return;
+      }
+      final apiResult = await _JobsApi.instance.sendInvitation(
+        talent: talent,
+        message: result.trim(),
+      );
+      if (!mounted) {
+        return;
+      }
+      if (apiResult.success) {
+        if (apiResult.invitation != null) {
+          _ResidentJobsHub.mergeInvitation(apiResult.invitation!);
+        } else {
+          // If backend does not return payload, fetch latest invitations.
+          await _syncInvitationsFromApi(showToast: false);
+        }
+        _showFeature(
+          context,
+          apiResult.message,
+          tone: _ToastTone.success,
+        );
+        return;
+      }
+
+      // Fallback to local mode when backend invitation endpoint is unavailable.
+      _ResidentJobsHub.sendInvitation(talent: talent, message: result.trim());
+      _showFeature(
+        context,
+        'Invitation saved locally (backend sync unavailable).',
+        tone: _ToastTone.warning,
+      );
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -1704,10 +2766,7 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () => _showFeature(
-                      context,
-                      'Message sent to ${talent.fullName}.',
-                    ),
+                    onPressed: openSmsComposer,
                     icon: const Icon(
                       Icons.chat_bubble_outline_rounded,
                       size: 16,
@@ -1718,21 +2777,289 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: FilledButton.icon(
-                    onPressed: () => _showFeature(
-                      context,
-                      'Invitation sent to ${talent.fullName}.',
-                    ),
+                    onPressed: isTalentOwner
+                        ? () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  ResidentTalentInvitationsPage(talent: talent),
+                            ),
+                          )
+                        : hasInvited
+                        ? null
+                        : openInviteModal,
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF7E46D7),
+                      backgroundColor: hasInvited
+                          ? const Color(0xFF9D96BB)
+                          : const Color(0xFF7E46D7),
                     ),
                     icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
-                    label: const Text('Invite'),
+                    label: Text(
+                      isTalentOwner
+                          ? 'View Invitations ($invitationCount)'
+                          : hasInvited
+                          ? 'Invited'
+                          : 'Invite',
+                    ),
                   ),
                 ),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class ResidentTalentInvitationsPage extends StatelessWidget {
+  final _ResidentTalentPostData talent;
+
+  const ResidentTalentInvitationsPage({super.key, required this.talent});
+
+  String _formatDateTime(DateTime value) {
+    final hour = value.hour == 0
+        ? 12
+        : value.hour > 12
+        ? value.hour - 12
+        : value.hour;
+    final minute = value.minute.toString().padLeft(2, '0');
+    final meridiem = value.hour >= 12 ? 'PM' : 'AM';
+    return '${value.month}/${value.day}/${value.year} $hour:$minute $meridiem';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    List<_ResidentJobInvitationData> _mergedInvitations() {
+      final isOwner = _ResidentJobsHub.isTalentOwnedByCurrentUser(talent);
+      if (!isOwner) {
+        return _ResidentJobsHub.invitationsForTalent(talent);
+      }
+      final byTalent = _ResidentJobsHub.invitationsForTalent(talent);
+      final byCurrent = _ResidentJobsHub.invitationsForCurrentResident();
+      final map = <String, _ResidentJobInvitationData>{};
+      for (final invite in [...byTalent, ...byCurrent]) {
+        map[invite.id] = invite;
+      }
+      return map.values.toList();
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_appText('Invitations', 'Invitations')),
+        backgroundColor: const Color(0xFFF7F8FF),
+      ),
+      body: ValueListenableBuilder<int>(
+        valueListenable: _ResidentJobsHub.refresh,
+        builder: (_, __, ___) {
+          final scopedInvitations = _mergedInvitations();
+          if (scopedInvitations.isEmpty) {
+            return _AppEmptyState(
+              icon: Icons.mail_outline_rounded,
+              title: _appText('No invitations yet', 'Wala pang invitations'),
+              subtitle: _appText(
+                'Invitations sent to this profile will appear here.',
+                'Lalabas dito ang mga invitation para sa profile na ito.',
+              ),
+            );
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+            itemCount: scopedInvitations.length,
+            itemBuilder: (_, i) {
+              final invitation = scopedInvitations[i];
+              return InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ResidentInvitationReviewPage(
+                      invitation: invitation,
+                      dateLabel: _formatDateTime(invitation.createdAt),
+                    ),
+                  ),
+                ),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFFE4E7F3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              invitation.inviterName.isEmpty
+                                  ? 'Unknown inviter'
+                                  : invitation.inviterName,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF2F334A),
+                              ),
+                            ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: Color(0xFF7D86A6),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        invitation.inviterMobile.isEmpty
+                            ? 'No mobile number'
+                            : invitation.inviterMobile,
+                        style: const TextStyle(
+                          color: Color(0xFF5F6784),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _formatDateTime(invitation.createdAt),
+                        style: const TextStyle(
+                          color: Color(0xFF666E89),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        invitation.message,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF575F79),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class ResidentInvitationReviewPage extends StatelessWidget {
+  final _ResidentJobInvitationData invitation;
+  final String dateLabel;
+
+  const ResidentInvitationReviewPage({
+    super.key,
+    required this.invitation,
+    required this.dateLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_appText('Invitation Review', 'Invitation Review')),
+        backgroundColor: const Color(0xFFF7F8FF),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF6A3ACB), Color(0xFF9C5BE5)],
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  invitation.talentName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  invitation.talentDesiredJob,
+                  style: const TextStyle(
+                    color: Color(0xFFEADFFF),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE4E7F3)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  invitation.inviterName.isEmpty
+                      ? 'Unknown inviter'
+                      : invitation.inviterName,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF2F334A),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Mobile: ${invitation.inviterMobile.isEmpty ? 'No mobile number' : invitation.inviterMobile}',
+                  style: const TextStyle(
+                    color: Color(0xFF5F6784),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Sent: $dateLabel',
+                  style: const TextStyle(
+                    color: Color(0xFF666E89),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Invitation Message',
+                  style: TextStyle(
+                    color: Color(0xFF3E4460),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  invitation.message,
+                  style: const TextStyle(
+                    color: Color(0xFF575F79),
+                    fontWeight: FontWeight.w600,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1978,6 +3305,132 @@ class _ResidentJobApplicationsPageState extends State<ResidentJobApplicationsPag
   }
 }
 
+class ResidentJobSubmissionsPage extends StatefulWidget {
+  final _ResidentJobData job;
+  const ResidentJobSubmissionsPage({super.key, required this.job});
+
+  @override
+  State<ResidentJobSubmissionsPage> createState() =>
+      _ResidentJobSubmissionsPageState();
+}
+
+class _ResidentJobSubmissionsPageState extends State<ResidentJobSubmissionsPage> {
+  String _formatDateTime(DateTime value) {
+    final hour = value.hour == 0
+        ? 12
+        : value.hour > 12
+        ? value.hour - 12
+        : value.hour;
+    final minute = value.minute.toString().padLeft(2, '0');
+    final meridiem = value.hour >= 12 ? 'PM' : 'AM';
+    return '${value.month}/${value.day}/${value.year} $hour:$minute $meridiem';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final job = widget.job;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_appText('Job Submissions', 'Job Submissions')),
+        backgroundColor: const Color(0xFFF7F8FF),
+      ),
+      body: ValueListenableBuilder<int>(
+        valueListenable: _ResidentJobsHub.refresh,
+        builder: (_, __, ___) {
+          final submissions = _ResidentJobsHub.submissionsForJob(job);
+          if (submissions.isEmpty) {
+            return _AppEmptyState(
+              icon: Icons.inbox_outlined,
+              title: _appText('No submissions yet', 'Wala pang submissions'),
+              subtitle: _appText(
+                'Applicants for this job will appear here.',
+                'Lalabas dito ang mga applicant para sa job na ito.',
+              ),
+            );
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+            itemCount: submissions.length,
+            itemBuilder: (_, i) {
+              final submission = submissions[i];
+              return InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        ResidentApplicantReviewPage(job: job, submission: submission),
+                  ),
+                ),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFFE4E7F3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              submission.applicantName.isEmpty
+                                  ? 'Unnamed applicant'
+                                  : submission.applicantName,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF2F334A),
+                              ),
+                            ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: Color(0xFF7D86A6),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        submission.mobileNumber.isEmpty
+                            ? 'No mobile number'
+                            : submission.mobileNumber,
+                        style: const TextStyle(
+                          color: Color(0xFF5F6784),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Submitted: ${_formatDateTime(submission.submittedAt)}',
+                        style: const TextStyle(
+                          color: Color(0xFF666E89),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Attachment: ${submission.attachmentName.isEmpty ? 'No attachment' : submission.attachmentName}',
+                        style: const TextStyle(
+                          color: Color(0xFF515873),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
 class ResidentJobApplicationPage extends StatefulWidget {
   final _ResidentJobData job;
   const ResidentJobApplicationPage({super.key, required this.job});
@@ -1988,20 +3441,30 @@ class ResidentJobApplicationPage extends StatefulWidget {
 }
 
 class _ResidentJobApplicationPageState extends State<ResidentJobApplicationPage> {
-  final _nameController = TextEditingController(text: 'Juan Dela Cruz');
-  final _mobileController = TextEditingController(text: '09123456789');
-  final _coverLetterController = TextEditingController(
-    text:
-        'I am interested in this position and can start immediately. I have community-facing work experience and basic document handling skills.',
-  );
+  late final TextEditingController _nameController;
+  late final TextEditingController _mobileController;
+  late final TextEditingController _coverLetterController;
+  late final String _initialName;
+  late final String _initialMobile;
+  static const String _initialCoverLetter = '';
   XFile? _attachment;
+  bool _submitting = false;
 
   bool get _hasDraft =>
-      _nameController.text.trim() != 'Juan Dela Cruz' ||
-      _mobileController.text.trim() != '09123456789' ||
-      _coverLetterController.text.trim() !=
-          'I am interested in this position and can start immediately. I have community-facing work experience and basic document handling skills.' ||
+      _nameController.text.trim() != _initialName ||
+      _mobileController.text.trim() != _initialMobile ||
+      _coverLetterController.text.trim() != _initialCoverLetter ||
       _attachment != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialName = _currentResidentProfile?.displayName ?? '';
+    _initialMobile = _currentResidentProfile?.mobile ?? '';
+    _nameController = TextEditingController(text: _initialName);
+    _mobileController = TextEditingController(text: _initialMobile);
+    _coverLetterController = TextEditingController(text: _initialCoverLetter);
+  }
 
   @override
   void dispose() {
@@ -2020,30 +3483,104 @@ class _ResidentJobApplicationPageState extends State<ResidentJobApplicationPage>
     setState(() => _attachment = picked);
   }
 
-  void _submit() {
+  String _safeAttachmentName(String input) {
+    final cleaned = input.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
+    if (cleaned.isEmpty) {
+      return 'attachment_${DateTime.now().millisecondsSinceEpoch}.bin';
+    }
+    return cleaned;
+  }
+
+  Future<String> _persistAttachment(XFile file) async {
+    try {
+      final appDocs = await getApplicationDocumentsDirectory();
+      final targetDir = Directory('${appDocs.path}/BarangayMo/Applications');
+      if (!await targetDir.exists()) {
+        await targetDir.create(recursive: true);
+      }
+      final extension = file.name.contains('.')
+          ? file.name.substring(file.name.lastIndexOf('.'))
+          : '';
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_${_safeAttachmentName(file.name)}'
+              .replaceAll('..', '.');
+      final destination = File('${targetDir.path}/$fileName');
+      await File(file.path).copy(destination.path);
+      return destination.path;
+    } catch (_) {
+      return file.path;
+    }
+  }
+
+  Future<void> _submit() async {
+    if (_submitting) {
+      return;
+    }
     final name = _nameController.text.trim();
     final mobile = _mobileController.text.trim();
     final cover = _coverLetterController.text.trim();
-    final attachmentName = _attachment?.name ?? '';
-    if (name.isEmpty ||
-        mobile.length < 11 ||
-        cover.length < 20 ||
-        attachmentName.isEmpty) {
+    final attachmentName = _attachment?.name ?? 'No attachment';
+    final attachmentPath = _attachment == null
+        ? ''
+        : await _persistAttachment(_attachment!);
+    if (name.isEmpty || mobile.length < 11 || cover.isEmpty) {
       _showFeature(
         context,
-        'Complete your name, mobile number, cover letter, and resume attachment.',
+        'Enter your name, a valid mobile number, and a cover letter.',
       );
       return;
     }
-    _ResidentJobsHub.submitApplication(
+    setState(() => _submitting = true);
+    final apiResult = await _JobsApi.instance.sendApplication(
       job: widget.job,
       applicantName: name,
       mobileNumber: mobile,
       coverLetter: cover,
       attachmentName: attachmentName,
     );
+    if (!mounted) {
+      return;
+    }
+    if (apiResult.success) {
+      await _JobsApi.instance.fetchApplications().then((result) {
+        if (result.success) {
+          _ResidentJobsHub.replaceApplications(result.applications);
+        } else if (apiResult.application != null) {
+          _ResidentJobsHub.submitApplication(
+            job: widget.job,
+            applicantName: name,
+            mobileNumber: mobile,
+            coverLetter: cover,
+            attachmentName: attachmentName,
+            attachmentPath: attachmentPath,
+          );
+        }
+      });
+      if (!mounted) {
+        return;
+      }
+      Navigator.pop(context);
+      _showFeature(context, apiResult.message);
+      return;
+    }
+
+    _ResidentJobsHub.submitApplication(
+      job: widget.job,
+      applicantName: name,
+      mobileNumber: mobile,
+      coverLetter: cover,
+      attachmentName: attachmentName,
+      attachmentPath: attachmentPath,
+    );
+    if (!mounted) {
+      return;
+    }
     Navigator.pop(context);
-    _showFeature(context, 'Application sent for "${widget.job.title}".');
+    _showFeature(
+      context,
+      'Saved locally only: ${apiResult.message}',
+      tone: _ToastTone.warning,
+    );
   }
 
   @override
@@ -2158,16 +3695,282 @@ class _ResidentJobApplicationPageState extends State<ResidentJobApplicationPage>
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
           child: FilledButton.icon(
-            onPressed: _submit,
+            onPressed: _submitting ? null : _submit,
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFF3946BD),
             ),
-            icon: const Icon(Icons.send_rounded),
-            label: const Text('Submit Application'),
+            icon: _submitting
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.send_rounded),
+            label: Text(_submitting ? 'Submitting...' : 'Submit Application'),
           ),
         ),
       ),
     ),
   );
+  }
+}
+
+class ResidentApplicantReviewPage extends StatefulWidget {
+  final _ResidentJobData job;
+  final _ResidentJobApplicationData submission;
+
+  const ResidentApplicantReviewPage({
+    super.key,
+    required this.job,
+    required this.submission,
+  });
+
+  @override
+  State<ResidentApplicantReviewPage> createState() =>
+      _ResidentApplicantReviewPageState();
+}
+
+class _ResidentApplicantReviewPageState extends State<ResidentApplicantReviewPage> {
+  bool _downloading = false;
+
+  String _formatDateTime(DateTime value) {
+    final hour = value.hour == 0
+        ? 12
+        : value.hour > 12
+        ? value.hour - 12
+        : value.hour;
+    final minute = value.minute.toString().padLeft(2, '0');
+    final meridiem = value.hour >= 12 ? 'PM' : 'AM';
+    return '${value.month}/${value.day}/${value.year} $hour:$minute $meridiem';
+  }
+
+  String _safeFileName(String input) {
+    final cleaned = input.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
+    if (cleaned.isEmpty) {
+      return 'submission_attachment_${DateTime.now().millisecondsSinceEpoch}.bin';
+    }
+    return cleaned;
+  }
+
+  Future<File?> _resolveAttachmentSourceFile() async {
+    final directPath = widget.submission.attachmentPath.trim();
+    if (directPath.isNotEmpty) {
+      final directFile = File(directPath);
+      if (await directFile.exists()) {
+        return directFile;
+      }
+    }
+
+    final fileName = widget.submission.attachmentName.trim();
+    if (fileName.isEmpty || fileName == 'No attachment') {
+      return null;
+    }
+    try {
+      final appDocs = await getApplicationDocumentsDirectory();
+      final appDir = Directory('${appDocs.path}/BarangayMo/Applications');
+      if (!await appDir.exists()) {
+        return null;
+      }
+      final files = appDir.listSync();
+      for (final entity in files) {
+        if (entity is! File) {
+          continue;
+        }
+        final currentName = entity.uri.pathSegments.last;
+        if (currentName == fileName || currentName.endsWith('_$fileName')) {
+          return entity;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> _downloadAttachment() async {
+    final sourceFile = await _resolveAttachmentSourceFile();
+    if (sourceFile == null) {
+      _showFeature(
+        context,
+        'Attachment file is not available on this device for this submission.',
+      );
+      return;
+    }
+
+    setState(() => _downloading = true);
+    try {
+      Directory? targetRoot = await getDownloadsDirectory();
+      targetRoot ??= await getApplicationDocumentsDirectory();
+      final downloadsDir = Directory('${targetRoot.path}/BarangayMo/Downloads');
+      if (!await downloadsDir.exists()) {
+        await downloadsDir.create(recursive: true);
+      }
+      final fileName = _safeFileName(
+        widget.submission.attachmentName.isEmpty
+            ? sourceFile.uri.pathSegments.last
+            : widget.submission.attachmentName,
+      );
+      final destinationPath = '${downloadsDir.path}/$fileName';
+      await sourceFile.copy(destinationPath);
+      if (!mounted) {
+        return;
+      }
+      _showFeature(
+        context,
+        'Attachment downloaded to: $destinationPath',
+        tone: _ToastTone.success,
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showFeature(
+        context,
+        'Download failed. Please try again.',
+        tone: _ToastTone.error,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _downloading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final submission = widget.submission;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_appText('Applicant Review', 'Applicant Review')),
+        backgroundColor: const Color(0xFFF7F8FF),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF2F46C9), Color(0xFF5878F5)],
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.job.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  widget.job.company,
+                  style: const TextStyle(
+                    color: Color(0xFFDDE3FF),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE4E7F3)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  submission.applicantName.isEmpty
+                      ? 'Unnamed applicant'
+                      : submission.applicantName,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF2F334A),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Mobile: ${submission.mobileNumber.isEmpty ? 'No mobile number' : submission.mobileNumber}',
+                  style: const TextStyle(
+                    color: Color(0xFF5F6784),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Submitted: ${_formatDateTime(submission.submittedAt)}',
+                  style: const TextStyle(
+                    color: Color(0xFF666E89),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Cover Letter',
+                  style: TextStyle(
+                    color: Color(0xFF3E4460),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  submission.coverLetter.isEmpty
+                      ? 'No cover letter provided.'
+                      : submission.coverLetter,
+                  style: const TextStyle(
+                    color: Color(0xFF575F79),
+                    fontWeight: FontWeight.w600,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Attachment: ${submission.attachmentName.isEmpty ? 'No attachment' : submission.attachmentName}',
+                  style: const TextStyle(
+                    color: Color(0xFF515873),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _downloading ? null : _downloadAttachment,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF3555A7),
+                    ),
+                    icon: _downloading
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                            ),
+                          )
+                        : const Icon(Icons.download_rounded),
+                    label: Text(
+                      _downloading ? 'Downloading...' : 'Download Attachment',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
