@@ -1791,8 +1791,33 @@ class _DashboardCommunityFeedPreviewState
   }
 }
 
-class _DashboardMarketplacePreview extends StatelessWidget {
+class _DashboardMarketplacePreview extends StatefulWidget {
   const _DashboardMarketplacePreview();
+
+  @override
+  State<_DashboardMarketplacePreview> createState() =>
+      _DashboardMarketplacePreviewState();
+}
+
+class _DashboardMarketplacePreviewState extends State<_DashboardMarketplacePreview> {
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_syncMarketProductsFromApi());
+  }
+
+  Future<void> _syncMarketProductsFromApi() async {
+    final result = await _SellerApi.instance.fetchMarketProducts();
+    if (!mounted) {
+      return;
+    }
+    if (result.success) {
+      _ResidentCommercialSellerHub.replaceInventoryProducts(result.products);
+    }
+    setState(() => _loading = false);
+  }
 
   String _currency(double amount) => 'PHP ${amount.toStringAsFixed(0)}';
 
@@ -1813,12 +1838,18 @@ class _DashboardMarketplacePreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final products = _residentMarketplaceProducts.take(4).toList();
-    final categories = <String>{
-      for (final item in _residentMarketplaceProducts) item.category,
-    }.toList();
+    return ValueListenableBuilder<int>(
+      valueListenable: _ResidentCommercialSellerHub.refresh,
+      builder: (_, __, ___) {
+        final products = _ResidentCommercialSellerHub.inventoryProducts
+            .take(4)
+            .toList();
+        final categories = <String>{
+          for (final item in _ResidentCommercialSellerHub.inventoryProducts)
+            item.category,
+        }.toList();
 
-    return Column(
+        return Column(
       children: [
         Container(
           padding: const EdgeInsets.all(14),
@@ -1894,37 +1925,78 @@ class _DashboardMarketplacePreview extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        SizedBox(
-          height: 36,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: categories.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 8),
-            itemBuilder: (_, i) => Chip(
-              label: Text(categories[i]),
-              backgroundColor: Colors.white,
-              side: const BorderSide(color: Color(0xFFDDE3F0)),
-              labelStyle: const TextStyle(
-                color: Color(0xFF49506C),
-                fontWeight: FontWeight.w700,
+        if (categories.isNotEmpty)
+          SizedBox(
+            height: 36,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: categories.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (_, i) => Chip(
+                label: Text(categories[i]),
+                backgroundColor: Colors.white,
+                side: const BorderSide(color: Color(0xFFDDE3F0)),
+                labelStyle: const TextStyle(
+                  color: Color(0xFF49506C),
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),
-        ),
         const SizedBox(height: 10),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: products.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-            childAspectRatio: 0.64,
+        if (_loading)
+          const SizedBox(
+            height: 84,
+            child: Center(
+              child: CircularProgressIndicator(strokeWidth: 2.2),
+            ),
+          )
+        else if (products.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE4E7F2)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.storefront_outlined, color: Color(0xFF5D6788)),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'No marketplace products yet.',
+                    style: TextStyle(
+                      color: Color(0xFF5D6788),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          Builder(
+            builder: (context) {
+              final textScale = MediaQuery.textScalerOf(context).scale(1);
+              final itemHeight = textScale > 1.05 ? 360.0 : 340.0;
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: products.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                  mainAxisExtent: itemHeight,
+                ),
+                itemBuilder: (_, i) => _productCard(context, products[i]),
+              );
+            },
           ),
-          itemBuilder: (_, i) => _productCard(context, products[i]),
-        ),
       ],
+        );
+      },
     );
   }
 
@@ -1965,11 +2037,11 @@ class _DashboardMarketplacePreview extends StatelessWidget {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(14),
-                    child: Image.asset(
-                      item.imageAsset,
-                      width: double.infinity,
+                    child: _buildMarketProductImage(
+                      source: item.imageAsset,
+                      fallbackIcon: item.icon,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Icon(
+                      fallbackBuilder: () => Icon(
                         item.icon,
                         size: 46,
                         color: const Color(0xFF3F4EB5),
@@ -2082,14 +2154,15 @@ class _DashboardMarketplacePreview extends StatelessWidget {
                       ),
                     ),
                   const SizedBox(height: 6),
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
                     children: [
                       const Icon(
                         Icons.star_rounded,
                         size: 16,
                         color: Color(0xFFF4B133),
                       ),
-                      const SizedBox(width: 3),
                       Text(
                         '${item.rating.toStringAsFixed(1)} (${item.reviews})',
                         style: const TextStyle(
