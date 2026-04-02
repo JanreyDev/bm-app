@@ -926,14 +926,15 @@ class _ResidentMarketPageState extends State<ResidentMarketPage> {
                       ),
                     ),
                   const SizedBox(height: 6),
-                  Row(
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
                     children: [
                       _statPill(
                         icon: Icons.star_rounded,
                         text: merchantRating.toStringAsFixed(1),
                         color: const Color(0xFFF2A93B),
                       ),
-                      const SizedBox(width: 6),
                       _statPill(
                         icon: Icons.local_fire_department_rounded,
                         text: '${_compactCount(item.sold)} sold',
