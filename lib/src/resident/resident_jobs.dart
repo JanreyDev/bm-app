@@ -594,6 +594,8 @@ class _JobsApi {
     final inviterName = (_currentResidentProfile?.displayName ?? '').trim();
     final inviterMobile = (_currentResidentProfile?.mobile ?? '').trim();
     final payload = jsonEncode({
+      'talent_user_id': int.tryParse(talent.userId.trim()),
+      'talent_profile_id': int.tryParse(talent.profileId.trim()),
       'talent_name': talent.fullName.trim(),
       'talent_mobile': talent.mobileNumber.trim(),
       'talent_desired_job': talent.desiredJob.trim(),
@@ -1119,6 +1121,16 @@ class _JobsApi {
       return fallback;
     }
 
+    String dynamicId(dynamic value) {
+      if (value == null) {
+        return '';
+      }
+      if (value is String) {
+        return value.trim();
+      }
+      return value.toString();
+    }
+
     final fullName = read('full_name', fallback: 'Resident');
     var mobileNumber = read(
       'mobile',
@@ -1137,6 +1149,8 @@ class _JobsApi {
     }
 
     return _ResidentTalentPostData(
+      profileId: dynamicId(raw['id']),
+      userId: dynamicId(raw['user_id']),
       fullName: fullName,
       mobileNumber: mobileNumber,
       desiredJob: read('desired_job', fallback: 'Job seeker'),
@@ -1198,13 +1212,18 @@ class _JobsApi {
   _ResidentJobInvitationData? _mapInvitation(Map<String, dynamic> raw) {
     String read(String key, {String fallback = ''}) {
       final value = raw[key];
+      if (value == null) {
+        return fallback;
+      }
       if (value is String) {
         final trimmed = value.trim();
         if (trimmed.isNotEmpty) {
           return trimmed;
         }
+        return fallback;
       }
-      return fallback;
+      final asText = value.toString().trim();
+      return asText.isEmpty ? fallback : asText;
     }
 
     final id = read(
@@ -1219,6 +1238,9 @@ class _JobsApi {
     final createdAt = DateTime.tryParse(createdAtRaw) ?? DateTime.now();
     return _ResidentJobInvitationData(
       id: id,
+      inviterUserId: read('inviter_user_id'),
+      talentUserId: read('talent_user_id'),
+      talentProfileId: read('talent_profile_id'),
       talentName: talentName,
       talentMobile: read('talent_mobile', fallback: read('job_hunter_mobile')),
       talentDesiredJob: read('talent_desired_job', fallback: read('desired_job')),

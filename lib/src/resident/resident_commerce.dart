@@ -1,6 +1,8 @@
 part of barangaymo_app;
 
 class _ResidentTalentPostData {
+  final String profileId;
+  final String userId;
   final String fullName;
   final String mobileNumber;
   final String desiredJob;
@@ -11,6 +13,8 @@ class _ResidentTalentPostData {
   final bool availableNow;
 
   const _ResidentTalentPostData({
+    this.profileId = '',
+    this.userId = '',
     required this.fullName,
     this.mobileNumber = '',
     required this.desiredJob,
@@ -72,6 +76,9 @@ class _ResidentJobApplicationData {
 
 class _ResidentJobInvitationData {
   final String id;
+  final String inviterUserId;
+  final String talentUserId;
+  final String talentProfileId;
   final String talentName;
   final String talentMobile;
   final String talentDesiredJob;
@@ -83,6 +90,9 @@ class _ResidentJobInvitationData {
 
   const _ResidentJobInvitationData({
     required this.id,
+    this.inviterUserId = '',
+    this.talentUserId = '',
+    this.talentProfileId = '',
     required this.talentName,
     required this.talentMobile,
     required this.talentDesiredJob,
@@ -662,6 +672,9 @@ class _ResidentJobsHub {
   static Map<String, dynamic> _invitationToJson(_ResidentJobInvitationData invite) {
     return <String, dynamic>{
       'id': invite.id,
+      'inviter_user_id': invite.inviterUserId,
+      'talent_user_id': invite.talentUserId,
+      'talent_profile_id': invite.talentProfileId,
       'talent_name': invite.talentName,
       'talent_mobile': invite.talentMobile,
       'talent_desired_job': invite.talentDesiredJob,
@@ -689,6 +702,9 @@ class _ResidentJobsHub {
     final createdAt = DateTime.tryParse(read('created_at')) ?? DateTime.now();
     return _ResidentJobInvitationData(
       id: id,
+      inviterUserId: read('inviter_user_id'),
+      talentUserId: read('talent_user_id'),
+      talentProfileId: read('talent_profile_id'),
       talentName: talentName,
       talentMobile: read('talent_mobile'),
       talentDesiredJob: read('talent_desired_job'),
@@ -1080,6 +1096,8 @@ class _ResidentJobsHub {
     }
     final invitation = _ResidentJobInvitationData(
       id: 'inv-${DateTime.now().microsecondsSinceEpoch}',
+      talentUserId: talent.userId.trim(),
+      talentProfileId: talent.profileId.trim(),
       talentName: talent.fullName.trim(),
       talentMobile: talent.mobileNumber.trim(),
       talentDesiredJob: talent.desiredJob.trim(),
@@ -1106,9 +1124,17 @@ class _ResidentJobsHub {
   static List<_ResidentJobInvitationData> invitationsForTalent(
     _ResidentTalentPostData talent,
   ) {
+    final talentProfileId = talent.profileId.trim();
+    final talentUserId = talent.userId.trim();
     final normalizedTalentMobile = _normalizeMobileForKey(talent.mobileNumber);
     final normalizedTalentName = _normalizedIdentityName(talent.fullName.trim());
     return _allInvitations.where((invite) {
+      if (talentProfileId.isNotEmpty && invite.talentProfileId.trim().isNotEmpty) {
+        return invite.talentProfileId.trim() == talentProfileId;
+      }
+      if (talentUserId.isNotEmpty && invite.talentUserId.trim().isNotEmpty) {
+        return invite.talentUserId.trim() == talentUserId;
+      }
       final inviteMobile = _normalizeMobileForKey(invite.talentMobile);
       if (normalizedTalentMobile.isNotEmpty && inviteMobile.isNotEmpty) {
         return inviteMobile == normalizedTalentMobile;
@@ -1149,6 +1175,8 @@ class _ResidentJobsHub {
     }
     final talentMobile = _normalizeMobileForKey(talent.mobileNumber);
     final talentName = _normalizedIdentityName(talent.fullName.trim());
+    final talentProfileId = talent.profileId.trim();
+    final talentUserId = talent.userId.trim();
     return _allInvitations.any((invite) {
       final inviterMobile = _normalizeMobileForKey(invite.inviterMobile);
       final inviterName = _normalizedIdentityName(invite.inviterName.trim());
@@ -1159,6 +1187,12 @@ class _ResidentJobsHub {
           (currentName.isNotEmpty && inviterName == currentName);
       if (!inviterMatch) {
         return false;
+      }
+      if (talentProfileId.isNotEmpty && invite.talentProfileId.trim().isNotEmpty) {
+        return invite.talentProfileId.trim() == talentProfileId;
+      }
+      if (talentUserId.isNotEmpty && invite.talentUserId.trim().isNotEmpty) {
+        return invite.talentUserId.trim() == talentUserId;
       }
       final inviteTalentMobile = _normalizeMobileForKey(invite.talentMobile);
       final inviteTalentName = _normalizedIdentityName(invite.talentName.trim());
