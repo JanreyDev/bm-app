@@ -1718,7 +1718,18 @@ class ResidentMerchantInventoryPage extends StatelessWidget {
                             color: const Color(0xFFE8ECFF),
                             borderRadius: BorderRadius.circular(14),
                           ),
-                          child: Icon(item.icon, color: const Color(0xFF4254C8)),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: _buildMarketProductImage(
+                              source: item.imageAsset,
+                              fallbackIcon: item.icon,
+                              fit: BoxFit.cover,
+                              fallbackBuilder: () => Icon(
+                                item.icon,
+                                color: const Color(0xFF4254C8),
+                              ),
+                            ),
+                          ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
