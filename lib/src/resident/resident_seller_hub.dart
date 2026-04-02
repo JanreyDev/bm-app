@@ -489,6 +489,8 @@ class _SellerApi {
     final imageCandidate = read(
       'thumbnail_url',
       fallback: read(
+        'thumbnail_base64',
+        fallback: read(
         'thumbnail_path',
         fallback: read(
           'thumbnail',
@@ -496,6 +498,7 @@ class _SellerApi {
             'image_url',
             fallback: read('image_asset', fallback: _merchantProductAsset(category)),
           ),
+        ),
         ),
       ),
     );
@@ -1965,6 +1968,14 @@ class _ResidentCommercialAddProductPageState
       _showFeature(
         context,
         'Please complete all fields. Product description must be at least 8 characters.',
+      );
+      return;
+    }
+    if (widget.editIndex == null && _thumbnailBytes == null) {
+      _showFeature(
+        context,
+        'Please choose a product thumbnail.',
+        tone: _ToastTone.warning,
       );
       return;
     }
