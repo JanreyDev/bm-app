@@ -320,6 +320,8 @@ class ResidentRequestsPage extends StatefulWidget {
 class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
   String _query = '';
   String _selectedStatus = 'All';
+  bool _loading = true;
+  final List<_ResidentRequestEntry> _history = [];
 
   static const _statusFilters = [
     'All',
@@ -329,7 +331,7 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
     'Completed',
   ];
 
-  static const _history = [
+  static const _seedHistory = [
     _ResidentRequestEntry(
       category: 'Clearance',
       title: 'Barangay Clearance',
@@ -371,6 +373,253 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
       date: 'Feb 04, 2026',
     ),
   ];
+
+  static final _availableRequests = [
+    _ResidentRequestActionEntry(
+      title: 'Clearance Requests',
+      subtitle:
+          'Generate and track barangay clearance and residency certificates.',
+      icon: Icons.description_outlined,
+      buttonLabel: 'Request Clearance',
+      color: Color(0xFF4A66CB),
+      leadTime: '2-3 days',
+      serviceCategory: 'Clearance',
+    ),
+    _ResidentRequestActionEntry(
+      title: 'Assistance Requests',
+      subtitle:
+          'Submit social, financial, educational, and medical support applications.',
+      icon: Icons.volunteer_activism,
+      buttonLabel: 'Request Assistance',
+      color: Color(0xFFAE5A4E),
+      leadTime: '2-3 days',
+      serviceCategory: 'Assistance',
+    ),
+    _ResidentRequestActionEntry(
+      title: 'BPAT Patrol Requests',
+      subtitle:
+          'File patrol checks, incident support, and neighborhood safety requests.',
+      icon: Icons.shield_outlined,
+      buttonLabel: 'Request BPAT',
+      color: Color(0xFF3C5EA0),
+      leadTime: 'Same day',
+      serviceCategory: 'BPAT',
+    ),
+    _ResidentRequestActionEntry(
+      title: 'Council Coordination',
+      subtitle:
+          'Request meeting, endorsement, or barangay council follow-up support.',
+      icon: Icons.groups_rounded,
+      buttonLabel: 'Request Council',
+      color: Color(0xFF6A57BE),
+      leadTime: '1-2 days',
+      serviceCategory: 'Council',
+    ),
+    _ResidentRequestActionEntry(
+      title: 'Health Service Requests',
+      subtitle:
+          'Open health assistance, checkup coordination, and medical referrals.',
+      icon: Icons.health_and_safety_outlined,
+      buttonLabel: 'Request Health',
+      color: Color(0xFF2E8A79),
+      leadTime: '1-3 days',
+      serviceCategory: 'Health',
+    ),
+    _ResidentRequestActionEntry(
+      title: 'Community Service Requests',
+      subtitle:
+          'Submit local announcements, support concerns, and community needs.',
+      icon: Icons.forum_outlined,
+      buttonLabel: 'Request Community',
+      color: Color(0xFF8A5A44),
+      leadTime: '1-2 days',
+      serviceCategory: 'Community',
+    ),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _history.addAll(_seedHistory);
+    unawaited(_loadRequestsFromApi());
+  }
+
+  String _formatRequestDate(DateTime value) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[value.month - 1]} ${value.day}, ${value.year}';
+  }
+
+  Future<void> _loadRequestsFromApi() async {
+    final result = await _ServiceRequestApi.instance.fetchRequests();
+    if (!mounted) {
+      return;
+    }
+    if (result.success) {
+      _history
+        ..clear()
+        ..addAll(result.entries);
+    }
+    setState(() => _loading = false);
+    if (!result.success) {
+      _showFeature(
+        context,
+        'Using local request history for now: ${result.message}',
+        tone: _ToastTone.warning,
+      );
+    }
+  }
+
+  Future<void> _openRequestComposer(_ResidentRequestActionEntry entry) async {
+    final purposeController = TextEditingController();
+    final detailsController = TextEditingController();
+    var submitting = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setModal) {
+            return AnimatedPadding(
+              duration: const Duration(milliseconds: 180),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(10, 20, 10, 10),
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAFF),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFFE0E4F2)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.title,
+                      style: const TextStyle(
+                        color: Color(0xFF2D334C),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      entry.subtitle,
+                      style: const TextStyle(
+                        color: Color(0xFF69708A),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: purposeController,
+                      decoration: const InputDecoration(
+                        labelText: 'Purpose',
+                        hintText: 'Why do you need this request?',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: detailsController,
+                      minLines: 3,
+                      maxLines: 5,
+                      decoration: const InputDecoration(
+                        labelText: 'Details (optional)',
+                        hintText: 'Add supporting details',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: submitting
+                            ? null
+                            : () async {
+                                final purpose = purposeController.text.trim();
+                                if (purpose.length < 4) {
+                                  _showFeature(
+                                    context,
+                                    'Please enter a clear purpose (at least 4 characters).',
+                                    tone: _ToastTone.warning,
+                                  );
+                                  return;
+                                }
+                                setModal(() => submitting = true);
+                                final result = await _ServiceRequestApi.instance
+                                    .submitRequest(
+                                      serviceCategory: entry.serviceCategory,
+                                      serviceTitle: entry.title,
+                                      purpose: purpose,
+                                      details: detailsController.text.trim(),
+                                    );
+                                if (!mounted) {
+                                  return;
+                                }
+                                if (sheetContext.mounted) {
+                                  Navigator.pop(sheetContext);
+                                }
+                                if (result.success && result.entry != null) {
+                                  _history.insert(0, result.entry!);
+                                  setState(() {});
+                                  _showFeature(
+                                    this.context,
+                                    result.message,
+                                    tone: _ToastTone.success,
+                                  );
+                                  return;
+                                }
+                                final local = _ResidentRequestEntry(
+                                  category: entry.serviceCategory,
+                                  title: entry.title,
+                                  requestId:
+                                      '${entry.serviceCategory.substring(0, math.min(2, entry.serviceCategory.length)).toUpperCase()}-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+                                  status: 'Pending',
+                                  purpose: purpose,
+                                  date: _formatRequestDate(DateTime.now()),
+                                );
+                                _history.insert(0, local);
+                                setState(() {});
+                                _showFeature(
+                                  this.context,
+                                  'Saved locally: ${result.message}',
+                                  tone: _ToastTone.warning,
+                                );
+                              },
+                        icon: const Icon(Icons.send_rounded, size: 18),
+                        label: Text(
+                          submitting ? 'Submitting...' : 'Submit Request',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    purposeController.dispose();
+    detailsController.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -499,64 +748,75 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
               ),
             ),
             const SizedBox(height: 10),
-            SizedBox(
-              height: 36,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: _statusFilters.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 6),
-                itemBuilder: (_, i) {
-                  final label = _statusFilters[i];
-                  final active = label == _selectedStatus;
-                  final count = label == 'All'
-                      ? _history.length
-                      : _history.where((item) => item.status == label).length;
-                  return ChoiceChip(
-                    label: Text('$label ($count)'),
-                    selected: active,
-                    onSelected: (_) => setState(() => _selectedStatus = label),
-                    selectedColor: const Color(0xFFDCE4FF),
-                    side: BorderSide(
-                      color: active
-                          ? const Color(0xFF576DD8)
-                          : const Color(0xFFD9DFEF),
-                    ),
-                    labelStyle: TextStyle(
-                      color: active
-                          ? const Color(0xFF32419A)
-                          : const Color(0xFF626983),
-                      fontWeight: FontWeight.w800,
-                    ),
-                  );
-                },
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 4),
+                child: LinearProgressIndicator(minHeight: 3),
+              )
+            else
+              SizedBox(
+                height: 36,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _statusFilters.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 6),
+                  itemBuilder: (_, i) {
+                    final label = _statusFilters[i];
+                    final active = label == _selectedStatus;
+                    final count = label == 'All'
+                        ? _history.length
+                        : _history.where((item) => item.status == label).length;
+                    return ChoiceChip(
+                      label: Text('$label ($count)'),
+                      selected: active,
+                      onSelected: (_) => setState(() => _selectedStatus = label),
+                      selectedColor: const Color(0xFFDCE4FF),
+                      side: BorderSide(
+                        color: active
+                            ? const Color(0xFF576DD8)
+                            : const Color(0xFFD9DFEF),
+                      ),
+                      labelStyle: TextStyle(
+                        color: active
+                            ? const Color(0xFF32419A)
+                            : const Color(0xFF626983),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            const SizedBox(height: 12),
+            const Text(
+              'Available Requests',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF2F334A),
               ),
             ),
-            const SizedBox(height: 12),
-            _requestActionCard(
-              context: context,
-              title: 'Clearance Requests',
-              subtitle:
-                  'Generate and track barangay clearance and residency certificates.',
-              icon: Icons.description_outlined,
-              buttonLabel: 'Request Clearance',
-              color: const Color(0xFF4A66CB),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ClearancePage()),
+            const SizedBox(height: 2),
+            Text(
+              '${_availableRequests.length} service request type(s) available',
+              style: const TextStyle(
+                color: Color(0xFF6A7089),
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 10),
-            _requestActionCard(
-              context: context,
-              title: 'Assistance Requests',
-              subtitle:
-                  'Submit social, financial, educational, and medical support applications.',
-              icon: Icons.volunteer_activism,
-              buttonLabel: 'Request Assistance',
-              color: const Color(0xFFAE5A4E),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AssistancePage()),
+            ..._availableRequests.map(
+              (entry) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _requestActionCard(
+                  context: context,
+                  title: entry.title,
+                  subtitle: entry.subtitle,
+                  icon: entry.icon,
+                  buttonLabel: entry.buttonLabel,
+                  color: entry.color,
+                  leadTime: entry.leadTime,
+                  onTap: () => _openRequestComposer(entry),
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -732,6 +992,7 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
     required IconData icon,
     required String buttonLabel,
     required Color color,
+    String leadTime = '2-3 days',
     required VoidCallback onTap,
   }) {
     return Container(
@@ -773,7 +1034,7 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  '2-3 days',
+                  leadTime,
                   style: TextStyle(
                     color: color,
                     fontWeight: FontWeight.w800,
@@ -876,6 +1137,306 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
         ),
       ),
     );
+  }
+}
+
+class _ResidentRequestActionEntry {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final String buttonLabel;
+  final Color color;
+  final String leadTime;
+  final String serviceCategory;
+
+  const _ResidentRequestActionEntry({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.buttonLabel,
+    required this.color,
+    required this.leadTime,
+    required this.serviceCategory,
+  });
+}
+
+class _ServiceRequestFetchResult {
+  final bool success;
+  final String message;
+  final List<_ResidentRequestEntry> entries;
+
+  const _ServiceRequestFetchResult({
+    required this.success,
+    required this.message,
+    this.entries = const <_ResidentRequestEntry>[],
+  });
+}
+
+class _ServiceRequestSubmitResult {
+  final bool success;
+  final String message;
+  final _ResidentRequestEntry? entry;
+
+  const _ServiceRequestSubmitResult({
+    required this.success,
+    required this.message,
+    this.entry,
+  });
+}
+
+class _ServiceRequestApi {
+  _ServiceRequestApi._();
+  static final _ServiceRequestApi instance = _ServiceRequestApi._();
+  static const Duration _requestTimeout = Duration(seconds: 8);
+
+  Future<_ServiceRequestFetchResult> fetchRequests() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _ServiceRequestFetchResult(
+        success: false,
+        message: 'Please log in again to load requests.',
+      );
+    }
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    final paths = <String>['services/requests', 'requests'];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http
+              .get(
+                endpoint,
+                headers: {
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $_authToken',
+                },
+              )
+              .timeout(_requestTimeout);
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          final body = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final rawList = body['requests'] ?? body['data'];
+            if (rawList is! List) {
+              return const _ServiceRequestFetchResult(
+                success: false,
+                message: 'Service requests payload is invalid.',
+              );
+            }
+            final entries = <_ResidentRequestEntry>[];
+            for (final item in rawList) {
+              if (item is! Map<String, dynamic>) {
+                continue;
+              }
+              final mapped = _mapRequest(item);
+              if (mapped != null) {
+                entries.add(mapped);
+              }
+            }
+            return _ServiceRequestFetchResult(
+              success: true,
+              message: _extractApiMessage(body, fallback: 'Requests loaded.'),
+              entries: entries,
+            );
+          }
+          return _ServiceRequestFetchResult(
+            success: false,
+            message: _extractApiMessage(
+              body,
+              fallback: 'Unable to load requests.',
+            ),
+          );
+        } on TimeoutException {
+          sawTimeout = true;
+        } catch (_) {
+          sawConnectionError = true;
+        }
+      }
+    }
+
+    if (sawTimeout) {
+      return const _ServiceRequestFetchResult(
+        success: false,
+        message: 'Loading requests timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _ServiceRequestFetchResult(
+        success: false,
+        message: 'Cannot connect to server to load requests.',
+      );
+    }
+    return const _ServiceRequestFetchResult(
+      success: false,
+      message: 'Requests endpoint is not available yet.',
+    );
+  }
+
+  Future<_ServiceRequestSubmitResult> submitRequest({
+    required String serviceCategory,
+    required String serviceTitle,
+    required String purpose,
+    String details = '',
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _ServiceRequestSubmitResult(
+        success: false,
+        message: 'Please log in again before requesting.',
+      );
+    }
+
+    final payload = jsonEncode({
+      'service_category': serviceCategory.trim(),
+      'service_title': serviceTitle.trim(),
+      'purpose': purpose.trim(),
+      if (details.trim().isNotEmpty) 'details': details.trim(),
+    });
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    final paths = <String>['services/requests', 'requests'];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http
+              .post(
+                endpoint,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $_authToken',
+                },
+                body: payload,
+              )
+              .timeout(_requestTimeout);
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          final body = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final raw = body['request'] ?? body['data'];
+            final mapped = raw is Map<String, dynamic> ? _mapRequest(raw) : null;
+            return _ServiceRequestSubmitResult(
+              success: true,
+              message: _extractApiMessage(
+                body,
+                fallback: 'Service request submitted.',
+              ),
+              entry: mapped,
+            );
+          }
+          return _ServiceRequestSubmitResult(
+            success: false,
+            message: _extractApiMessage(
+              body,
+              fallback: 'Unable to submit request.',
+            ),
+          );
+        } on TimeoutException {
+          sawTimeout = true;
+        } catch (_) {
+          sawConnectionError = true;
+        }
+      }
+    }
+
+    if (sawTimeout) {
+      return const _ServiceRequestSubmitResult(
+        success: false,
+        message: 'Submitting request timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _ServiceRequestSubmitResult(
+        success: false,
+        message: 'Cannot connect to server to submit request.',
+      );
+    }
+    return const _ServiceRequestSubmitResult(
+      success: false,
+      message: 'Requests endpoint is not available yet.',
+    );
+  }
+
+  _ResidentRequestEntry? _mapRequest(Map<String, dynamic> raw) {
+    String read(String key, {String fallback = ''}) {
+      final value = raw[key];
+      if (value == null) {
+        return fallback;
+      }
+      if (value is String) {
+        final trimmed = value.trim();
+        return trimmed.isEmpty ? fallback : trimmed;
+      }
+      final text = value.toString().trim();
+      return text.isEmpty ? fallback : text;
+    }
+
+    final title = read('service_title', fallback: read('title'));
+    if (title.isEmpty) {
+      return null;
+    }
+    final submittedAtRaw = read('submitted_at', fallback: read('created_at'));
+    DateTime submittedAt = DateTime.now();
+    if (submittedAtRaw.isNotEmpty) {
+      submittedAt = DateTime.tryParse(submittedAtRaw) ?? submittedAt;
+    }
+    final monthNames = const [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final dateText =
+        '${monthNames[submittedAt.month - 1]} ${submittedAt.day}, ${submittedAt.year}';
+    return _ResidentRequestEntry(
+      category: read('service_category', fallback: 'General'),
+      title: title,
+      requestId: read('request_id', fallback: read('id', fallback: 'REQ')),
+      status: read('status', fallback: 'Pending'),
+      purpose: read('purpose', fallback: read('details')),
+      date: dateText,
+    );
+  }
+
+  String _extractApiMessage(
+    Map<String, dynamic> body, {
+    required String fallback,
+  }) {
+    final message = body['message'];
+    if (message is String && message.trim().isNotEmpty) {
+      return message.trim();
+    }
+    final errors = body['errors'];
+    if (errors is Map<String, dynamic>) {
+      for (final value in errors.values) {
+        if (value is List && value.isNotEmpty) {
+          final first = value.first;
+          if (first is String && first.trim().isNotEmpty) {
+            return first.trim();
+          }
+        }
+        if (value is String && value.trim().isNotEmpty) {
+          return value.trim();
+        }
+      }
+    }
+    return fallback;
   }
 }
 
