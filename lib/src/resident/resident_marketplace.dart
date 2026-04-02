@@ -667,17 +667,23 @@ class _ResidentMarketPageState extends State<ResidentMarketPage> {
                   ),
                 )
               else
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: products.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 0.62,
-                    crossAxisSpacing: 9,
-                    mainAxisSpacing: 10,
-                  ),
-                  itemBuilder: (_, i) => _marketTile(context, products[i]),
+                Builder(
+                  builder: (context) {
+                    final textScale = MediaQuery.textScalerOf(context).scale(1);
+                    final itemHeight = textScale > 1.05 ? 360.0 : 340.0;
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: products.length,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        mainAxisExtent: itemHeight,
+                        crossAxisSpacing: 9,
+                        mainAxisSpacing: 10,
+                      ),
+                      itemBuilder: (_, i) => _marketTile(context, products[i]),
+                    );
+                  },
                 ),
                 ],
               ),
