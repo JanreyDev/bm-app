@@ -1319,6 +1319,7 @@ class _SimplePageState extends State<_SimplePage> {
   int _refreshTick = 0;
   late List<String> _rows;
   List<_SimpleTimelineItem> _officialTimeline = const <_SimpleTimelineItem>[];
+  List<_SimpleTimelineItem> _marketTimeline = const <_SimpleTimelineItem>[];
 
   static const List<String> _officialLoadingRows = <String>[
     'Council Agenda: Loading...',
@@ -1326,18 +1327,34 @@ class _SimplePageState extends State<_SimplePage> {
     'Public Notices: Loading...',
     'Scheduled Hearings: Loading...',
   ];
+  static const List<String> _marketLoadingRows = <String>[
+    'Marketplace Vendors: Loading...',
+    'Today\'s Transactions: Loading...',
+    'Top Category: Loading...',
+    'Delivery Requests: Loading...',
+  ];
 
   @override
   void initState() {
     super.initState();
-    _rows = widget.title.toLowerCase() == 'official'
+    final title = widget.title.toLowerCase();
+    _rows = title == 'official'
         ? [..._officialLoadingRows]
-        : [...widget.rows];
-    if (widget.title.toLowerCase() == 'official') {
+        : (title == 'market' ? [..._marketLoadingRows] : [...widget.rows]);
+    if (title == 'official') {
       _officialTimeline = <_SimpleTimelineItem>[
         _SimpleTimelineItem(
           title: 'Loading recent activity',
           note: 'Syncing official activity feed...',
+          time: DateTime(2000, 1, 1),
+          icon: Icons.sync_rounded,
+        ),
+      ];
+    } else if (title == 'market') {
+      _marketTimeline = <_SimpleTimelineItem>[
+        _SimpleTimelineItem(
+          title: 'Loading market activity',
+          note: 'Syncing marketplace feed...',
           time: DateTime(2000, 1, 1),
           icon: Icons.sync_rounded,
         ),
@@ -1349,8 +1366,11 @@ class _SimplePageState extends State<_SimplePage> {
 
   Future<void> _refreshData() async {
     List<String>? refreshedRows;
-    if (widget.title.toLowerCase() == 'official') {
+    final title = widget.title.toLowerCase();
+    if (title == 'official') {
       refreshedRows = await _resolveOfficialRows();
+    } else if (title == 'market') {
+      refreshedRows = await _resolveMarketRows();
     } else {
       await Future<void>.delayed(const Duration(milliseconds: 550));
     }
@@ -1365,10 +1385,13 @@ class _SimplePageState extends State<_SimplePage> {
   }
 
   Future<void> _primeOfficialAgendaCard() async {
-    if (widget.title.toLowerCase() != 'official') {
+    final title = widget.title.toLowerCase();
+    if (title != 'official' && title != 'market') {
       return;
     }
-    final refreshedRows = await _resolveOfficialRows();
+    final refreshedRows = title == 'official'
+        ? await _resolveOfficialRows()
+        : await _resolveMarketRows();
     if (!mounted) {
       return;
     }
@@ -1514,6 +1537,101 @@ class _SimplePageState extends State<_SimplePage> {
     return next;
   }
 
+  Future<List<String>> _resolveMarketRows() async {
+    final next = [..._rows];
+    if (next.length < 4) {
+      while (next.length < 4) {
+        next.add('');
+      }
+    }
+
+    final productsResult = await _SellerApi.instance.fetchMarketProducts();
+    final backendTimeline =
+        await _fetchOfficialRecentActivityFromBackend(onlyType: 'market');
+
+    if (!productsResult.success) {
+      next[0] = 'Marketplace Vendors: Data unavailable right now';
+      next[1] = 'Today\'s Transactions: Data unavailable right now';
+      next[2] = 'Top Category: Data unavailable right now';
+      next[3] = 'Delivery Requests: Data unavailable right now';
+      _marketTimeline = backendTimeline.isEmpty
+          ? <_SimpleTimelineItem>[
+              _SimpleTimelineItem(
+                title: 'No market activity yet',
+                note: 'Recent market actions will appear here.',
+                time: DateTime(2000, 1, 1),
+                icon: Icons.inbox_outlined,
+              ),
+            ]
+          : backendTimeline;
+      return next;
+    }
+
+    final products = productsResult.products;
+    final vendorCount = products
+        .map((item) => item.seller.trim().toLowerCase())
+        .where((name) => name.isNotEmpty)
+        .toSet()
+        .length;
+    final soldUnits = products.fold<int>(0, (sum, item) => sum + item.sold);
+
+    final categoryCounts = <String, int>{};
+    for (final item in products) {
+      final key = item.category.trim().isEmpty ? 'Uncategorized' : item.category.trim();
+      categoryCounts[key] = (categoryCounts[key] ?? 0) + 1;
+    }
+    var topCategory = 'No categories yet';
+    var topCount = -1;
+    categoryCounts.forEach((key, count) {
+      if (count > topCount) {
+        topCount = count;
+        topCategory = key;
+      }
+    });
+
+    final deliveryPending = products.where((item) {
+      final eta = item.eta.toLowerCase();
+      return eta.contains('deliver') ||
+          eta.contains('delivery') ||
+          eta.contains('pickup') ||
+          eta.contains('ship');
+    }).length;
+
+    next[0] = 'Marketplace Vendors: $vendorCount registered stall(s)';
+    next[1] = 'Today\'s Transactions: $soldUnits sold unit(s) logged';
+    next[2] = 'Top Category: $topCategory';
+    next[3] = 'Delivery Requests: $deliveryPending pending fulfillment(s)';
+
+    if (backendTimeline.isNotEmpty) {
+      _marketTimeline = backendTimeline;
+    } else {
+      final fallbackTimeline = products.take(3).toList();
+      if (fallbackTimeline.isEmpty) {
+        _marketTimeline = <_SimpleTimelineItem>[
+          _SimpleTimelineItem(
+            title: 'No market activity yet',
+            note: 'Recent market actions will appear here.',
+            time: DateTime(2000, 1, 1),
+            icon: Icons.inbox_outlined,
+          ),
+        ];
+      } else {
+        _marketTimeline = [
+          for (var i = 0; i < fallbackTimeline.length; i++)
+            _SimpleTimelineItem(
+              title: 'Market product listed',
+              note:
+                  '${fallbackTimeline[i].title} (Stock ${fallbackTimeline[i].stock})',
+              time: DateTime.now().subtract(Duration(minutes: i * 8)),
+              icon: Icons.storefront_rounded,
+            ),
+        ];
+      }
+    }
+
+    return next;
+  }
+
   Future<Map<String, dynamic>?> _fetchOfficialSummaryFromBackend() async {
     if (_authToken == null || _authToken!.isEmpty) {
       return null;
@@ -1559,7 +1677,9 @@ class _SimplePageState extends State<_SimplePage> {
     return null;
   }
 
-  Future<List<_SimpleTimelineItem>> _fetchOfficialRecentActivityFromBackend() async {
+  Future<List<_SimpleTimelineItem>> _fetchOfficialRecentActivityFromBackend({
+    String? onlyType,
+  }) async {
     if (_authToken == null || _authToken!.isEmpty) {
       return const <_SimpleTimelineItem>[];
     }
@@ -1606,6 +1726,11 @@ class _SimplePageState extends State<_SimplePage> {
                 .trim();
             final parsedTime = DateTime.tryParse(rawTime)?.toLocal() ?? DateTime.now();
             final type = ((item['type'] as String?) ?? '').trim().toLowerCase();
+            if (onlyType != null &&
+                onlyType.trim().isNotEmpty &&
+                type != onlyType.trim().toLowerCase()) {
+              continue;
+            }
             if (title.isEmpty || note.isEmpty) {
               continue;
             }
@@ -1926,26 +2051,7 @@ class _SimplePageState extends State<_SimplePage> {
       return _officialTimeline;
     }
     if (t == 'market') {
-      return [
-        _SimpleTimelineItem(
-          title: 'Vendor check-in completed',
-          note: 'Morning inventory validated for 32 stalls.',
-          time: _lastSynced.subtract(const Duration(minutes: 6)),
-          icon: Icons.store_mall_directory_rounded,
-        ),
-        _SimpleTimelineItem(
-          title: 'Payment batch posted',
-          note: 'Receipts reconciled with marketplace ledger.',
-          time: _lastSynced.subtract(const Duration(minutes: 18)),
-          icon: Icons.receipt_long_rounded,
-        ),
-        _SimpleTimelineItem(
-          title: 'Delivery route assigned',
-          note: 'Rider dispatch aligned with zone priorities.',
-          time: _lastSynced.subtract(const Duration(minutes: 37)),
-          icon: Icons.local_shipping_rounded,
-        ),
-      ];
+      return _marketTimeline;
     }
     return [
       _SimpleTimelineItem(
@@ -2106,7 +2212,8 @@ class _SimplePageState extends State<_SimplePage> {
               final hasPair = parts.length > 1;
               final key = hasPair ? parts.first.trim() : text;
               final rawValue = hasPair ? parts.sublist(1).join(':').trim() : '';
-              final allowPulse = widget.title.toLowerCase() != 'official';
+              final titleKey = widget.title.toLowerCase();
+              final allowPulse = titleKey != 'official' && titleKey != 'market';
               final value = hasPair
                   ? (allowPulse ? _pulseValue(rawValue, entry.key) : rawValue)
                   : rawValue;
