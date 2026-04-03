@@ -128,6 +128,7 @@ class _OfficialAccessPageState extends State<OfficialAccessPage> {
       mobile: mobile,
       token: result.token ?? '',
       activationCompleted: result.activationCompleted,
+      user: result.user,
       pin: _pin,
     );
   }

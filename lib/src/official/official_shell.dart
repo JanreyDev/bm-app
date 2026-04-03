@@ -58,9 +58,10 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    final barangayTitle = _officialBarangaySetup.barangay.trim().isEmpty
+    final liveBarangay = _officialEditableProfile.value.barangay.trim();
+    final barangayTitle = liveBarangay.isEmpty
         ? 'Barangay Profile'
-        : '${_officialBarangaySetup.barangay} Barangay Profile';
+        : '$liveBarangay Barangay Profile';
     final barangayLocation =
         '${_officialBarangaySetup.city}, ${_officialBarangaySetup.province}';
 
@@ -784,9 +785,10 @@ class _OfficialHomePageState extends State<_OfficialHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final barangayName = _officialBarangaySetup.barangay.trim().isEmpty
+    final liveBarangay = _officialEditableProfile.value.barangay.trim();
+    final barangayName = liveBarangay.isEmpty
         ? 'Barangay Profile'
-        : _officialBarangaySetup.barangay;
+        : liveBarangay;
     final city = _officialBarangaySetup.city.trim();
     final province = _officialBarangaySetup.province.trim();
     final location = [city, province]
@@ -1144,20 +1146,215 @@ class _SimplePage extends StatefulWidget {
 class _SimplePageState extends State<_SimplePage> {
   late DateTime _lastSynced;
   int _refreshTick = 0;
+  late List<String> _rows;
+  List<_SimpleTimelineItem> _officialTimeline = const <_SimpleTimelineItem>[];
+
+  static const List<String> _officialLoadingRows = <String>[
+    'Council Agenda: Loading...',
+    'Pending Approvals: Loading...',
+    'Public Notices: Loading...',
+    'Scheduled Hearings: Loading...',
+  ];
 
   @override
   void initState() {
     super.initState();
+    _rows = widget.title.toLowerCase() == 'official'
+        ? [..._officialLoadingRows]
+        : [...widget.rows];
+    if (widget.title.toLowerCase() == 'official') {
+      _officialTimeline = <_SimpleTimelineItem>[
+        _SimpleTimelineItem(
+          title: 'Loading recent activity',
+          note: 'Syncing official activity feed...',
+          time: DateTime(2000, 1, 1),
+          icon: Icons.sync_rounded,
+        ),
+      ];
+    }
     _lastSynced = DateTime.now();
+    _primeOfficialAgendaCard();
   }
 
   Future<void> _refreshData() async {
-    await Future<void>.delayed(const Duration(milliseconds: 550));
+    List<String>? refreshedRows;
+    if (widget.title.toLowerCase() == 'official') {
+      refreshedRows = await _resolveOfficialRows();
+    } else {
+      await Future<void>.delayed(const Duration(milliseconds: 550));
+    }
     if (!mounted) return;
     setState(() {
+      if (refreshedRows != null) {
+        _rows = refreshedRows;
+      }
       _refreshTick++;
       _lastSynced = DateTime.now();
     });
+  }
+
+  Future<void> _primeOfficialAgendaCard() async {
+    if (widget.title.toLowerCase() != 'official') {
+      return;
+    }
+    final refreshedRows = await _resolveOfficialRows();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _rows = refreshedRows);
+  }
+
+  Future<List<String>> _resolveOfficialRows() async {
+    final next = [..._rows];
+
+    final requestsResult = await _ServiceRequestApi.instance.fetchRequests();
+    if (next.length < 4) {
+      while (next.length < 4) {
+        next.add('');
+      }
+    }
+    if (requestsResult.success) {
+      final pending = requestsResult.entries
+          .where((entry) => entry.status.toLowerCase().contains('pending'))
+          .length;
+      final hearingKeywords = <String>[
+        'hearing',
+        'mediation',
+        'dispute',
+        'complaint',
+        'settlement',
+      ];
+      final hearingCount = requestsResult.entries.where((entry) {
+        final bucket = '${entry.category} ${entry.title} ${entry.purpose}'.toLowerCase();
+        return hearingKeywords.any(bucket.contains);
+      }).length;
+      next[1] = 'Pending Approvals: $pending request(s) pending review';
+      next[3] = 'Scheduled Hearings: $hearingCount mediation case(s) this week';
+    } else {
+      next[1] = 'Pending Approvals: Queue unavailable right now';
+      next[3] = 'Scheduled Hearings: Schedule unavailable right now';
+    }
+
+    final result = await _CommunityApi.instance.fetchPosts();
+    final timelineEvents = <_SimpleTimelineItem>[];
+    if (requestsResult.success) {
+      final requestEvents = [...requestsResult.entries];
+      for (var i = 0; i < requestEvents.length && i < 3; i++) {
+        final entry = requestEvents[i];
+        timelineEvents.add(
+          _SimpleTimelineItem(
+            title: 'Service request received',
+            note: '${entry.title} (${entry.status})',
+            time: _parseRequestDate(entry.date).add(Duration(minutes: i)),
+            icon: Icons.assignment_turned_in_rounded,
+          ),
+        );
+      }
+    }
+    if (result.success) {
+      final postEvents = [...result.posts]..sort((a, b) => b.postedAt.compareTo(a.postedAt));
+      for (var i = 0; i < postEvents.length && i < 3; i++) {
+        final post = postEvents[i];
+        timelineEvents.add(
+          _SimpleTimelineItem(
+            title: post.isOfficial ? 'Official post published' : 'Community post published',
+            note: _truncate(post.message, 64),
+            time: post.postedAt,
+            icon: post.isOfficial ? Icons.campaign_rounded : Icons.forum_rounded,
+          ),
+        );
+      }
+    }
+    if (timelineEvents.isEmpty) {
+      _officialTimeline = <_SimpleTimelineItem>[
+        _SimpleTimelineItem(
+          title: 'No recent activity yet',
+          note: 'Recent requests and posts will appear here.',
+          time: DateTime(2000, 1, 1),
+          icon: Icons.inbox_outlined,
+        ),
+      ];
+    } else {
+      timelineEvents.sort((a, b) => b.time.compareTo(a.time));
+      _officialTimeline = timelineEvents.take(3).toList();
+    }
+
+    if (!result.success || result.posts.isEmpty) {
+      if (next.isEmpty) {
+        next.add('Council Agenda: No council agenda published yet.');
+      } else {
+        next[0] = 'Council Agenda: No council agenda published yet.';
+      }
+      next[2] = 'Public Notices: 0 active posting(s) this week';
+      return next;
+    }
+    final officialPosts = result.posts.where((entry) => entry.isOfficial).toList();
+    final source = officialPosts.isNotEmpty ? officialPosts : result.posts;
+    source.sort((a, b) => b.postedAt.compareTo(a.postedAt));
+
+    final latest = source.first;
+    final agendaText = latest.message.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (agendaText.isEmpty) {
+      if (next.isEmpty) {
+        next.add('Council Agenda: No council agenda published yet.');
+      } else {
+        next[0] = 'Council Agenda: No council agenda published yet.';
+      }
+      next[2] = 'Public Notices: ${result.posts.length} active posting(s) this week';
+      return next;
+    }
+    final rowText = 'Council Agenda: $agendaText';
+    if (next.isEmpty) {
+      next.add(rowText);
+    } else {
+      next[0] = rowText;
+    }
+    next[2] = 'Public Notices: ${result.posts.length} active posting(s) this week';
+    return next;
+  }
+
+  DateTime _parseRequestDate(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) {
+      return DateTime.now();
+    }
+    final direct = DateTime.tryParse(text);
+    if (direct != null) {
+      return direct;
+    }
+    final parts = text.replaceAll(',', '').split(RegExp(r'\s+'));
+    if (parts.length < 3) {
+      return DateTime.now();
+    }
+    const monthMap = <String, int>{
+      'jan': 1,
+      'feb': 2,
+      'mar': 3,
+      'apr': 4,
+      'may': 5,
+      'jun': 6,
+      'jul': 7,
+      'aug': 8,
+      'sep': 9,
+      'oct': 10,
+      'nov': 11,
+      'dec': 12,
+    };
+    final month = monthMap[parts[0].toLowerCase().substring(0, 3)];
+    final day = int.tryParse(parts[1]);
+    final year = int.tryParse(parts[2]);
+    if (month == null || day == null || year == null) {
+      return DateTime.now();
+    }
+    return DateTime(year, month, day);
+  }
+
+  String _truncate(String value, int maxChars) {
+    final clean = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (clean.length <= maxChars) {
+      return clean;
+    }
+    return '${clean.substring(0, maxChars)}...';
   }
 
   IconData _rowIcon(String text, int index) {
@@ -1337,26 +1534,7 @@ class _SimplePageState extends State<_SimplePage> {
   List<_SimpleTimelineItem> _timelineItems() {
     final t = widget.title.toLowerCase();
     if (t == 'official') {
-      return [
-        _SimpleTimelineItem(
-          title: 'Permit endorsement reviewed',
-          note: 'Treasury desk completed pre-check.',
-          time: _lastSynced.subtract(const Duration(minutes: 8)),
-          icon: Icons.assignment_turned_in_rounded,
-        ),
-        _SimpleTimelineItem(
-          title: 'Council memo published',
-          note: 'Session reminders pushed to committee members.',
-          time: _lastSynced.subtract(const Duration(minutes: 22)),
-          icon: Icons.campaign_rounded,
-        ),
-        _SimpleTimelineItem(
-          title: 'Hearing reminder sent',
-          note: 'Mediation participants confirmed attendance.',
-          time: _lastSynced.subtract(const Duration(minutes: 41)),
-          icon: Icons.notifications_active_rounded,
-        ),
-      ];
+      return _officialTimeline;
     }
     if (t == 'market') {
       return [
@@ -1403,6 +1581,9 @@ class _SimplePageState extends State<_SimplePage> {
   }
 
   String _timeAgo(DateTime value) {
+    if (value.year <= 2001) {
+      return 'now';
+    }
     final difference = _lastSynced.difference(value);
     final minutes = difference.inMinutes;
     if (minutes <= 0) return 'Just now';
@@ -1530,14 +1711,15 @@ class _SimplePageState extends State<_SimplePage> {
               ),
             ),
             const SizedBox(height: 12),
-            ...widget.rows.asMap().entries.map((entry) {
+            ..._rows.asMap().entries.map((entry) {
               final text = entry.value;
               final parts = text.split(':');
               final hasPair = parts.length > 1;
               final key = hasPair ? parts.first.trim() : text;
               final rawValue = hasPair ? parts.sublist(1).join(':').trim() : '';
+              final allowPulse = widget.title.toLowerCase() != 'official';
               final value = hasPair
-                  ? _pulseValue(rawValue, entry.key)
+                  ? (allowPulse ? _pulseValue(rawValue, entry.key) : rawValue)
                   : rawValue;
               final isPureNumber = RegExp(r'^\d+$').hasMatch(value);
               final badge = _badgeForRow(key, value);

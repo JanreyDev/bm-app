@@ -1690,6 +1690,10 @@ class _OfficialAuthCacheStore {
   static const String _mobilePrefix = 'official_session_mobile_';
   static const String _activationPrefix = 'official_session_activation_';
   static const String _expiresPrefix = 'official_session_expires_';
+  static const String _namePrefix = 'official_session_name_';
+  static const String _barangayPrefix = 'official_session_barangay_';
+  static const String _cityPrefix = 'official_session_city_';
+  static const String _provincePrefix = 'official_session_province_';
 
   static String _key(String prefix, String mobile) {
     return '$prefix${_normalizeMobileForKey(mobile)}';
@@ -1699,6 +1703,10 @@ class _OfficialAuthCacheStore {
     required String token,
     required String mobile,
     required bool activationCompleted,
+    String? name,
+    String? barangay,
+    String? cityMunicipality,
+    String? province,
   }) async {
     final normalized = _normalizeMobileForKey(mobile);
     if (normalized.isEmpty || token.isEmpty) {
@@ -1708,6 +1716,10 @@ class _OfficialAuthCacheStore {
     await prefs.setString(_key(_tokenPrefix, mobile), token);
     await prefs.setString(_key(_mobilePrefix, mobile), normalized);
     await prefs.setBool(_key(_activationPrefix, mobile), activationCompleted);
+    await prefs.setString(_key(_namePrefix, mobile), (name ?? '').trim());
+    await prefs.setString(_key(_barangayPrefix, mobile), (barangay ?? '').trim());
+    await prefs.setString(_key(_cityPrefix, mobile), (cityMunicipality ?? '').trim());
+    await prefs.setString(_key(_provincePrefix, mobile), (province ?? '').trim());
     await prefs.setInt(
       _key(_expiresPrefix, mobile),
       DateTime.now().add(_cachedSessionLifetime).millisecondsSinceEpoch,
@@ -1740,10 +1752,25 @@ class _OfficialAuthCacheStore {
     }
     final storedActivation =
         prefs.getBool(_key(_activationPrefix, keyMobile)) ?? false;
+    final cachedName = (prefs.getString(_key(_namePrefix, keyMobile)) ?? '').trim();
+    final cachedBarangay = (prefs.getString(_key(_barangayPrefix, keyMobile)) ?? '').trim();
+    final cachedCity = (prefs.getString(_key(_cityPrefix, keyMobile)) ?? '').trim();
+    final cachedProvince = (prefs.getString(_key(_provincePrefix, keyMobile)) ?? '').trim();
+    if (cachedBarangay.isEmpty || cachedCity.isEmpty || cachedProvince.isEmpty) {
+      return false;
+    }
     final localCompleted = await _LocalActivationStore.isCompleted(normalized);
     _authToken = token;
     _currentOfficialMobile = normalized;
     _officialActivationCompleted = storedActivation || localCompleted;
+    _officialEditableProfile.value = _officialEditableProfile.value.copyWith(
+      name: cachedName.isNotEmpty ? cachedName : null,
+      phone: normalized,
+      barangay: cachedBarangay,
+    );
+    _officialBarangaySetup.barangay = cachedBarangay;
+    _officialBarangaySetup.city = cachedCity;
+    _officialBarangaySetup.province = cachedProvince;
     await _OfficialMpinStore.rememberMobile(normalized);
     return true;
   }
@@ -1759,6 +1786,10 @@ class _OfficialAuthCacheStore {
       await prefs.remove(_key(_mobilePrefix, variant));
       await prefs.remove(_key(_activationPrefix, variant));
       await prefs.remove(_key(_expiresPrefix, variant));
+      await prefs.remove(_key(_namePrefix, variant));
+      await prefs.remove(_key(_barangayPrefix, variant));
+      await prefs.remove(_key(_cityPrefix, variant));
+      await prefs.remove(_key(_provincePrefix, variant));
     }
   }
 }
@@ -1829,6 +1860,7 @@ Future<void> _completeOfficialSignIn(
   required String mobile,
   required String token,
   required bool activationCompleted,
+  Map<String, dynamic>? user,
   String? pin,
 }) async {
   final normalized = _normalizeMobileForKey(mobile);
@@ -1839,14 +1871,33 @@ Future<void> _completeOfficialSignIn(
   final localCompleted = await _LocalActivationStore.isCompleted(normalized);
   _currentOfficialMobile = normalized;
   _officialActivationCompleted = activationCompleted || localCompleted;
+  String readUser(String key) => ((user ?? const <String, dynamic>{})[key] as String? ?? '').trim();
+  final profileName = readUser('name');
+  final profileBarangay = readUser('barangay');
+  final profileCity = readUser('city_municipality');
+  final profileProvince = readUser('province');
   _officialEditableProfile.value = _officialEditableProfile.value.copyWith(
+    name: profileName.isNotEmpty ? profileName : null,
     phone: normalized,
-    barangay: _officialBarangaySetup.barangay,
+    barangay: profileBarangay.isNotEmpty ? profileBarangay : _officialBarangaySetup.barangay,
   );
+  if (profileBarangay.isNotEmpty) {
+    _officialBarangaySetup.barangay = profileBarangay;
+  }
+  if (profileCity.isNotEmpty) {
+    _officialBarangaySetup.city = profileCity;
+  }
+  if (profileProvince.isNotEmpty) {
+    _officialBarangaySetup.province = profileProvince;
+  }
   await _OfficialAuthCacheStore.save(
     token: token,
     mobile: normalized,
     activationCompleted: _officialActivationCompleted,
+    name: profileName,
+    barangay: _officialBarangaySetup.barangay,
+    cityMunicipality: _officialBarangaySetup.city,
+    province: _officialBarangaySetup.province,
   );
   if (pin != null && _isValidAppPin(pin)) {
     await _OfficialMpinStore.savePin(normalized, pin);
