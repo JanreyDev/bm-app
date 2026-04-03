@@ -281,6 +281,8 @@ class _ResidentRbiCardPageState extends State<ResidentRbiCardPage> {
   bool _profileHydrated = false;
   bool _rbiHydrated = false;
   bool _savingToApi = false;
+  bool _serverSynced = false;
+  bool _autoSyncAttempted = false;
 
   @override
   void initState() {
@@ -398,10 +400,19 @@ class _ResidentRbiCardPageState extends State<ResidentRbiCardPage> {
     }
     _rbiHydrated = true;
     final result = await _ResidentRbiApi.instance.fetchMyRecord();
-    if (!mounted || !result.success || result.record == null) {
+    if (!mounted) {
+      return;
+    }
+    if (!result.success || result.record == null) {
+      final local = _ResidentRbiStore.current.value;
+      if (local != null && !_autoSyncAttempted) {
+        _autoSyncAttempted = true;
+        await _syncRecordToBackend(local, silent: true);
+      }
       return;
     }
     final remote = result.record!;
+    _serverSynced = true;
     _ResidentRbiStore.save(remote, previousName: _ResidentRbiStore.current.value?.fullName);
     if (_ResidentRbiStore.current.value == null) {
       return;
@@ -425,6 +436,40 @@ class _ResidentRbiCardPageState extends State<ResidentRbiCardPage> {
     _nutritionEntries = remote.nutritionEntries;
     _bloodDonorOptIn = remote.bloodDonorOptIn;
     setState(() {});
+  }
+
+  Future<void> _syncRecordToBackend(
+    _ResidentRbiRecord record, {
+    bool silent = false,
+  }) async {
+    setState(() => _savingToApi = true);
+    final result = await _ResidentRbiApi.instance.upsertRecord(record);
+    if (!mounted) return;
+    setState(() {
+      _savingToApi = false;
+      _serverSynced = result.success;
+    });
+    if (result.success && result.record != null) {
+      _ResidentRbiStore.save(
+        result.record!,
+        previousName: _ResidentRbiStore.current.value?.fullName,
+      );
+      if (!silent) {
+        _showFeature(
+          context,
+          'RBI form saved and synced.',
+          tone: _ToastTone.success,
+        );
+      }
+      return;
+    }
+    if (!silent) {
+      _showFeature(
+        context,
+        'RBI saved locally. ${result.message}',
+        tone: _ToastTone.warning,
+      );
+    }
   }
 
   @override
@@ -991,20 +1036,7 @@ class _ResidentRbiCardPageState extends State<ResidentRbiCardPage> {
       updatedAt: now,
     );
     _ResidentRbiStore.save(record, previousName: current?.fullName);
-    setState(() => _savingToApi = true);
-    final result = await _ResidentRbiApi.instance.upsertRecord(record);
-    if (!mounted) return;
-    setState(() => _savingToApi = false);
-    if (result.success && result.record != null) {
-      _ResidentRbiStore.save(result.record!, previousName: current?.fullName);
-      _showFeature(context, 'RBI form saved and synced.', tone: _ToastTone.success);
-      return;
-    }
-    _showFeature(
-      context,
-      'RBI saved locally. ${result.message}',
-      tone: _ToastTone.warning,
-    );
+    await _syncRecordToBackend(record);
   }
 
   Future<void> _markVerified() async {
@@ -1025,16 +1057,7 @@ class _ResidentRbiCardPageState extends State<ResidentRbiCardPage> {
       ],
     );
     _ResidentRbiStore.save(verified, previousName: current.fullName);
-    setState(() => _savingToApi = true);
-    final result = await _ResidentRbiApi.instance.upsertRecord(verified);
-    if (!mounted) return;
-    setState(() => _savingToApi = false);
-    if (result.success && result.record != null) {
-      _ResidentRbiStore.save(result.record!, previousName: current.fullName);
-      _showFeature(context, 'RBI profile marked as verified and synced.', tone: _ToastTone.success);
-      return;
-    }
-    _showFeature(context, 'RBI verified locally only. ${result.message}', tone: _ToastTone.warning);
+    await _syncRecordToBackend(verified);
   }
 
   String _formatShortDate(DateTime date) {
@@ -1135,6 +1158,8 @@ class _ResidentRbiCardPageState extends State<ResidentRbiCardPage> {
                       ? null
                       : () => _copyRbiId(displayRecord.rbiId),
                   residentPhoto: _buildResidentPhoto(76),
+                  isSaving: _savingToApi,
+                  isServerSynced: _serverSynced,
                 ),
                 _RbiProfileForm(
                   formKey: _formKey,
@@ -1309,11 +1334,15 @@ class _RbiMyCard extends StatelessWidget {
   final _ResidentRbiRecord? record;
   final VoidCallback? onCopyId;
   final Widget residentPhoto;
+  final bool isSaving;
+  final bool isServerSynced;
 
   const _RbiMyCard({
     required this.record,
     required this.onCopyId,
     required this.residentPhoto,
+    required this.isSaving,
+    required this.isServerSynced,
   });
 
   @override
@@ -1423,6 +1452,35 @@ class _RbiMyCard extends StatelessWidget {
                             color: Color(0xFF595569),
                             fontWeight: FontWeight.w700,
                           ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              isSaving
+                                  ? Icons.sync_rounded
+                                  : (isServerSynced
+                                      ? Icons.cloud_done_rounded
+                                      : Icons.cloud_off_rounded),
+                              size: 14,
+                              color: isSaving
+                                  ? const Color(0xFF4A55B8)
+                                  : (isServerSynced
+                                      ? const Color(0xFF1F8A55)
+                                      : const Color(0xFFB1762B)),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              isSaving
+                                  ? 'Syncing...'
+                                  : (isServerSynced ? 'Synced to server' : 'Local only'),
+                              style: const TextStyle(
+                                color: Color(0xFF5D647E),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 12),
                         Container(
