@@ -2489,6 +2489,7 @@ class _AssistanceRequestPageState extends State<AssistanceRequestPage> {
   _AssistanceAttachmentValue? _prescriptionAttachment;
   _AssistanceAttachmentValue? _deathCertificateAttachment;
   _AssistanceAttachmentValue? _gradeAttachment;
+  bool _submitting = false;
 
   @override
   void dispose() {
@@ -2523,7 +2524,10 @@ class _AssistanceRequestPageState extends State<AssistanceRequestPage> {
     );
   }
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (_submitting) {
+      return;
+    }
     if (_fullNameController.text.trim().isEmpty ||
         _mobileController.text.trim().isEmpty) {
       _showFeature(context, 'Please complete full name and mobile.');
@@ -2558,6 +2562,7 @@ class _AssistanceRequestPageState extends State<AssistanceRequestPage> {
       return;
     }
 
+    final parentContext = context;
     final detail = _isMedical
         ? 'Hospital: ${_hospitalController.text.trim()}'
         : _isBurial
@@ -2565,6 +2570,39 @@ class _AssistanceRequestPageState extends State<AssistanceRequestPage> {
         : _isEducation
         ? 'School: ${_schoolController.text.trim()}'
         : _notesController.text.trim();
+    final notes = <String>[
+      'Urgency: $_urgency',
+      'Resident: ${_fullNameController.text.trim()}',
+      'Mobile: ${_mobileController.text.trim()}',
+      if (_notesController.text.trim().isNotEmpty)
+        'Notes: ${_notesController.text.trim()}',
+      if (_isMedical && _billAmountController.text.trim().isNotEmpty)
+        'Estimated Bill: ${_billAmountController.text.trim()}',
+      if (_isEducation && _gradeLevelController.text.trim().isNotEmpty)
+        'Grade/Course: ${_gradeLevelController.text.trim()}',
+      if (_isEducation && _gwaController.text.trim().isNotEmpty)
+        'Current Grade/GWA: ${_gwaController.text.trim()}',
+      if (_hospitalBillAttachment != null)
+        'Hospital Bill Attachment: ${_hospitalBillAttachment!.fileName}',
+      if (_prescriptionAttachment != null)
+        'Prescription Attachment: ${_prescriptionAttachment!.fileName}',
+      if (_deathCertificateAttachment != null)
+        'Death Certificate Attachment: ${_deathCertificateAttachment!.fileName}',
+      if (_gradeAttachment != null)
+        'Grade Attachment: ${_gradeAttachment!.fileName}',
+    ].join('\n');
+
+    setState(() => _submitting = true);
+    final result = await _ServiceRequestApi.instance.submitRequest(
+      serviceCategory: 'Assistance',
+      serviceTitle: widget.assistanceType,
+      purpose: detail.isEmpty ? widget.assistanceDescription : detail,
+      details: notes,
+    );
+    if (!mounted) {
+      return;
+    }
+
     _tracker.value = [
       _AidProgramTrackerEntry(
         type: widget.assistanceType,
@@ -2579,9 +2617,22 @@ class _AssistanceRequestPageState extends State<AssistanceRequestPage> {
       ),
       ..._tracker.value,
     ];
+    setState(() => _submitting = false);
+    if (result.success) {
+      final ref = result.entry?.requestId.trim() ?? '';
+      _showFeature(
+        parentContext,
+        ref.isEmpty
+            ? result.message
+            : '${result.message} Ref: $ref',
+        tone: _ToastTone.success,
+      );
+      return;
+    }
     _showFeature(
-      context,
-      '${widget.assistanceType} request submitted. Ref: AST-${DateTime.now().millisecondsSinceEpoch % 1000}',
+      parentContext,
+      'Saved locally: ${result.message}',
+      tone: _ToastTone.warning,
     );
   }
 
@@ -2844,12 +2895,12 @@ class _AssistanceRequestPageState extends State<AssistanceRequestPage> {
           ],
           const SizedBox(height: 12),
           FilledButton.icon(
-            onPressed: _submit,
+            onPressed: _submitting ? null : _submit,
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFF2E35D3),
             ),
             icon: const Icon(Icons.send),
-            label: const Text('Submit Request'),
+            label: Text(_submitting ? 'Submitting...' : 'Submit Request'),
           ),
         ],
       ),
