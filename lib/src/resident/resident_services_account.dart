@@ -1487,14 +1487,339 @@ class _ResidentRequestEntry {
   });
 }
 
+class ResidentServiceCategoryRequestPage extends StatefulWidget {
+  final String serviceCategory;
+  final String serviceTitle;
+  final IconData icon;
+  final Color accentColor;
+
+  const ResidentServiceCategoryRequestPage({
+    super.key,
+    required this.serviceCategory,
+    required this.serviceTitle,
+    required this.icon,
+    required this.accentColor,
+  });
+
+  @override
+  State<ResidentServiceCategoryRequestPage> createState() =>
+      _ResidentServiceCategoryRequestPageState();
+}
+
+class _ResidentServiceCategoryRequestPageState
+    extends State<ResidentServiceCategoryRequestPage> {
+  final _purposeController = TextEditingController();
+  final _detailsController = TextEditingController();
+  final _history = <_ResidentRequestEntry>[];
+  bool _loading = true;
+  bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadHistory());
+  }
+
+  @override
+  void dispose() {
+    _purposeController.dispose();
+    _detailsController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadHistory() async {
+    final result = await _ServiceRequestApi.instance.fetchRequests();
+    if (!mounted) {
+      return;
+    }
+    if (result.success) {
+      _history
+        ..clear()
+        ..addAll(
+          result.entries.where(
+            (item) =>
+                item.category.trim().toLowerCase() ==
+                widget.serviceCategory.trim().toLowerCase(),
+          ),
+        );
+    }
+    setState(() => _loading = false);
+    if (!result.success) {
+      _showFeature(
+        context,
+        'Unable to sync ${widget.serviceCategory} requests: ${result.message}',
+        tone: _ToastTone.warning,
+      );
+    }
+  }
+
+  Future<void> _submit() async {
+    if (_submitting) {
+      return;
+    }
+    final purpose = _purposeController.text.trim();
+    if (purpose.length < 4) {
+      _showFeature(
+        context,
+        'Please enter a clear purpose (at least 4 characters).',
+        tone: _ToastTone.warning,
+      );
+      return;
+    }
+
+    setState(() => _submitting = true);
+    final result = await _ServiceRequestApi.instance.submitRequest(
+      serviceCategory: widget.serviceCategory,
+      serviceTitle: widget.serviceTitle,
+      purpose: purpose,
+      details: _detailsController.text.trim(),
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() => _submitting = false);
+    if (result.success) {
+      if (result.entry != null) {
+        _history.insert(0, result.entry!);
+      }
+      _purposeController.clear();
+      _detailsController.clear();
+      _showFeature(context, result.message, tone: _ToastTone.success);
+      setState(() {});
+      return;
+    }
+    _showFeature(
+      context,
+      'Unable to submit right now: ${result.message}',
+      tone: _ToastTone.warning,
+    );
+  }
+
+  Color _statusColor(String status) {
+    final value = status.trim().toLowerCase();
+    if (value == 'approved') {
+      return const Color(0xFF2F965D);
+    }
+    if (value == 'completed') {
+      return const Color(0xFF3B56C8);
+    }
+    if (value == 'rejected') {
+      return const Color(0xFFD34F42);
+    }
+    return const Color(0xFFB77A2F);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.serviceCategory),
+        backgroundColor: const Color(0xFFF7F8FF),
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFF4F8FF), Color(0xFFF9F1ED)],
+          ),
+        ),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE4E7F4)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: widget.accentColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(widget.icon, color: widget.accentColor),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Submit and track your ${widget.serviceCategory.toLowerCase()} request.',
+                      style: const TextStyle(
+                        color: Color(0xFF5C6280),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _purposeController,
+              decoration: const InputDecoration(
+                labelText: 'Purpose',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _detailsController,
+              minLines: 3,
+              maxLines: 5,
+              decoration: const InputDecoration(
+                labelText: 'Details',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            FilledButton.icon(
+              onPressed: _submitting ? null : _submit,
+              style: FilledButton.styleFrom(backgroundColor: widget.accentColor),
+              icon: const Icon(Icons.send_rounded),
+              label: Text(_submitting ? 'Submitting...' : 'Submit Request'),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Request History (${_history.length})',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF2F334A),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: LinearProgressIndicator(minHeight: 3),
+              )
+            else if (_history.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE4E7F4)),
+                ),
+                child: const Text(
+                  'No request records yet for this service.',
+                  style: TextStyle(
+                    color: Color(0xFF666D86),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              )
+            else
+              ..._history.map(
+                (item) => Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE4E7F4)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item.title,
+                              style: const TextStyle(
+                                color: Color(0xFF2F334A),
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _statusColor(item.status).withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              item.status,
+                              style: TextStyle(
+                                color: _statusColor(item.status),
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'ID: ${item.requestId} | ${item.date}',
+                        style: const TextStyle(
+                          color: Color(0xFF666D86),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Purpose: ${item.purpose}',
+                        style: const TextStyle(
+                          color: Color(0xFF606781),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class ResidentServicesPage extends StatelessWidget {
   const ResidentServicesPage({super.key});
 
   static const _commonServices = [
     _ServiceAction('Assistance', Icons.volunteer_activism, AssistancePage()),
-    _ServiceAction('BPAT', Icons.shield, BpatPage()),
-    _ServiceAction('Clearance', Icons.description, ClearancePage()),
-    _ServiceAction('Council', Icons.groups, CouncilPage()),
+    _ServiceAction(
+      'BPAT',
+      Icons.shield,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'BPAT',
+        serviceTitle: 'BPAT Assistance',
+        icon: Icons.shield,
+        accentColor: Color(0xFF3C5EA0),
+      ),
+    ),
+    _ServiceAction(
+      'Clearance',
+      Icons.description,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Clearance',
+        serviceTitle: 'Barangay Clearance',
+        icon: Icons.description,
+        accentColor: Color(0xFF4A66CB),
+      ),
+    ),
+    _ServiceAction(
+      'Council',
+      Icons.groups,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Council',
+        serviceTitle: 'Council Coordination',
+        icon: Icons.groups,
+        accentColor: Color(0xFF6A57BE),
+      ),
+    ),
     _ServiceAction('Health', Icons.health_and_safety, HealthPage()),
     _ServiceAction('Community', Icons.forum, CommunityPage()),
   ];
@@ -1502,10 +1827,46 @@ class ResidentServicesPage extends StatelessWidget {
   static const _allServices = [
     _ServiceAction('Requests', Icons.assignment, ResidentRequestsPage()),
     _ServiceAction('Assistance', Icons.volunteer_activism, AssistancePage()),
-    _ServiceAction('BPAT', Icons.shield, BpatPage()),
-    _ServiceAction('Clearance', Icons.description, ClearancePage()),
-    _ServiceAction('Council', Icons.groups, CouncilPage()),
-    _ServiceAction('Disclosure', Icons.table_chart, DisclosureBoardPage()),
+    _ServiceAction(
+      'BPAT',
+      Icons.shield,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'BPAT',
+        serviceTitle: 'BPAT Assistance',
+        icon: Icons.shield,
+        accentColor: Color(0xFF3C5EA0),
+      ),
+    ),
+    _ServiceAction(
+      'Clearance',
+      Icons.description,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Clearance',
+        serviceTitle: 'Barangay Clearance',
+        icon: Icons.description,
+        accentColor: Color(0xFF4A66CB),
+      ),
+    ),
+    _ServiceAction(
+      'Council',
+      Icons.groups,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Council',
+        serviceTitle: 'Council Coordination',
+        icon: Icons.groups,
+        accentColor: Color(0xFF6A57BE),
+      ),
+    ),
+    _ServiceAction(
+      'Disclosure',
+      Icons.table_chart,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Disclosure',
+        serviceTitle: 'Disclosure Request',
+        icon: Icons.table_chart,
+        accentColor: Color(0xFF4B6AC8),
+      ),
+    ),
     _ServiceAction(
       'Special Docs',
       Icons.stars,
