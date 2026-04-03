@@ -718,7 +718,7 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
   }
 
   Future<void> _handleResidentBarangaySelection(String? value) async {
-    if (!_isResident || value == null) {
+    if (value == null) {
       return;
     }
     final entry = _lookupBarangayDirectoryEntry(
@@ -815,9 +815,9 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
       mobile: _mobileController.text,
       password: _passwordController.text,
       confirmPassword: _confirmPasswordController.text,
-      province: _isResident ? _selectedProvince : null,
-      cityMunicipality: _isResident ? _selectedCity : null,
-      barangay: _isResident ? _selectedBarangay : null,
+      province: _selectedProvince,
+      cityMunicipality: _selectedCity,
+      barangay: _selectedBarangay,
       middleName: _isResident && !_noMiddleName
           ? _middleNameController.text.trim()
           : null,
@@ -839,16 +839,40 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(result.message)));
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AuthOtpVerificationPage(
-          role: widget.role,
-          mobile: _mobileController.text,
-          debugOtpCode: result.otpDebugCode,
-          pin: _passwordController.text.trim(),
+
+    if (result.otpRequired) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AuthOtpVerificationPage(
+            role: widget.role,
+            mobile: _mobileController.text,
+            debugOtpCode: result.otpDebugCode,
+            pin: _passwordController.text.trim(),
+          ),
         ),
-      ),
+      );
+      return;
+    }
+
+    _authToken = result.token;
+    if (_isResident) {
+      await _completeResidentSignIn(
+        context,
+        mobile: _mobileController.text,
+        token: result.token ?? '',
+        user: result.user,
+        pin: _passwordController.text.trim(),
+      );
+      return;
+    }
+
+    await _completeOfficialSignIn(
+      context,
+      mobile: _mobileController.text,
+      token: result.token ?? '',
+      activationCompleted: result.activationCompleted,
+      pin: _passwordController.text.trim(),
     );
   }
 
@@ -954,86 +978,83 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                if (_isResident) ...[
-                  _sectionCard(
-                    title: 'Address Assignment (Required)',
-                    children: [
-                      DropdownButtonFormField<String>(
-                        initialValue: _selectedProvince,
-                        decoration: _fieldDecoration('1. Select Province'),
-                        items: _locationDirectory.keys
-                            .map(
-                              (v) => DropdownMenuItem(value: v, child: Text(v)),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedProvince = value;
-                            _selectedCity = null;
-                            _selectedBarangay = null;
-                          });
-                        },
-                        validator: (value) {
-                          if (!_isResident) return null;
-                          if (value == null || value.isEmpty) {
-                            return 'Province is required.';
-                          }
-                          return null;
-                        },
+                _sectionCard(
+                  title: 'Address Assignment (Required)',
+                  children: [
+                    DropdownButtonFormField<String>(
+                      initialValue: _selectedProvince,
+                      decoration: _fieldDecoration('1. Select Province'),
+                      items: _locationDirectory.keys
+                          .map(
+                            (v) => DropdownMenuItem(value: v, child: Text(v)),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedProvince = value;
+                          _selectedCity = null;
+                          _selectedBarangay = null;
+                        });
+                      },
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Province is required.';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: _selectedCity,
+                      decoration: _fieldDecoration(
+                        '2. Select City/Municipality',
                       ),
+                      items: _cities
+                          .map(
+                            (v) => DropdownMenuItem(value: v, child: Text(v)),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedCity = value;
+                          _selectedBarangay = null;
+                        });
+                      },
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'City/Municipality is required.';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: _selectedBarangay,
+                      decoration: _fieldDecoration('3. Select Barangay'),
+                      items: _barangays
+                          .map(
+                            (v) => DropdownMenuItem(value: v, child: Text(v)),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        setState(() => _selectedBarangay = value);
+                        _handleResidentBarangaySelection(value);
+                      },
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Barangay is required.';
+                        }
+                        return null;
+                      },
+                    ),
+                    if (_selectedBarangayEntry != null) ...[
                       const SizedBox(height: 10),
-                      DropdownButtonFormField<String>(
-                        initialValue: _selectedCity,
-                        decoration: _fieldDecoration(
-                          '2. Select City/Municipality',
-                        ),
-                        items: _cities
-                            .map(
-                              (v) => DropdownMenuItem(value: v, child: Text(v)),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedCity = value;
-                            _selectedBarangay = null;
-                          });
-                        },
-                        validator: (value) {
-                          if (!_isResident) return null;
-                          if (value == null || value.isEmpty) {
-                            return 'City/Municipality is required.';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      DropdownButtonFormField<String>(
-                        initialValue: _selectedBarangay,
-                        decoration: _fieldDecoration('3. Select Barangay'),
-                        items: _barangays
-                            .map(
-                              (v) => DropdownMenuItem(value: v, child: Text(v)),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          setState(() => _selectedBarangay = value);
-                          _handleResidentBarangaySelection(value);
-                        },
-                        validator: (value) {
-                          if (!_isResident) return null;
-                          if (value == null || value.isEmpty) {
-                            return 'Barangay is required.';
-                          }
-                          return null;
-                        },
-                      ),
-                      if (_selectedBarangayEntry != null) ...[
-                        const SizedBox(height: 10),
-                        _barangayStatusCard(_selectedBarangayEntry!),
-                      ],
+                      _barangayStatusCard(_selectedBarangayEntry!),
                     ],
-                  ),
-                  const SizedBox(height: 10),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                if (_isResident) ...[
                   _sectionCard(
                     title: 'Personal Details',
                     children: [

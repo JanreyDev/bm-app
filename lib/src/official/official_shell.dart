@@ -448,8 +448,122 @@ class _HomeShellState extends State<HomeShell> {
   }
 }
 
-class _OfficialHomePage extends StatelessWidget {
+class _OfficialHomeSnapshot {
+  final int totalPopulation;
+  final int pendingRequests;
+  final int totalRequests;
+  final int marketProductCount;
+  final int verifiedMarketProductCount;
+  final int communityPostCount;
+  final _CommunityPost? latestPost;
+  final DateTime syncedAt;
+  final String warningMessage;
+
+  const _OfficialHomeSnapshot({
+    required this.totalPopulation,
+    required this.pendingRequests,
+    required this.totalRequests,
+    required this.marketProductCount,
+    required this.verifiedMarketProductCount,
+    required this.communityPostCount,
+    required this.latestPost,
+    required this.syncedAt,
+    required this.warningMessage,
+  });
+
+  factory _OfficialHomeSnapshot.initial() {
+    return _OfficialHomeSnapshot(
+      totalPopulation: 0,
+      pendingRequests: 0,
+      totalRequests: 0,
+      marketProductCount: 0,
+      verifiedMarketProductCount: 0,
+      communityPostCount: 0,
+      latestPost: null,
+      syncedAt: DateTime.now(),
+      warningMessage: '',
+    );
+  }
+}
+
+class _OfficialHomePage extends StatefulWidget {
   const _OfficialHomePage();
+
+  @override
+  State<_OfficialHomePage> createState() => _OfficialHomePageState();
+}
+
+class _OfficialHomePageState extends State<_OfficialHomePage> {
+  _OfficialHomeSnapshot _snapshot = _OfficialHomeSnapshot.initial();
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshDashboard(showLoading: true);
+  }
+
+  Future<void> _refreshDashboard({bool showLoading = false}) async {
+    if (showLoading && mounted) {
+      setState(() => _loading = true);
+    }
+
+    final requestsFuture = _ServiceRequestApi.instance.fetchRequests();
+    final productsFuture = _SellerApi.instance.fetchMarketProducts();
+    final postsFuture = _CommunityApi.instance.fetchPosts();
+    final populationFuture = _fetchPopulationFromBackend();
+
+    final requestsResult = await requestsFuture;
+    final productsResult = await productsFuture;
+    final postsResult = await postsFuture;
+    final population = await populationFuture;
+
+    final warnings = <String>[];
+    final requests = requestsResult.success ? requestsResult.entries : const <_ResidentRequestEntry>[];
+    if (!requestsResult.success) {
+      warnings.add('Requests');
+    }
+    final marketProducts = productsResult.success ? productsResult.products : const <_ResidentProductData>[];
+    if (!productsResult.success) {
+      warnings.add('Marketplace');
+    }
+    final posts = postsResult.success ? postsResult.posts : const <_CommunityPost>[];
+    if (!postsResult.success) {
+      warnings.add('Community');
+    }
+    if (population == null) {
+      warnings.add('Population');
+    }
+
+    final pendingRequests = requests
+        .where((entry) => entry.status.toLowerCase().contains('pending'))
+        .length;
+    final verifiedListings = marketProducts.where((item) => item.verified).length;
+
+    final sortedPosts = [...posts]..sort((a, b) => b.postedAt.compareTo(a.postedAt));
+    final computedPopulation = population ?? _ResidentRbiStore.all.value.length;
+    final warningMessage = warnings.isEmpty
+        ? ''
+        : 'Partial sync: ${warnings.join(', ')} unavailable.';
+
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _snapshot = _OfficialHomeSnapshot(
+        totalPopulation: computedPopulation,
+        pendingRequests: pendingRequests,
+        totalRequests: requests.length,
+        marketProductCount: marketProducts.length,
+        verifiedMarketProductCount: verifiedListings,
+        communityPostCount: posts.length,
+        latestPost: sortedPosts.isEmpty ? null : sortedPosts.first,
+        syncedAt: DateTime.now(),
+        warningMessage: warningMessage,
+      );
+      _loading = false;
+    });
+  }
 
   Widget _sectionHeader(
     BuildContext context,
@@ -592,6 +706,82 @@ class _OfficialHomePage extends StatelessWidget {
     );
   }
 
+  String _timeAgo(DateTime value) {
+    final diff = DateTime.now().difference(value);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
+    if (diff.inDays < 1) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
+  Future<int?> _fetchPopulationFromBackend() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return null;
+    }
+    for (final endpoint in _AuthApi.instance._endpointCandidates('official/dashboard-summary')) {
+      try {
+        final response = await http.get(
+          endpoint,
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $_authToken',
+          },
+        ).timeout(const Duration(seconds: 7));
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          return null;
+        }
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        if (decoded is! Map<String, dynamic>) {
+          return null;
+        }
+        final direct = _asInt(decoded['population']);
+        if (direct != null) {
+          return direct;
+        }
+        final summary = decoded['summary'];
+        if (summary is Map<String, dynamic>) {
+          final summaryPopulation = _asInt(summary['population']);
+          if (summaryPopulation != null) {
+            return summaryPopulation;
+          }
+        }
+        final populationNode = decoded['population'];
+        if (populationNode is Map<String, dynamic>) {
+          final estimated = _asInt(populationNode['estimated']);
+          if (estimated != null) {
+            return estimated;
+          }
+          final residents = _asInt(populationNode['registered_residents']);
+          if (residents != null) {
+            return residents;
+          }
+        }
+        return null;
+      } on TimeoutException {
+        return null;
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  int? _asInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value.trim());
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final barangayName = _officialBarangaySetup.barangay.trim().isEmpty
@@ -613,17 +803,45 @@ class _OfficialHomePage extends StatelessWidget {
     ].where((part) => part.isNotEmpty).join(' ');
 
     return Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFF7F8FC), _officialSurfaceBlend],
-          ),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFF7F8FC), _officialSurfaceBlend],
         ),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
-        children: [
-          Container(
+      ),
+      child: RefreshIndicator(
+        onRefresh: () => _refreshDashboard(showLoading: false),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
+          children: [
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: LinearProgressIndicator(
+                  color: _officialHeaderStart,
+                  minHeight: 3,
+                ),
+              ),
+            if (_snapshot.warningMessage.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF2E8),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFFD7BA)),
+                ),
+                child: Text(
+                  _snapshot.warningMessage,
+                  style: const TextStyle(
+                    color: Color(0xFF8B4A0D),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -720,8 +938,8 @@ class _OfficialHomePage extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 10),
-          GridView.count(
+            const SizedBox(height: 10),
+            GridView.count(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             crossAxisCount: 2,
@@ -732,34 +950,34 @@ class _OfficialHomePage extends StatelessWidget {
               _metricCard(
                 icon: Icons.groups_2_outlined,
                 label: 'Total Population',
-                value: '${_officialPopulationForYear()}',
-                note: 'PSA ${DateTime.now().year} refresh',
+                value: '${_snapshot.totalPopulation}',
+                note: 'Live barangay dashboard count',
               ),
-              _metricCard(
-                icon: Icons.verified_user_outlined,
-                label: 'RBI Count',
-                value: '5,420',
-                note: 'Verified resident records',
+              ValueListenableBuilder<List<_ResidentRbiRecord>>(
+                valueListenable: _ResidentRbiStore.all,
+                builder: (context, records, _) => _metricCard(
+                  icon: Icons.verified_user_outlined,
+                  label: 'RBI Count',
+                  value: '${records.length}',
+                  note: 'Verified resident records',
+                ),
               ),
               _metricCard(
                 icon: Icons.description_outlined,
                 label: 'Doc Requests',
-                value: '12',
-                note: 'Queued for council action',
+                value: '${_snapshot.pendingRequests}',
+                note: '${_snapshot.totalRequests} total submitted requests',
               ),
-              ValueListenableBuilder<String>(
-                valueListenable: _treasurerRemainingBalanceHome,
-                builder: (context, value, _) => _metricCard(
-                  icon: Icons.account_balance_wallet_outlined,
-                  label: 'Remaining Balance',
-                  value: value,
-                  note: 'Treasurer live available fund widget',
-                ),
+              _metricCard(
+                icon: Icons.storefront_outlined,
+                label: 'Market Products',
+                value: '${_snapshot.marketProductCount}',
+                note: '${_snapshot.verifiedMarketProductCount} verified listing(s)',
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          _sectionHeader(
+            const SizedBox(height: 12),
+            _sectionHeader(
             context,
             'Serbilis Services',
             onViewAll: () => Navigator.push(
@@ -767,8 +985,8 @@ class _OfficialHomePage extends StatelessWidget {
               MaterialPageRoute(builder: (_) => const SerbilisServicesPage()),
             ),
           ),
-          const SizedBox(height: 4),
-          SingleChildScrollView(
+            const SizedBox(height: 4),
+            SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
@@ -805,8 +1023,8 @@ class _OfficialHomePage extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 12),
-          _sectionHeader(
+            const SizedBox(height: 12),
+            _sectionHeader(
             context,
             'Community',
             onViewAll: () => Navigator.push(
@@ -814,8 +1032,8 @@ class _OfficialHomePage extends StatelessWidget {
               MaterialPageRoute(builder: (_) => const CommunityPage()),
             ),
           ),
-          const SizedBox(height: 4),
-          Container(
+            const SizedBox(height: 4),
+            Container(
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(14),
@@ -835,30 +1053,63 @@ class _OfficialHomePage extends StatelessWidget {
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(14),
                   ),
-                  child: Image.asset(
-                    'public/item-table.jpg',
-                    height: 140,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      height: 140,
-                      color: const Color(0xFFE9EEFF),
-                      child: const Center(
-                        child: Icon(
-                          Icons.image_rounded,
-                          size: 44,
-                          color: Color(0xFF6C74A4),
+                  child: _snapshot.latestPost?.photoBytes != null
+                      ? Image.memory(
+                          _snapshot.latestPost!.photoBytes!,
+                          height: 140,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        )
+                      : Container(
+                          height: 140,
+                          width: double.infinity,
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [Color(0xFFE9EEFF), Color(0xFFF7F8FF)],
+                            ),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.campaign_outlined,
+                              size: 44,
+                              color: Color(0xFF6C74A4),
+                            ),
+                          ),
                         ),
-                      ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 2),
+                  child: Text(
+                    _snapshot.latestPost?.author ?? 'No community updates yet',
+                    style: TextStyle(
+                      color: _officialText,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(10, 8, 10, 10),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
                   child: Text(
-                    'Lester Nadong',
-                    style: TextStyle(
-                      color: _officialText,
+                    _snapshot.latestPost?.message.isNotEmpty == true
+                        ? _snapshot.latestPost!.message
+                        : 'No posts found for this barangay yet.',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _officialSubtext,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+                  child: Text(
+                    '${_snapshot.communityPostCount} post(s) in feed - Synced ${_timeAgo(_snapshot.syncedAt)}',
+                    style: const TextStyle(
+                      color: _officialSubtext,
+                      fontSize: 12,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -866,7 +1117,8 @@ class _OfficialHomePage extends StatelessWidget {
               ],
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }
