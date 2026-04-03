@@ -1934,8 +1934,26 @@ class ResidentServicesPage extends StatelessWidget {
         accentColor: Color(0xFF6A57BE),
       ),
     ),
-    _ServiceAction('Health', Icons.health_and_safety, HealthPage()),
-    _ServiceAction('Community', Icons.forum, CommunityPage()),
+    _ServiceAction(
+      'Health',
+      Icons.health_and_safety,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Health',
+        serviceTitle: 'Health Service Request',
+        icon: Icons.health_and_safety,
+        accentColor: Color(0xFF2E8A79),
+      ),
+    ),
+    _ServiceAction(
+      'Community',
+      Icons.forum,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Community',
+        serviceTitle: 'Community Service Request',
+        icon: Icons.forum,
+        accentColor: Color(0xFF8A5A44),
+      ),
+    ),
   ];
 
   static const _allServices = [
@@ -1984,45 +2002,152 @@ class ResidentServicesPage extends StatelessWidget {
     _ServiceAction(
       'Special Docs',
       Icons.stars,
-      SimpleSerbilisPage(title: 'Special Docs', isOfficial: false),
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Special Docs',
+        serviceTitle: 'Special Docs Request',
+        icon: Icons.stars,
+        accentColor: Color(0xFF5F6AD6),
+      ),
     ),
-    _ServiceAction('Responder', Icons.local_shipping, ResponderPage()),
-    _ServiceAction('Provincial Gov', Icons.apartment, GovAgenciesPage()),
-    _ServiceAction('Health', Icons.health_and_safety, HealthPage()),
-    _ServiceAction('Community', Icons.forum, CommunityPage()),
-    _ServiceAction('QR ID', Icons.qr_code_scanner, ScanQrPage()),
-    _ServiceAction('RBI', Icons.badge, ResidentRbiCardPage()),
+    _ServiceAction(
+      'Responder',
+      Icons.local_shipping,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Responder',
+        serviceTitle: 'Responder Service Request',
+        icon: Icons.local_shipping,
+        accentColor: Color(0xFF4E6DBA),
+      ),
+    ),
+    _ServiceAction(
+      'Provincial Gov',
+      Icons.apartment,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Provincial Gov',
+        serviceTitle: 'Provincial Gov Request',
+        icon: Icons.apartment,
+        accentColor: Color(0xFF4D78BE),
+      ),
+    ),
+    _ServiceAction(
+      'Health',
+      Icons.health_and_safety,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Health',
+        serviceTitle: 'Health Service Request',
+        icon: Icons.health_and_safety,
+        accentColor: Color(0xFF2E8A79),
+      ),
+    ),
+    _ServiceAction(
+      'Community',
+      Icons.forum,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Community',
+        serviceTitle: 'Community Service Request',
+        icon: Icons.forum,
+        accentColor: Color(0xFF8A5A44),
+      ),
+    ),
+    _ServiceAction(
+      'QR ID',
+      Icons.qr_code_scanner,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'QR ID',
+        serviceTitle: 'QR ID Request',
+        icon: Icons.qr_code_scanner,
+        accentColor: Color(0xFF4E6ECC),
+      ),
+    ),
+    _ServiceAction(
+      'RBI',
+      Icons.badge,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'RBI',
+        serviceTitle: 'RBI Request',
+        icon: Icons.badge,
+        accentColor: Color(0xFF5D6AC8),
+      ),
+    ),
     _ServiceAction(
       'Education',
       Icons.menu_book,
-      SimpleSerbilisPage(title: 'Education', isOfficial: false),
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Education',
+        serviceTitle: 'Education Request',
+        icon: Icons.menu_book,
+        accentColor: Color(0xFF536FBE),
+      ),
     ),
     _ServiceAction(
       'Police',
       Icons.local_police,
-      SimpleSerbilisPage(title: 'Police', isOfficial: false),
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Police',
+        serviceTitle: 'Police Request',
+        icon: Icons.local_police,
+        accentColor: Color(0xFF4E64B4),
+      ),
     ),
     _ServiceAction(
       'Other Barangay',
       Icons.travel_explore,
-      SimpleSerbilisPage(title: 'Other Barangay', isOfficial: false),
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Other Barangay',
+        serviceTitle: 'Other Barangay Request',
+        icon: Icons.travel_explore,
+        accentColor: Color(0xFF5362B9),
+      ),
     ),
     _ServiceAction(
       'SK Education',
       Icons.school,
-      SimpleSerbilisPage(title: 'SK Education', isOfficial: false),
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'SK Education',
+        serviceTitle: 'SK Education Request',
+        icon: Icons.school,
+        accentColor: Color(0xFF5D75CB),
+      ),
     ),
-    _ServiceAction('Officials', Icons.groups_2, CouncilPage()),
+    _ServiceAction(
+      'Officials',
+      Icons.groups_2,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Officials',
+        serviceTitle: 'Officials Request',
+        icon: Icons.groups_2,
+        accentColor: Color(0xFF5D67AF),
+      ),
+    ),
     _ServiceAction(
       'Programs',
       Icons.assignment,
-      SimpleSerbilisPage(title: 'Programs', isOfficial: false),
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Programs',
+        serviceTitle: 'Programs Request',
+        icon: Icons.assignment,
+        accentColor: Color(0xFF4F6EC5),
+      ),
     ),
-    _ServiceAction('Scholarship', Icons.card_giftcard, AssistancePage()),
+    _ServiceAction(
+      'Scholarship',
+      Icons.card_giftcard,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Scholarship',
+        serviceTitle: 'Scholarship Request',
+        icon: Icons.card_giftcard,
+        accentColor: Color(0xFF7D5AA7),
+      ),
+    ),
     _ServiceAction(
       'Sports',
       Icons.sports_basketball,
-      SimpleSerbilisPage(title: 'Sports', isOfficial: false),
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Sports',
+        serviceTitle: 'Sports Request',
+        icon: Icons.sports_basketball,
+        accentColor: Color(0xFF5B73C8),
+      ),
     ),
   ];
 
