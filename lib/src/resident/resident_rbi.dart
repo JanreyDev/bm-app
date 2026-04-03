@@ -995,6 +995,16 @@ class _ResidentRbiCardPageState extends State<ResidentRbiCardPage> {
     final residencyYear = int.parse(_yearResidencyController.text.trim());
     final now = DateTime.now();
     final id = current?.rbiId ?? _generateRbiId();
+    final preservedStep = () {
+      final fromCurrent = current?.verificationStep ?? 0;
+      if (fromCurrent >= 2) {
+        return 2;
+      }
+      if (_ResidentProfileStore.profile.isVerified) {
+        return 2;
+      }
+      return 1;
+    }();
     final transactions = [
       const _RbiTransactionEntry(
         title: 'Form Sent',
@@ -1031,7 +1041,7 @@ class _ResidentRbiCardPageState extends State<ResidentRbiCardPage> {
       bloodType: _bloodType,
       educationAidStatus: _educationAidStatus,
       latestGradeAverage: _latestGradeController.text.trim(),
-      verificationStep: 1,
+      verificationStep: preservedStep,
       transactions: transactions,
       updatedAt: now,
     );
