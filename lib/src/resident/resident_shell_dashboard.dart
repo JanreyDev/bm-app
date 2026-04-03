@@ -151,12 +151,41 @@ class _ResidentHomeShellState extends State<ResidentHomeShell> {
   }
 }
 
-class ResidentDrawer extends StatelessWidget {
+class ResidentDrawer extends StatefulWidget {
   const ResidentDrawer({super.key});
 
   @override
+  State<ResidentDrawer> createState() => _ResidentDrawerState();
+}
+
+class _ResidentDrawerState extends State<ResidentDrawer> {
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_ResidentProfileStore.ensureLoaded());
+    unawaited(_ResidentProfileVerificationHub.ensureLoaded());
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Drawer(
+    return ValueListenableBuilder<int>(
+      valueListenable: _ResidentProfileStore.refresh,
+      builder: (context, _, __) {
+        return ValueListenableBuilder<bool>(
+          valueListenable: _ResidentProfileVerificationHub.refresh,
+          builder: (context, isVerified, ___) {
+            final profile = _ResidentProfileStore.profile;
+            final completion = (profile.profileCompletion * 100).round();
+            final residentBadgeText = isVerified
+                ? 'Verified Resident'
+                : 'Profile $completion% Complete';
+            final companyLabel = _ResidentCommercialSellerHub.registration == null
+                ? 'My Company'
+                : (_ResidentCommercialSellerHub.registration!.merchantVerified
+                    ? 'My Company (Verified)'
+                    : 'My Company (Pending)');
+
+            return Drawer(
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.horizontal(right: Radius.circular(26)),
       ),
@@ -251,9 +280,9 @@ class ResidentDrawer extends StatelessWidget {
                                 color: Colors.white.withValues(alpha: 0.34),
                               ),
                             ),
-                            child: const Text(
-                              'Verified Resident',
-                              style: TextStyle(
+                            child: Text(
+                              residentBadgeText,
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
@@ -301,7 +330,7 @@ class ResidentDrawer extends StatelessWidget {
                     ),
                     _residentMenu(
                       context,
-                      'My Company',
+                      companyLabel,
                       const ResidentSellHubPage(),
                       Icons.business,
                     ),
@@ -413,6 +442,10 @@ class ResidentDrawer extends StatelessWidget {
           ),
         ),
       ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1850,7 +1883,7 @@ class _DashboardMarketplacePreviewState extends State<_DashboardMarketplacePrevi
         }.toList();
 
         return Column(
-      children: [
+          children: [
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -1994,7 +2027,7 @@ class _DashboardMarketplacePreviewState extends State<_DashboardMarketplacePrevi
               );
             },
           ),
-      ],
+          ],
         );
       },
     );

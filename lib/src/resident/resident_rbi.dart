@@ -278,11 +278,13 @@ class _ResidentRbiCardPageState extends State<ResidentRbiCardPage> {
   List<_ResidentNutritionEntry> _nutritionEntries = const [];
   bool _bloodDonorOptIn = false;
   bool _initialized = false;
+  bool _profileHydrated = false;
 
   @override
   void initState() {
     super.initState();
     _hydrateFromStore();
+    unawaited(_hydrateFromBackendProfile());
   }
 
   void _hydrateFromStore() {
@@ -327,6 +329,64 @@ class _ResidentRbiCardPageState extends State<ResidentRbiCardPage> {
     _zonePurokController.text = 'Zone 2';
     _yearResidencyController.text = '2018';
     _birthDateController.text = 'Mar 14, 1998';
+  }
+
+  Future<void> _hydrateFromBackendProfile() async {
+    if (_profileHydrated) {
+      return;
+    }
+    _profileHydrated = true;
+    await _ResidentProfileStore.ensureLoaded();
+    if (!mounted) {
+      return;
+    }
+    final profile = _ResidentProfileStore.profile;
+    if (_ResidentRbiStore.current.value != null) {
+      return;
+    }
+    final parts = _splitName(profile.name);
+    if (_firstNameController.text.trim().isEmpty && parts.$1.isNotEmpty) {
+      _firstNameController.text = parts.$1;
+    }
+    if (_middleNameController.text.trim().isEmpty && parts.$2.isNotEmpty) {
+      _middleNameController.text = parts.$2;
+    }
+    if (_lastNameController.text.trim().isEmpty && parts.$3.isNotEmpty) {
+      _lastNameController.text = parts.$3;
+    }
+    if (_middleNameController.text.trim().isEmpty &&
+        profile.middleName.trim().isNotEmpty) {
+      _middleNameController.text = profile.middleName.trim();
+    }
+    if (_suffix == 'N/A' && profile.suffix.trim().isNotEmpty) {
+      final next = profile.suffix.trim();
+      if (_suffixes.contains(next)) {
+        _suffix = next;
+      }
+    }
+    if (_bloodType.trim().isEmpty && profile.bloodType.trim().isNotEmpty) {
+      final nextBlood = profile.bloodType.trim().toUpperCase();
+      if (_bloodTypes.contains(nextBlood)) {
+        _bloodType = nextBlood;
+      }
+    } else if (profile.bloodType.trim().isNotEmpty) {
+      final nextBlood = profile.bloodType.trim().toUpperCase();
+      if (_bloodTypes.contains(nextBlood)) {
+        _bloodType = nextBlood;
+      }
+    }
+    if (_nutritionEntries.isEmpty &&
+        profile.heightCm != null &&
+        profile.weightKg != null) {
+      _nutritionEntries = [
+        _ResidentNutritionEntry(
+          recordedAt: DateTime.now(),
+          heightCm: profile.heightCm!,
+          weightKg: profile.weightKg!,
+        ),
+      ];
+    }
+    setState(() {});
   }
 
   @override
@@ -999,14 +1059,21 @@ class _ResidentRbiCardPageState extends State<ResidentRbiCardPage> {
             ],
           ),
         ),
-        body: ValueListenableBuilder<_ResidentRbiRecord?>(
-          valueListenable: _ResidentRbiStore.current,
-          builder: (context, record, _) {
-            return TabBarView(
+        body: ValueListenableBuilder<int>(
+          valueListenable: _ResidentProfileStore.refresh,
+          builder: (context, __, ___) {
+            final backendProfile = _ResidentProfileStore.profile;
+            return ValueListenableBuilder<_ResidentRbiRecord?>(
+              valueListenable: _ResidentRbiStore.current,
+              builder: (context, record, _) {
+                final displayRecord = record ?? _recordFromBackendProfile(backendProfile);
+                return TabBarView(
               children: [
                 _RbiMyCard(
-                  record: record,
-                  onCopyId: record == null ? null : () => _copyRbiId(record.rbiId),
+                  record: displayRecord,
+                  onCopyId: displayRecord == null
+                      ? null
+                      : () => _copyRbiId(displayRecord.rbiId),
                   residentPhoto: _buildResidentPhoto(76),
                 ),
                 _RbiProfileForm(
@@ -1066,14 +1133,110 @@ class _ResidentRbiCardPageState extends State<ResidentRbiCardPage> {
                   existingRecord: record,
                 ),
                 _RbiTransactions(
-                  record: record,
+                  record: displayRecord,
                   onMarkVerified: _markVerified,
                 ),
               ],
+                );
+              },
             );
           },
         ),
       ),
+    );
+  }
+
+  _ResidentRbiRecord? _recordFromBackendProfile(_ResidentProfileData profile) {
+    final fallbackName = _residentDisplayName().trim();
+    final resolvedName = profile.name.trim().isNotEmpty
+        ? profile.name.trim()
+        : fallbackName;
+    final nameParts = _splitName(resolvedName);
+    final hasAnyProfileData =
+        resolvedName.isNotEmpty ||
+        profile.bloodType.trim().isNotEmpty ||
+        _residentBarangay.trim().isNotEmpty;
+    if (!hasAnyProfileData) {
+      return null;
+    }
+    final latestNutrition =
+        profile.heightCm != null && profile.weightKg != null
+        ? <_ResidentNutritionEntry>[
+            _ResidentNutritionEntry(
+              recordedAt: DateTime.now(),
+              heightCm: profile.heightCm!,
+              weightKg: profile.weightKg!,
+            ),
+          ]
+        : const <_ResidentNutritionEntry>[];
+    final now = DateTime.now();
+    return _ResidentRbiRecord(
+      rbiId: _residentProfileCode(),
+      firstName: nameParts.$1.isNotEmpty ? nameParts.$1 : 'Resident',
+      middleName: profile.middleName.trim().isNotEmpty
+          ? profile.middleName.trim()
+          : nameParts.$2,
+      lastName: nameParts.$3,
+      suffix: profile.suffix.trim().isNotEmpty ? profile.suffix.trim() : 'N/A',
+      barangay: _residentBarangay,
+      municipality: _residentCity,
+      province: _residentProvince,
+      streetName: _streetNameController.text.trim().isNotEmpty
+          ? _streetNameController.text.trim()
+          : 'Not provided',
+      zonePurok: _zonePurokController.text.trim().isNotEmpty
+          ? _zonePurokController.text.trim()
+          : 'Not provided',
+      yearOfResidency: int.tryParse(_yearResidencyController.text.trim()) ??
+          (now.year - 5),
+      birthDate: _parsedBirthDate ?? DateTime(now.year - 25, 1, 1),
+      gender: _gender,
+      disabilityTag: _disabilityTag,
+      familyMembers: _familyMembers,
+      vehicles: _vehicles,
+      vaccinations: _vaccinations,
+      nutritionEntries: _nutritionEntries.isNotEmpty
+          ? _nutritionEntries
+          : latestNutrition,
+      bloodDonorOptIn: _bloodDonorOptIn,
+      bloodType: profile.bloodType.trim().isNotEmpty
+          ? profile.bloodType.trim().toUpperCase()
+          : _bloodType,
+      educationAidStatus: _educationAidStatus,
+      latestGradeAverage: _latestGradeController.text.trim(),
+      verificationStep: profile.isVerified
+          ? 2
+          : (profile.profileCompletion > 0 ? 1 : 0),
+      transactions: <_RbiTransactionEntry>[
+        _RbiTransactionEntry(
+          title: profile.isVerified ? 'Profile Verified' : 'Profile Draft',
+          date: _formatShortDate(now),
+          status: profile.isVerified ? 'Completed' : 'Pending',
+        ),
+      ],
+      updatedAt: now,
+    );
+  }
+
+  (String, String, String) _splitName(String full) {
+    final parts = full
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((item) => item.trim().isNotEmpty)
+        .toList();
+    if (parts.isEmpty) {
+      return ('', '', '');
+    }
+    if (parts.length == 1) {
+      return (parts.first, '', '');
+    }
+    if (parts.length == 2) {
+      return (parts.first, '', parts.last);
+    }
+    return (
+      parts.first,
+      parts.sublist(1, parts.length - 1).join(' '),
+      parts.last,
     );
   }
 }

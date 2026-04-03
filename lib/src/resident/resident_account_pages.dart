@@ -1392,6 +1392,11 @@ class _ResidentCommunityChatPageState extends State<ResidentCommunityChatPage> {
   final _scrollController = ScrollController();
   String _channel = 'General';
   String _barangay = 'West Tapinac';
+  bool _syncing = false;
+  bool _sending = false;
+  bool _backendLive = false;
+  String _syncNotice = '';
+  List<_ResidentChatMessage> _backendMessages = const <_ResidentChatMessage>[];
 
   static const _registeredBarangays = [
     'West Tapinac',
@@ -1565,11 +1570,55 @@ class _ResidentCommunityChatPageState extends State<ResidentCommunityChatPage> {
     ],
   };
 
+  @override
+  void initState() {
+    super.initState();
+    final currentBarangay = _currentResidentProfile?.barangay.trim() ?? '';
+    if (currentBarangay.isNotEmpty) {
+      _barangay = currentBarangay;
+    }
+    unawaited(_loadMessagesFromApi(showToastOnFailure: false));
+  }
+
   List<_ResidentChatMessage> get _filteredMessages =>
-      (_messagesByBarangay[_barangay] ?? const <_ResidentChatMessage>[])
+      (_backendLive
+              ? _backendMessages
+              : (_messagesByBarangay[_barangay] ?? const <_ResidentChatMessage>[]))
           .where((m) => m.channel == _channel)
           .toList()
         ..sort((a, b) => a.sentAt.compareTo(b.sentAt));
+
+  Future<void> _loadMessagesFromApi({bool showToastOnFailure = true}) async {
+    setState(() => _syncing = true);
+    final result = await _CommunityChatApi.instance.fetchMessages(
+      barangay: _barangay,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (result.success) {
+      setState(() {
+        _backendLive = true;
+        _backendMessages = result.messages;
+        _syncNotice = '';
+      });
+    } else {
+      setState(() {
+        _backendLive = false;
+        _syncNotice = 'Using local chat only: ${result.message}';
+      });
+      if (showToastOnFailure) {
+        _showFeature(context, _syncNotice, tone: _ToastTone.warning);
+      }
+    }
+    setState(() => _syncing = false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) {
+        return;
+      }
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    });
+  }
 
   @override
   void dispose() {
@@ -1585,22 +1634,48 @@ class _ResidentCommunityChatPageState extends State<ResidentCommunityChatPage> {
     return '$hour:$minute $period';
   }
 
-  void _sendMessage() {
+  Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    final apiResult = await _CommunityChatApi.instance.sendMessage(
+      barangay: _barangay,
+      channel: _channel,
+      message: text,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (apiResult.success) {
+      setState(() {
+        _backendLive = true;
+        if (apiResult.chatMessage != null) {
+          _backendMessages = [..._backendMessages, apiResult.chatMessage!];
+        }
+        _messageController.clear();
+      });
+    } else {
+      setState(() {
+        _backendLive = false;
+        _syncNotice = 'Saved locally only: ${apiResult.message}';
+        _messagesByBarangay.putIfAbsent(_barangay, () => []);
+        _messagesByBarangay[_barangay]!.add(
+          _ResidentChatMessage(
+            sender: _residentDisplayName(),
+            text: text,
+            channel: _channel,
+            sentAt: DateTime.now(),
+            isMine: true,
+            isOfficial: false,
+          ),
+        );
+        _messageController.clear();
+      });
+      _showFeature(context, _syncNotice, tone: _ToastTone.warning);
+    }
+    setState(() => _sending = false);
     setState(() {
-      _messagesByBarangay.putIfAbsent(_barangay, () => []);
-      _messagesByBarangay[_barangay]!.add(
-        _ResidentChatMessage(
-          sender: 'Shamira Balandra',
-          text: text,
-          channel: _channel,
-          sentAt: DateTime.now(),
-          isMine: true,
-          isOfficial: false,
-        ),
-      );
-      _messageController.clear();
+      // refresh message view
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
@@ -1617,6 +1692,7 @@ class _ResidentCommunityChatPageState extends State<ResidentCommunityChatPage> {
     setState(() {
       _barangay = barangay;
     });
+    unawaited(_loadMessagesFromApi());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
       _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
@@ -1779,12 +1855,25 @@ class _ResidentCommunityChatPageState extends State<ResidentCommunityChatPage> {
                         }).toList(),
                       ),
                     ),
+                    if (_syncNotice.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        _syncNotice,
+                        style: const TextStyle(
+                          color: Color(0xFFB45309),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
             Expanded(
-              child: messages.isEmpty
+              child: _syncing
+                  ? const Center(child: CircularProgressIndicator())
+                  : messages.isEmpty
                   ? Center(
                       child: Text(
                         'No messages yet for $_barangay ($_channel).',
@@ -1887,7 +1976,7 @@ class _ResidentCommunityChatPageState extends State<ResidentCommunityChatPage> {
                         minLines: 1,
                         maxLines: 3,
                         decoration: InputDecoration(
-                          hintText: 'Message $_barangay ??? $_channel...',
+                          hintText: 'Message $_barangay - $_channel...',
                           filled: true,
                           fillColor: Colors.white,
                           border: OutlineInputBorder(
@@ -1901,12 +1990,12 @@ class _ResidentCommunityChatPageState extends State<ResidentCommunityChatPage> {
                             vertical: 10,
                           ),
                         ),
-                        onSubmitted: (_) => _sendMessage(),
+                        onSubmitted: (_) => unawaited(_sendMessage()),
                       ),
                     ),
                     const SizedBox(width: 8),
                     FilledButton(
-                      onPressed: _sendMessage,
+                      onPressed: _sending ? null : () => unawaited(_sendMessage()),
                       style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFF4052CA),
                         padding: const EdgeInsets.all(12),
@@ -1943,6 +2032,279 @@ class _ResidentChatMessage {
     required this.isMine,
     required this.isOfficial,
   });
+}
+
+class _CommunityChatFetchResult {
+  final bool success;
+  final String message;
+  final List<_ResidentChatMessage> messages;
+
+  const _CommunityChatFetchResult({
+    required this.success,
+    required this.message,
+    this.messages = const <_ResidentChatMessage>[],
+  });
+}
+
+class _CommunityChatSendResult {
+  final bool success;
+  final String message;
+  final _ResidentChatMessage? chatMessage;
+
+  const _CommunityChatSendResult({
+    required this.success,
+    required this.message,
+    this.chatMessage,
+  });
+}
+
+class _CommunityChatApi {
+  _CommunityChatApi._();
+  static final _CommunityChatApi instance = _CommunityChatApi._();
+  static const Duration _requestTimeout = Duration(seconds: 8);
+
+  Future<_CommunityChatFetchResult> fetchMessages({
+    required String barangay,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _CommunityChatFetchResult(
+        success: false,
+        message: 'Please log in again to load community chat.',
+      );
+    }
+
+    final encodedBarangay = Uri.encodeQueryComponent(barangay.trim());
+    final paths = <String>[
+      'community/chat/messages?barangay=$encodedBarangay',
+      'community/messages?barangay=$encodedBarangay',
+    ];
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http
+              .get(
+                endpoint,
+                headers: {
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $_authToken',
+                },
+              )
+              .timeout(_requestTimeout);
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          final body = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final rawList = body['messages'] ?? body['data'];
+            if (rawList is! List) {
+              return const _CommunityChatFetchResult(
+                success: false,
+                message: 'Community chat payload is invalid.',
+              );
+            }
+            final out = <_ResidentChatMessage>[];
+            for (final item in rawList) {
+              if (item is! Map<String, dynamic>) {
+                continue;
+              }
+              final mapped = _mapChatMessage(item);
+              if (mapped != null) {
+                out.add(mapped);
+              }
+            }
+            out.sort((a, b) => a.sentAt.compareTo(b.sentAt));
+            return _CommunityChatFetchResult(
+              success: true,
+              message: _extractApiMessage(
+                body,
+                fallback: 'Community chat synced.',
+              ),
+              messages: out,
+            );
+          }
+          return _CommunityChatFetchResult(
+            success: false,
+            message: _extractApiMessage(
+              body,
+              fallback: 'Unable to load community chat.',
+            ),
+          );
+        } on TimeoutException {
+          sawTimeout = true;
+        } catch (_) {
+          sawConnectionError = true;
+        }
+      }
+    }
+
+    if (sawTimeout) {
+      return const _CommunityChatFetchResult(
+        success: false,
+        message: 'Loading community chat timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _CommunityChatFetchResult(
+        success: false,
+        message: 'Cannot connect to server to load community chat.',
+      );
+    }
+    return const _CommunityChatFetchResult(
+      success: false,
+      message: 'Community chat endpoint is not available yet.',
+    );
+  }
+
+  Future<_CommunityChatSendResult> sendMessage({
+    required String barangay,
+    required String channel,
+    required String message,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _CommunityChatSendResult(
+        success: false,
+        message: 'Please log in again before sending a message.',
+      );
+    }
+
+    final payload = jsonEncode({
+      'barangay': barangay.trim(),
+      'channel': channel.trim(),
+      'message': message.trim(),
+    });
+    const paths = <String>['community/chat/messages', 'community/messages'];
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http
+              .post(
+                endpoint,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $_authToken',
+                },
+                body: payload,
+              )
+              .timeout(_requestTimeout);
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          final body = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final raw = body['chat_message'] ?? body['message_item'] ?? body['data'];
+            final mapped = raw is Map<String, dynamic> ? _mapChatMessage(raw) : null;
+            return _CommunityChatSendResult(
+              success: true,
+              message: _extractApiMessage(body, fallback: 'Message sent.'),
+              chatMessage: mapped,
+            );
+          }
+          return _CommunityChatSendResult(
+            success: false,
+            message: _extractApiMessage(
+              body,
+              fallback: 'Unable to send message.',
+            ),
+          );
+        } on TimeoutException {
+          sawTimeout = true;
+        } catch (_) {
+          sawConnectionError = true;
+        }
+      }
+    }
+
+    if (sawTimeout) {
+      return const _CommunityChatSendResult(
+        success: false,
+        message: 'Sending message timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _CommunityChatSendResult(
+        success: false,
+        message: 'Cannot connect to server to send message.',
+      );
+    }
+    return const _CommunityChatSendResult(
+      success: false,
+      message: 'Community chat endpoint is not available yet.',
+    );
+  }
+
+  _ResidentChatMessage? _mapChatMessage(Map<String, dynamic> raw) {
+    String read(String key, {String fallback = ''}) {
+      final value = raw[key];
+      if (value == null) {
+        return fallback;
+      }
+      if (value is String) {
+        final trimmed = value.trim();
+        return trimmed.isEmpty ? fallback : trimmed;
+      }
+      final text = value.toString().trim();
+      return text.isEmpty ? fallback : text;
+    }
+
+    final text = read('message', fallback: read('text'));
+    if (text.isEmpty) {
+      return null;
+    }
+    final sender = read('sender_name', fallback: read('sender', fallback: 'Resident'));
+    final channel = read('channel', fallback: 'General');
+    final createdAtRaw = read('created_at', fallback: read('sent_at'));
+    final sentAt = DateTime.tryParse(createdAtRaw) ?? DateTime.now();
+    final officialRaw = raw['is_official'];
+    final isOfficial = officialRaw == true ||
+        officialRaw == 1 ||
+        officialRaw?.toString().toLowerCase() == 'true';
+    final isMine = sender.toLowerCase() == _residentDisplayName().toLowerCase();
+
+    return _ResidentChatMessage(
+      sender: sender,
+      text: text,
+      channel: channel,
+      sentAt: sentAt,
+      isMine: isMine,
+      isOfficial: isOfficial,
+    );
+  }
+
+  String _extractApiMessage(
+    Map<String, dynamic> body, {
+    required String fallback,
+  }) {
+    final message = body['message'];
+    if (message is String && message.trim().isNotEmpty) {
+      return message.trim();
+    }
+    final errors = body['errors'];
+    if (errors is Map<String, dynamic>) {
+      for (final value in errors.values) {
+        if (value is List && value.isNotEmpty) {
+          final first = value.first;
+          if (first is String && first.trim().isNotEmpty) {
+            return first.trim();
+          }
+        }
+        if (value is String && value.trim().isNotEmpty) {
+          return value.trim();
+        }
+      }
+    }
+    return fallback;
+  }
 }
 
 class ResidentSupportPage extends StatelessWidget {
@@ -2256,6 +2618,21 @@ class ResidentVerifyProfilePage extends StatefulWidget {
 }
 
 class _ResidentVerifyProfilePageState extends State<ResidentVerifyProfilePage> {
+  final _educationController = TextEditingController();
+  final _employmentTypeController = TextEditingController();
+  final _employmentSectorController = TextEditingController();
+  final _householdSizeController = TextEditingController();
+  final _monthlyIncomeController = TextEditingController();
+  final _houseOwnershipController = TextEditingController();
+  final _heightController = TextEditingController();
+  final _weightController = TextEditingController();
+  final _bloodTypeController = TextEditingController();
+  final _medicalNotesController = TextEditingController();
+
+  bool _isSubmitting = false;
+  bool _didSeed = false;
+  bool _userStartedEditing = false;
+
   final Map<String, bool> _utilities = {
     'Electricity': true,
     'Water Supply': true,
@@ -2263,6 +2640,41 @@ class _ResidentVerifyProfilePageState extends State<ResidentVerifyProfilePage> {
     'Garbage/Waste Disposal': false,
     'Internet Access': true,
   };
+
+  @override
+  void initState() {
+    super.initState();
+    for (final controller in [
+      _educationController,
+      _employmentTypeController,
+      _employmentSectorController,
+      _householdSizeController,
+      _monthlyIncomeController,
+      _houseOwnershipController,
+      _heightController,
+      _weightController,
+      _bloodTypeController,
+      _medicalNotesController,
+    ]) {
+      controller.addListener(_markUserEditing);
+    }
+    unawaited(_loadExistingProfile());
+  }
+
+  @override
+  void dispose() {
+    _educationController.dispose();
+    _employmentTypeController.dispose();
+    _employmentSectorController.dispose();
+    _householdSizeController.dispose();
+    _monthlyIncomeController.dispose();
+    _houseOwnershipController.dispose();
+    _heightController.dispose();
+    _weightController.dispose();
+    _bloodTypeController.dispose();
+    _medicalNotesController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2358,26 +2770,83 @@ class _ResidentVerifyProfilePageState extends State<ResidentVerifyProfilePage> {
             _formSection(
               title: 'Education and Employment',
               icon: Icons.school_outlined,
-              children: const [
-                SizedBox(height: 8),
-                _StyledInput(label: 'Highest Educational Attainment *'),
-                SizedBox(height: 8),
-                _StyledInput(label: 'Type of Employment *'),
-                SizedBox(height: 8),
-                _StyledInput(label: 'Sector'),
+              children: [
+                const SizedBox(height: 8),
+                _StyledInput(
+                  label: 'Highest Educational Attainment *',
+                  controller: _educationController,
+                ),
+                const SizedBox(height: 8),
+                _StyledInput(
+                  label: 'Type of Employment *',
+                  controller: _employmentTypeController,
+                ),
+                const SizedBox(height: 8),
+                _StyledInput(
+                  label: 'Sector',
+                  controller: _employmentSectorController,
+                ),
               ],
             ),
             const SizedBox(height: 10),
             _formSection(
               title: 'Household Information',
               icon: Icons.home_work_outlined,
-              children: const [
-                SizedBox(height: 8),
-                _StyledInput(label: 'Number of People in the Household *'),
-                SizedBox(height: 8),
-                _StyledInput(label: 'Monthly Household Income'),
-                SizedBox(height: 8),
-                _StyledInput(label: 'House Ownership Status *'),
+              children: [
+                const SizedBox(height: 8),
+                _StyledInput(
+                  label: 'Number of People in the Household *',
+                  controller: _householdSizeController,
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 8),
+                _StyledInput(
+                  label: 'Monthly Household Income',
+                  controller: _monthlyIncomeController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _StyledInput(
+                  label: 'House Ownership Status *',
+                  controller: _houseOwnershipController,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _formSection(
+              title: 'Health Information',
+              icon: Icons.health_and_safety_outlined,
+              children: [
+                const SizedBox(height: 8),
+                _StyledInput(
+                  label: 'Height (cm)',
+                  controller: _heightController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _StyledInput(
+                  label: 'Weight (kg)',
+                  controller: _weightController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _StyledInput(
+                  label: 'Blood Type',
+                  controller: _bloodTypeController,
+                ),
+                const SizedBox(height: 8),
+                _StyledInput(
+                  label: 'Medical Notes',
+                  controller: _medicalNotesController,
+                  minLines: 2,
+                  maxLines: 4,
+                ),
               ],
             ),
             const SizedBox(height: 10),
@@ -2417,8 +2886,10 @@ class _ResidentVerifyProfilePageState extends State<ResidentVerifyProfilePage> {
                     (entry) => _utilityRow(
                       label: entry.key,
                       enabled: entry.value,
-                      onChanged: (v) =>
-                          setState(() => _utilities[entry.key] = v),
+                      onChanged: (v) => setState(() {
+                        _userStartedEditing = true;
+                        _utilities[entry.key] = v;
+                      }),
                     ),
                   ),
                 ],
@@ -2465,27 +2936,25 @@ class _ResidentVerifyProfilePageState extends State<ResidentVerifyProfilePage> {
                     children: [
                       Expanded(
                         child: FilledButton(
-                          onPressed: () async {
-                            await _ResidentProfileVerificationHub.markVerified();
-                            if (!context.mounted) {
-                              return;
-                            }
-                            _showFeature(
-                              context,
-                              'Verification submitted. Commercial selling is now enabled.',
-                            );
-                            Navigator.pop(context);
-                          },
+                          onPressed: _isSubmitting
+                              ? null
+                              : () async {
+                                  await _submitVerification();
+                                },
                           style: FilledButton.styleFrom(
                             backgroundColor: const Color(0xFF2E35D3),
                           ),
-                          child: const Text('Verify Now'),
+                          child: Text(
+                            _isSubmitting ? 'Submitting...' : 'Verify Now',
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: _isSubmitting
+                              ? null
+                              : () => Navigator.pop(context),
                           child: const Text('Maybe Later'),
                         ),
                       ),
@@ -2498,6 +2967,105 @@ class _ResidentVerifyProfilePageState extends State<ResidentVerifyProfilePage> {
         ),
       ),
     );
+  }
+
+  Future<void> _loadExistingProfile() async {
+    await _ResidentProfileStore.ensureLoaded();
+    if (!mounted || _didSeed || _userStartedEditing) {
+      return;
+    }
+    final profile = _ResidentProfileStore.profile;
+    _educationController.text = profile.educationAttainment;
+    _employmentTypeController.text = profile.employmentType;
+    _employmentSectorController.text = profile.employmentSector;
+    _householdSizeController.text = profile.householdSize > 0
+        ? profile.householdSize.toString()
+        : '';
+    _monthlyIncomeController.text = profile.monthlyHouseholdIncome != null
+        ? profile.monthlyHouseholdIncome!.toStringAsFixed(2)
+        : '';
+    _houseOwnershipController.text = profile.houseOwnershipStatus;
+    _heightController.text = profile.heightCm != null
+        ? profile.heightCm!.toStringAsFixed(2)
+        : '';
+    _weightController.text = profile.weightKg != null
+        ? profile.weightKg!.toStringAsFixed(2)
+        : '';
+    _bloodTypeController.text = profile.bloodType;
+    _medicalNotesController.text = profile.medicalNotes;
+    if (profile.utilities.isNotEmpty) {
+      for (final entry in profile.utilities.entries) {
+        _utilities[entry.key] = entry.value;
+      }
+    }
+    _didSeed = true;
+    setState(() {});
+  }
+
+  Future<void> _submitVerification() async {
+    final education = _educationController.text.trim();
+    final employmentType = _employmentTypeController.text.trim();
+    final householdSize = _parseHouseholdSize(_householdSizeController.text);
+    final ownership = _houseOwnershipController.text.trim();
+    if (education.isEmpty ||
+        employmentType.isEmpty ||
+        householdSize <= 0 ||
+        ownership.isEmpty) {
+      _showFeature(
+        context,
+        'Please complete education, employment, household size, and ownership.',
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    final result = await _ResidentProfileStore.submitProfile(
+      educationAttainment: education,
+      employmentType: employmentType,
+      employmentSector: _employmentSectorController.text.trim(),
+      householdSize: householdSize,
+      monthlyHouseholdIncome: _parseNullableDouble(_monthlyIncomeController.text),
+      houseOwnershipStatus: ownership,
+      utilities: Map<String, bool>.from(_utilities),
+      heightCm: _parseNullableDouble(_heightController.text),
+      weightKg: _parseNullableDouble(_weightController.text),
+      bloodType: _bloodTypeController.text.trim(),
+      medicalNotes: _medicalNotesController.text.trim(),
+      isVerified: true,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() => _isSubmitting = false);
+    _showFeature(context, result.message);
+    if (result.success) {
+      Navigator.pop(context);
+    }
+  }
+
+  double? _parseNullableDouble(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    return double.tryParse(trimmed);
+  }
+
+  int _parseHouseholdSize(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      return 0;
+    }
+    final direct = int.tryParse(trimmed);
+    if (direct != null) {
+      return direct;
+    }
+    final digits = RegExp(r'\d+').firstMatch(trimmed)?.group(0) ?? '';
+    return int.tryParse(digits) ?? 0;
+  }
+
+  void _markUserEditing() {
+    _userStartedEditing = true;
   }
 
   Widget _formSection({
@@ -2580,11 +3148,25 @@ class _ResidentVerifyProfilePageState extends State<ResidentVerifyProfilePage> {
 
 class _StyledInput extends StatelessWidget {
   final String label;
-  const _StyledInput({required this.label});
+  final TextEditingController? controller;
+  final TextInputType? keyboardType;
+  final int minLines;
+  final int maxLines;
+  const _StyledInput({
+    required this.label,
+    this.controller,
+    this.keyboardType,
+    this.minLines = 1,
+    this.maxLines = 1,
+  });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      minLines: minLines,
+      maxLines: maxLines,
       decoration: InputDecoration(
         labelText: label,
         filled: true,

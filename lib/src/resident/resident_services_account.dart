@@ -2885,213 +2885,235 @@ class _ResidentEditableProfileAvatar extends StatelessWidget {
   }
 }
 
-class ResidentProfilePage extends StatelessWidget {
+class ResidentProfilePage extends StatefulWidget {
   const ResidentProfilePage({super.key});
+
+  @override
+  State<ResidentProfilePage> createState() => _ResidentProfilePageState();
+}
+
+class _ResidentProfilePageState extends State<ResidentProfilePage> {
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_ResidentProfileStore.ensureLoaded());
+    unawaited(_ResidentProfileVerificationHub.ensureLoaded());
+  }
+
   @override
   Widget build(BuildContext context) {
-    final personalSummary = _residentPersonalSummary();
-    final residenceSummary = _residentLocationSummary();
+    return ValueListenableBuilder<int>(
+      valueListenable: _ResidentProfileStore.refresh,
+      builder: (context, _, __) {
+        final profile = _ResidentProfileStore.profile;
+        final completion = profile.profileCompletion.clamp(0.0, 1.0);
+        final personalSummary = _residentPersonalSummary();
+        final residenceSummary = _residentLocationSummary();
 
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFFF6F8FF), Color(0xFFF8F0EE)],
-        ),
-      ),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(23),
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF3E4CC7), Color(0xFF6573E3)],
-              ),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x262E35D3),
-                  blurRadius: 15,
-                  offset: Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                _ResidentEditableProfileAvatar(
-                  size: 72,
-                  onEdit: () => _openResidentProfilePhotoEditor(context),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _residentDisplayName(),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        residenceSummary,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Color(0xFFDDE0FF)),
-                      ),
-                      const SizedBox(height: 3),
-                      const Text(
-                        'Tap camera icon to change profile photo',
-                        style: TextStyle(
-                          color: Color(0xFFD8DCFF),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ResidentVerifyProfilePage(),
-                    ),
-                  ),
-                  icon: const Icon(Icons.edit, color: Colors.white),
-                ),
-              ],
+        return Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFFF6F8FF), Color(0xFFF8F0EE)],
             ),
           ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(17),
-              border: Border.all(color: const Color(0xFFE6E7F2)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
-                  'Profile Completion',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF2F3146),
-                  ),
-                ),
-                SizedBox(height: 6),
-                LinearProgressIndicator(
-                  value: 0.78,
-                  minHeight: 8,
-                  borderRadius: BorderRadius.all(Radius.circular(6)),
-                  backgroundColor: Color(0xFFE9ECFA),
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4250C4)),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Complete remaining details to unlock all services.',
-                  style: TextStyle(color: Color(0xFF666B86)),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
             children: [
-              Expanded(
-                child: _profileAction(
-                  context,
-                  title: 'Verify',
-                  icon: Icons.verified_user,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ResidentVerifyProfilePage(),
-                    ),
+              Container(
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(23),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF3E4CC7), Color(0xFF6573E3)],
                   ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x262E35D3),
+                      blurRadius: 15,
+                      offset: Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    _ResidentEditableProfileAvatar(
+                      size: 72,
+                      onEdit: () => _openResidentProfilePhotoEditor(context),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _residentDisplayName(),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            residenceSummary,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Color(0xFFDDE0FF)),
+                          ),
+                          const SizedBox(height: 3),
+                          const Text(
+                            'Tap camera icon to change profile photo',
+                            style: TextStyle(
+                              color: Color(0xFFD8DCFF),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ResidentVerifyProfilePage(),
+                        ),
+                      ),
+                      icon: const Icon(Icons.edit, color: Colors.white),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _profileAction(
-                  context,
-                  title: 'RBI Card',
-                  icon: Icons.badge,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ResidentRbiCardPage(),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(17),
+                  border: Border.all(color: const Color(0xFFE6E7F2)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Profile Completion',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF2F3146),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 6),
+                    LinearProgressIndicator(
+                      value: completion,
+                      minHeight: 8,
+                      borderRadius: const BorderRadius.all(Radius.circular(6)),
+                      backgroundColor: const Color(0xFFE9ECFA),
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        Color(0xFF4250C4),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${(completion * 100).round()}% complete. Finish your profile to unlock all services.',
+                      style: const TextStyle(color: Color(0xFF666B86)),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _profileAction(
-                  context,
-                  title: 'Settings',
-                  icon: Icons.settings,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ResidentSettingsPage(),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _profileAction(
+                      context,
+                      title: 'Verify',
+                      icon: Icons.verified_user,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ResidentVerifyProfilePage(),
+                        ),
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _profileAction(
+                      context,
+                      title: 'RBI Card',
+                      icon: Icons.badge,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ResidentRbiCardPage(),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _profileAction(
+                      context,
+                      title: 'Settings',
+                      icon: Icons.settings,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ResidentSettingsPage(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _profileInfoCard(
+                context,
+                title: 'Personal Information',
+                subtitle: personalSummary,
+                icon: Icons.person_outline,
+              ),
+              _profileInfoCard(
+                context,
+                title: 'Residence Details',
+                subtitle: residenceSummary,
+                icon: Icons.home_work_outlined,
+              ),
+              _profileInfoCard(
+                context,
+                title: 'Education and Employment',
+                subtitle: profile.educationSummary(),
+                icon: Icons.school_outlined,
+              ),
+              _profileInfoCard(
+                context,
+                title: 'Health Information',
+                subtitle: profile.healthSummary(),
+                icon: Icons.health_and_safety_outlined,
+              ),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ResidentSupportPage()),
                 ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF3A47BA),
+                ),
+                icon: const Icon(Icons.support_agent),
+                label: const Text('Need Help? Contact Support'),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          _profileInfoCard(
-            context,
-            title: 'Personal Information',
-            subtitle: personalSummary,
-            icon: Icons.person_outline,
-          ),
-          _profileInfoCard(
-            context,
-            title: 'Residence Details',
-            subtitle: residenceSummary,
-            icon: Icons.home_work_outlined,
-          ),
-          _profileInfoCard(
-            context,
-            title: 'Education and Employment',
-            subtitle: 'Attainment, occupation, skills, and job status',
-            icon: Icons.school_outlined,
-          ),
-          _profileInfoCard(
-            context,
-            title: 'Health Information',
-            subtitle: 'Height, weight, blood type, and medical details',
-            icon: Icons.health_and_safety_outlined,
-          ),
-          const SizedBox(height: 8),
-          FilledButton.icon(
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ResidentSupportPage()),
-            ),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF3A47BA),
-            ),
-            icon: const Icon(Icons.support_agent),
-            label: const Text('Need Help? Contact Support'),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -3194,6 +3216,564 @@ class ResidentCartPage extends StatefulWidget {
   State<ResidentCartPage> createState() => _ResidentCartPageState();
 }
 
+class _ResidentProfileData {
+  final String name;
+  final String mobile;
+  final String province;
+  final String cityMunicipality;
+  final String barangay;
+  final String middleName;
+  final String suffix;
+  final String religion;
+  final String educationAttainment;
+  final String employmentType;
+  final String employmentSector;
+  final int householdSize;
+  final double? monthlyHouseholdIncome;
+  final String houseOwnershipStatus;
+  final Map<String, bool> utilities;
+  final double? heightCm;
+  final double? weightKg;
+  final String bloodType;
+  final String medicalNotes;
+  final bool isVerified;
+  final double profileCompletion;
+
+  const _ResidentProfileData({
+    required this.name,
+    required this.mobile,
+    required this.province,
+    required this.cityMunicipality,
+    required this.barangay,
+    required this.middleName,
+    required this.suffix,
+    required this.religion,
+    required this.educationAttainment,
+    required this.employmentType,
+    required this.employmentSector,
+    required this.householdSize,
+    this.monthlyHouseholdIncome,
+    required this.houseOwnershipStatus,
+    required this.utilities,
+    this.heightCm,
+    this.weightKg,
+    required this.bloodType,
+    required this.medicalNotes,
+    required this.isVerified,
+    required this.profileCompletion,
+  });
+
+  const _ResidentProfileData.empty()
+      : name = '',
+        mobile = '',
+        province = '',
+        cityMunicipality = '',
+        barangay = '',
+        middleName = '',
+        suffix = '',
+        religion = '',
+        educationAttainment = '',
+        employmentType = '',
+        employmentSector = '',
+        householdSize = 0,
+        monthlyHouseholdIncome = null,
+        houseOwnershipStatus = '',
+        utilities = const <String, bool>{},
+        heightCm = null,
+        weightKg = null,
+        bloodType = '',
+        medicalNotes = '',
+        isVerified = false,
+        profileCompletion = 0;
+
+  static _ResidentProfileData fromJson(Map<String, dynamic> raw) {
+    String read(String key, {String fallback = ''}) {
+      final value = raw[key];
+      if (value == null) {
+        return fallback;
+      }
+      if (value is String) {
+        return value.trim();
+      }
+      return value.toString().trim();
+    }
+
+    int readInt(String key) {
+      final value = raw[key];
+      if (value is int) {
+        return value;
+      }
+      if (value is String) {
+        return int.tryParse(value.trim()) ?? 0;
+      }
+      if (value is num) {
+        return value.toInt();
+      }
+      return 0;
+    }
+
+    double? readDouble(String key) {
+      final value = raw[key];
+      if (value is num) {
+        return value.toDouble();
+      }
+      if (value is String) {
+        return double.tryParse(value.trim());
+      }
+      return null;
+    }
+
+    bool readBool(String key) {
+      final value = raw[key];
+      if (value is bool) {
+        return value;
+      }
+      if (value is num) {
+        return value != 0;
+      }
+      if (value is String) {
+        final lowered = value.trim().toLowerCase();
+        return lowered == 'true' || lowered == '1' || lowered == 'yes';
+      }
+      return false;
+    }
+
+    final rawUtilities = raw['utilities'];
+    final utilities = <String, bool>{};
+    if (rawUtilities is Map) {
+      rawUtilities.forEach((key, value) {
+        final label = key.toString().trim();
+        if (label.isEmpty) {
+          return;
+        }
+        if (value is bool) {
+          utilities[label] = value;
+          return;
+        }
+        if (value is num) {
+          utilities[label] = value != 0;
+          return;
+        }
+        final lowered = value.toString().trim().toLowerCase();
+        utilities[label] = lowered == 'true' || lowered == '1' || lowered == 'yes';
+      });
+    }
+
+    return _ResidentProfileData(
+      name: read('name'),
+      mobile: read('mobile'),
+      province: read('province'),
+      cityMunicipality: read('city_municipality'),
+      barangay: read('barangay'),
+      middleName: read('middle_name'),
+      suffix: read('suffix'),
+      religion: read('religion'),
+      educationAttainment: read('education_attainment'),
+      employmentType: read('employment_type'),
+      employmentSector: read('employment_sector'),
+      householdSize: readInt('household_size'),
+      monthlyHouseholdIncome: readDouble('monthly_household_income'),
+      houseOwnershipStatus: read('house_ownership_status'),
+      utilities: utilities,
+      heightCm: readDouble('height_cm'),
+      weightKg: readDouble('weight_kg'),
+      bloodType: read('blood_type'),
+      medicalNotes: read('medical_notes'),
+      isVerified: readBool('is_verified'),
+      profileCompletion: readDouble('profile_completion') ?? 0,
+    );
+  }
+
+  String educationSummary() {
+    if (educationAttainment.isEmpty &&
+        employmentType.isEmpty &&
+        employmentSector.isEmpty) {
+      return 'Attainment, occupation, skills, and job status';
+    }
+    final parts = <String>[
+      if (educationAttainment.isNotEmpty) educationAttainment,
+      if (employmentType.isNotEmpty) employmentType,
+      if (employmentSector.isNotEmpty) employmentSector,
+    ];
+    return parts.join(' | ');
+  }
+
+  String healthSummary() {
+    if (heightCm == null &&
+        weightKg == null &&
+        bloodType.isEmpty &&
+        medicalNotes.isEmpty) {
+      return 'Height, weight, blood type, and medical details';
+    }
+    final parts = <String>[
+      if (heightCm != null) '${heightCm!.toStringAsFixed(1)} cm',
+      if (weightKg != null) '${weightKg!.toStringAsFixed(1)} kg',
+      if (bloodType.isNotEmpty) 'Blood: $bloodType',
+      if (medicalNotes.isNotEmpty) medicalNotes,
+    ];
+    return parts.join(' | ');
+  }
+}
+
+class _ResidentProfileApiResult {
+  final bool success;
+  final String message;
+  final _ResidentProfileData? profile;
+
+  const _ResidentProfileApiResult({
+    required this.success,
+    required this.message,
+    this.profile,
+  });
+}
+
+class _ResidentProfileApi {
+  _ResidentProfileApi._();
+  static final _ResidentProfileApi instance = _ResidentProfileApi._();
+  static const Duration _requestTimeout = Duration(seconds: 8);
+
+  Future<_ResidentProfileApiResult> fetchProfile() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _ResidentProfileApiResult(
+        success: false,
+        message: 'Please log in again to load profile.',
+      );
+    }
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    const paths = <String>['profile/resident', 'resident/profile', 'profile'];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http
+              .get(
+                endpoint,
+                headers: {
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $_authToken',
+                },
+              )
+              .timeout(_requestTimeout);
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          final body = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final rawProfile = body['profile'] ?? body['data'] ?? body;
+            if (rawProfile is! Map<String, dynamic>) {
+              return const _ResidentProfileApiResult(
+                success: false,
+                message: 'Resident profile payload is invalid.',
+              );
+            }
+            return _ResidentProfileApiResult(
+              success: true,
+              message: _extractApiMessage(body, fallback: 'Resident profile loaded.'),
+              profile: _ResidentProfileData.fromJson(rawProfile),
+            );
+          }
+          return _ResidentProfileApiResult(
+            success: false,
+            message: _extractApiMessage(
+              body,
+              fallback: 'Unable to load resident profile.',
+            ),
+          );
+        } on TimeoutException {
+          sawTimeout = true;
+        } catch (_) {
+          sawConnectionError = true;
+        }
+      }
+    }
+
+    if (sawTimeout) {
+      return const _ResidentProfileApiResult(
+        success: false,
+        message: 'Loading resident profile timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _ResidentProfileApiResult(
+        success: false,
+        message: 'Cannot connect to server to load resident profile.',
+      );
+    }
+    return const _ResidentProfileApiResult(
+      success: false,
+      message: 'Resident profile endpoint is not available yet.',
+    );
+  }
+
+  Future<_ResidentProfileApiResult> submitProfile({
+    required String educationAttainment,
+    required String employmentType,
+    required String employmentSector,
+    required int householdSize,
+    required double? monthlyHouseholdIncome,
+    required String houseOwnershipStatus,
+    required Map<String, bool> utilities,
+    required double? heightCm,
+    required double? weightKg,
+    required String bloodType,
+    required String medicalNotes,
+    required bool isVerified,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _ResidentProfileApiResult(
+        success: false,
+        message: 'Please log in again before verification.',
+      );
+    }
+
+    final payload = jsonEncode({
+      'education_attainment': educationAttainment.trim(),
+      'employment_type': employmentType.trim(),
+      if (employmentSector.trim().isNotEmpty)
+        'employment_sector': employmentSector.trim(),
+      'household_size': householdSize,
+      if (monthlyHouseholdIncome != null)
+        'monthly_household_income': monthlyHouseholdIncome,
+      'house_ownership_status': houseOwnershipStatus.trim(),
+      'utilities': utilities,
+      if (heightCm != null) 'height_cm': heightCm,
+      if (weightKg != null) 'weight_kg': weightKg,
+      if (bloodType.trim().isNotEmpty) 'blood_type': bloodType.trim(),
+      if (medicalNotes.trim().isNotEmpty) 'medical_notes': medicalNotes.trim(),
+      'is_verified': isVerified,
+    });
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    const paths = <String>['profile/resident', 'resident/profile', 'profile'];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http
+              .post(
+                endpoint,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $_authToken',
+                },
+                body: payload,
+              )
+              .timeout(_requestTimeout);
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          final body = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final rawProfile = body['profile'] ?? body['data'] ?? body;
+            final mapped = rawProfile is Map<String, dynamic>
+                ? _ResidentProfileData.fromJson(rawProfile)
+                : null;
+            return _ResidentProfileApiResult(
+              success: true,
+              message: _extractApiMessage(
+                body,
+                fallback: 'Resident profile updated.',
+              ),
+              profile: mapped,
+            );
+          }
+          return _ResidentProfileApiResult(
+            success: false,
+            message: _extractApiMessage(
+              body,
+              fallback: 'Unable to save resident profile.',
+            ),
+          );
+        } on TimeoutException {
+          sawTimeout = true;
+        } catch (_) {
+          sawConnectionError = true;
+        }
+      }
+    }
+
+    if (sawTimeout) {
+      return const _ResidentProfileApiResult(
+        success: false,
+        message: 'Submitting profile timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _ResidentProfileApiResult(
+        success: false,
+        message: 'Cannot connect to server to submit profile.',
+      );
+    }
+    return const _ResidentProfileApiResult(
+      success: false,
+      message: 'Resident profile endpoint is not available yet.',
+    );
+  }
+
+  String _extractApiMessage(
+    Map<String, dynamic> body, {
+    required String fallback,
+  }) {
+    final message = body['message'];
+    if (message is String && message.trim().isNotEmpty) {
+      return message.trim();
+    }
+    final errors = body['errors'];
+    if (errors is Map<String, dynamic>) {
+      for (final value in errors.values) {
+        if (value is List && value.isNotEmpty) {
+          final first = value.first;
+          if (first is String && first.trim().isNotEmpty) {
+            return first.trim();
+          }
+        }
+        if (value is String && value.trim().isNotEmpty) {
+          return value.trim();
+        }
+      }
+    }
+    return fallback;
+  }
+}
+
+class _ResidentProfileStore {
+  static final ValueNotifier<int> refresh = ValueNotifier<int>(0);
+  static bool _loaded = false;
+  static bool _loading = false;
+  static String _loadedForMobile = '';
+  static _ResidentProfileData _profile = const _ResidentProfileData.empty();
+
+  static _ResidentProfileData get profile => _profile;
+
+  static Future<_ResidentProfileApiResult> ensureLoaded({
+    bool force = false,
+  }) async {
+    final activeMobile = (_currentResidentProfile?.mobile ?? '').trim();
+    final shouldForceByAccount =
+        activeMobile.isNotEmpty &&
+        _loadedForMobile.isNotEmpty &&
+        _loadedForMobile != activeMobile;
+    if (shouldForceByAccount) {
+      force = true;
+    }
+    if (_loading) {
+      return const _ResidentProfileApiResult(
+        success: false,
+        message: 'Resident profile load already in progress.',
+      );
+    }
+    if (_loaded && !force) {
+      return _ResidentProfileApiResult(
+        success: true,
+        message: 'Resident profile ready.',
+        profile: _profile,
+      );
+    }
+    _loading = true;
+    try {
+      final result = await _ResidentProfileApi.instance.fetchProfile();
+      if (result.success && result.profile != null) {
+        _profile = result.profile!;
+        _loaded = true;
+        _loadedForMobile = activeMobile;
+        _syncSessionProfile(_profile);
+        unawaited(
+          _ResidentProfileVerificationHub._syncVerified(
+            _profile.isVerified,
+            persist: true,
+          ),
+        );
+        refresh.value++;
+      }
+      return result;
+    } finally {
+      _loading = false;
+    }
+  }
+
+  static Future<_ResidentProfileApiResult> submitProfile({
+    required String educationAttainment,
+    required String employmentType,
+    required String employmentSector,
+    required int householdSize,
+    required double? monthlyHouseholdIncome,
+    required String houseOwnershipStatus,
+    required Map<String, bool> utilities,
+    required double? heightCm,
+    required double? weightKg,
+    required String bloodType,
+    required String medicalNotes,
+    required bool isVerified,
+  }) async {
+    final result = await _ResidentProfileApi.instance.submitProfile(
+      educationAttainment: educationAttainment,
+      employmentType: employmentType,
+      employmentSector: employmentSector,
+      householdSize: householdSize,
+      monthlyHouseholdIncome: monthlyHouseholdIncome,
+      houseOwnershipStatus: houseOwnershipStatus,
+      utilities: utilities,
+      heightCm: heightCm,
+      weightKg: weightKg,
+      bloodType: bloodType,
+      medicalNotes: medicalNotes,
+      isVerified: isVerified,
+    );
+    if (result.success && result.profile != null) {
+      _profile = result.profile!;
+      _loaded = true;
+      _loadedForMobile = (_currentResidentProfile?.mobile ?? '').trim();
+      _syncSessionProfile(_profile);
+      unawaited(
+        _ResidentProfileVerificationHub._syncVerified(
+          _profile.isVerified,
+          persist: true,
+        ),
+      );
+      refresh.value++;
+    }
+    return result;
+  }
+
+  static void _syncSessionProfile(_ResidentProfileData profile) {
+    if (_currentResidentProfile == null) {
+      return;
+    }
+    _currentResidentProfile = _ResidentSessionProfile(
+      name: profile.name.isNotEmpty ? profile.name : _currentResidentProfile!.name,
+      mobile: profile.mobile.isNotEmpty
+          ? profile.mobile
+          : _currentResidentProfile!.mobile,
+      province: profile.province.isNotEmpty
+          ? profile.province
+          : _currentResidentProfile!.province,
+      cityMunicipality: profile.cityMunicipality.isNotEmpty
+          ? profile.cityMunicipality
+          : _currentResidentProfile!.cityMunicipality,
+      barangay: profile.barangay.isNotEmpty
+          ? profile.barangay
+          : _currentResidentProfile!.barangay,
+      middleName: profile.middleName.isNotEmpty
+          ? profile.middleName
+          : _currentResidentProfile!.middleName,
+      suffix: profile.suffix.isNotEmpty
+          ? profile.suffix
+          : _currentResidentProfile!.suffix,
+      religion: profile.religion.isNotEmpty
+          ? profile.religion
+          : _currentResidentProfile!.religion,
+    );
+  }
+}
+
 class _ResidentProfileVerificationHub {
   static const _prefsKey = 'resident_profile_verified';
   static final ValueNotifier<bool> refresh = ValueNotifier<bool>(false);
@@ -3208,15 +3788,26 @@ class _ResidentProfileVerificationHub {
     }
     final prefs = await SharedPreferences.getInstance();
     _isVerified = prefs.getBool(_prefsKey) ?? false;
+    final remote = await _ResidentProfileStore.ensureLoaded();
+    if (remote.success && remote.profile != null) {
+      _isVerified = remote.profile!.isVerified;
+      await prefs.setBool(_prefsKey, _isVerified);
+    }
     _loaded = true;
     refresh.value = _isVerified;
   }
 
   static Future<void> markVerified() async {
-    _isVerified = true;
+    await _syncVerified(true, persist: true);
+  }
+
+  static Future<void> _syncVerified(bool value, {bool persist = false}) async {
+    _isVerified = value;
     _loaded = true;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_prefsKey, true);
+    if (persist) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_prefsKey, value);
+    }
     refresh.value = _isVerified;
   }
 }
