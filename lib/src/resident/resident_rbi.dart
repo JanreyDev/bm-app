@@ -279,12 +279,15 @@ class _ResidentRbiCardPageState extends State<ResidentRbiCardPage> {
   bool _bloodDonorOptIn = false;
   bool _initialized = false;
   bool _profileHydrated = false;
+  bool _rbiHydrated = false;
+  bool _savingToApi = false;
 
   @override
   void initState() {
     super.initState();
     _hydrateFromStore();
     unawaited(_hydrateFromBackendProfile());
+    unawaited(_hydrateFromBackendRbi());
   }
 
   void _hydrateFromStore() {
@@ -386,6 +389,41 @@ class _ResidentRbiCardPageState extends State<ResidentRbiCardPage> {
         ),
       ];
     }
+    setState(() {});
+  }
+
+  Future<void> _hydrateFromBackendRbi() async {
+    if (_rbiHydrated) {
+      return;
+    }
+    _rbiHydrated = true;
+    final result = await _ResidentRbiApi.instance.fetchMyRecord();
+    if (!mounted || !result.success || result.record == null) {
+      return;
+    }
+    final remote = result.record!;
+    _ResidentRbiStore.save(remote, previousName: _ResidentRbiStore.current.value?.fullName);
+    if (_ResidentRbiStore.current.value == null) {
+      return;
+    }
+    _firstNameController.text = remote.firstName;
+    _middleNameController.text = remote.middleName;
+    _lastNameController.text = remote.lastName;
+    _streetNameController.text = remote.streetName;
+    _zonePurokController.text = remote.zonePurok;
+    _yearResidencyController.text = remote.yearOfResidency.toString();
+    _birthDateController.text = _formatShortDate(remote.birthDate);
+    _latestGradeController.text = remote.latestGradeAverage;
+    _suffix = remote.suffix;
+    _gender = remote.gender;
+    _disabilityTag = remote.disabilityTag;
+    _bloodType = remote.bloodType;
+    _educationAidStatus = remote.educationAidStatus;
+    _familyMembers = remote.familyMembers;
+    _vehicles = remote.vehicles;
+    _vaccinations = remote.vaccinations;
+    _nutritionEntries = remote.nutritionEntries;
+    _bloodDonorOptIn = remote.bloodDonorOptIn;
     setState(() {});
   }
 
@@ -889,7 +927,7 @@ class _ResidentRbiCardPageState extends State<ResidentRbiCardPage> {
     });
   }
 
-  void _submitRbiProfile() {
+  Future<void> _submitRbiProfile() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -953,10 +991,23 @@ class _ResidentRbiCardPageState extends State<ResidentRbiCardPage> {
       updatedAt: now,
     );
     _ResidentRbiStore.save(record, previousName: current?.fullName);
-    _showFeature(context, 'RBI form sent for verification.');
+    setState(() => _savingToApi = true);
+    final result = await _ResidentRbiApi.instance.upsertRecord(record);
+    if (!mounted) return;
+    setState(() => _savingToApi = false);
+    if (result.success && result.record != null) {
+      _ResidentRbiStore.save(result.record!, previousName: current?.fullName);
+      _showFeature(context, 'RBI form saved and synced.', tone: _ToastTone.success);
+      return;
+    }
+    _showFeature(
+      context,
+      'RBI saved locally. ${result.message}',
+      tone: _ToastTone.warning,
+    );
   }
 
-  void _markVerified() {
+  Future<void> _markVerified() async {
     final current = _ResidentRbiStore.current.value;
     if (current == null || current.verificationStep >= 2) {
       return;
@@ -974,7 +1025,16 @@ class _ResidentRbiCardPageState extends State<ResidentRbiCardPage> {
       ],
     );
     _ResidentRbiStore.save(verified, previousName: current.fullName);
-    _showFeature(context, 'RBI profile marked as verified.');
+    setState(() => _savingToApi = true);
+    final result = await _ResidentRbiApi.instance.upsertRecord(verified);
+    if (!mounted) return;
+    setState(() => _savingToApi = false);
+    if (result.success && result.record != null) {
+      _ResidentRbiStore.save(result.record!, previousName: current.fullName);
+      _showFeature(context, 'RBI profile marked as verified and synced.', tone: _ToastTone.success);
+      return;
+    }
+    _showFeature(context, 'RBI verified locally only. ${result.message}', tone: _ToastTone.warning);
   }
 
   String _formatShortDate(DateTime date) {
@@ -1129,12 +1189,16 @@ class _ResidentRbiCardPageState extends State<ResidentRbiCardPage> {
                     () => _educationAidStatus =
                         value ?? _educationAidStatuses.first,
                   ),
-                  onSubmit: _submitRbiProfile,
+                  onSubmit: () {
+                    unawaited(_submitRbiProfile());
+                  },
                   existingRecord: record,
                 ),
                 _RbiTransactions(
                   record: displayRecord,
-                  onMarkVerified: _markVerified,
+                  onMarkVerified: () {
+                    unawaited(_markVerified());
+                  },
                 ),
               ],
                 );
@@ -1570,6 +1634,297 @@ class _RbiMyCard extends StatelessWidget {
       'Dec',
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+}
+
+class _ResidentRbiApiResult {
+  final bool success;
+  final String message;
+  final _ResidentRbiRecord? record;
+
+  const _ResidentRbiApiResult({
+    required this.success,
+    required this.message,
+    this.record,
+  });
+}
+
+class _ResidentRbiApi {
+  _ResidentRbiApi._();
+  static final instance = _ResidentRbiApi._();
+
+  Future<_ResidentRbiApiResult> fetchMyRecord() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _ResidentRbiApiResult(
+        success: false,
+        message: 'Login required.',
+      );
+    }
+    const paths = <String>['rbi/records'];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http.get(
+            endpoint,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $_authToken',
+            },
+          ).timeout(const Duration(seconds: 8));
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            return _ResidentRbiApiResult(
+              success: false,
+              message: _extractApiMessage(response.body, 'Unable to load RBI record.'),
+            );
+          }
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          if (decoded is! Map<String, dynamic>) {
+            return const _ResidentRbiApiResult(
+              success: false,
+              message: 'Invalid RBI response.',
+            );
+          }
+          final recordsRaw = decoded['records'];
+          if (recordsRaw is List && recordsRaw.isNotEmpty) {
+            final first = recordsRaw.first;
+            if (first is Map<String, dynamic>) {
+              return _ResidentRbiApiResult(
+                success: true,
+                message: _extractApiMessage(response.body, 'RBI record loaded.'),
+                record: _fromApiMap(first),
+              );
+            }
+          }
+          final recordRaw = decoded['record'];
+          if (recordRaw is Map<String, dynamic>) {
+            return _ResidentRbiApiResult(
+              success: true,
+              message: _extractApiMessage(response.body, 'RBI record loaded.'),
+              record: _fromApiMap(recordRaw),
+            );
+          }
+          return _ResidentRbiApiResult(
+            success: true,
+            message: _extractApiMessage(response.body, 'No RBI record yet.'),
+          );
+        } on TimeoutException {
+          return const _ResidentRbiApiResult(
+            success: false,
+            message: 'RBI request timed out.',
+          );
+        } catch (_) {
+          return const _ResidentRbiApiResult(
+            success: false,
+            message: 'Unable to load RBI record.',
+          );
+        }
+      }
+    }
+    return const _ResidentRbiApiResult(
+      success: false,
+      message: 'RBI endpoint unavailable.',
+    );
+  }
+
+  Future<_ResidentRbiApiResult> upsertRecord(_ResidentRbiRecord record) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _ResidentRbiApiResult(
+        success: false,
+        message: 'Login required.',
+      );
+    }
+    final latestBmi = record.latestNutritionEntry?.bmi;
+    final payload = jsonEncode({
+      'rbi_id': record.rbiId,
+      'first_name': record.firstName,
+      'middle_name': record.middleName,
+      'last_name': record.lastName,
+      'suffix': record.suffix == 'N/A' ? '' : record.suffix,
+      'province': record.province,
+      'city_municipality': record.municipality,
+      'barangay': record.barangay,
+      'street_name': record.streetName,
+      'zone_purok': record.zonePurok,
+      'year_of_residency': record.yearOfResidency,
+      'birth_date': record.birthDate.toIso8601String().split('T').first,
+      'gender': record.gender,
+      'disability_tag': record.disabilityTag,
+      'blood_donor_opt_in': record.bloodDonorOptIn,
+      'blood_type': record.bloodType,
+      'education_aid_status': record.educationAidStatus,
+      'latest_grade_average': record.latestGradeAverage,
+      'family_count': record.familyMembers.length,
+      'vehicle_count': record.vehicles.length,
+      'vaccination_count': record.vaccinations.length,
+      'latest_bmi': latestBmi == null ? null : double.parse(latestBmi.toStringAsFixed(2)),
+      'verification_step': record.verificationStep,
+    });
+
+    const paths = <String>['rbi/records'];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http.post(
+            endpoint,
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $_authToken',
+            },
+            body: payload,
+          ).timeout(const Duration(seconds: 8));
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            return _ResidentRbiApiResult(
+              success: false,
+              message: _extractApiMessage(response.body, 'Unable to save RBI record.'),
+            );
+          }
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          if (decoded is! Map<String, dynamic>) {
+            return const _ResidentRbiApiResult(
+              success: false,
+              message: 'Invalid RBI save response.',
+            );
+          }
+          final recordRaw = decoded['record'];
+          return _ResidentRbiApiResult(
+            success: true,
+            message: _extractApiMessage(response.body, 'RBI record saved.'),
+            record: recordRaw is Map<String, dynamic> ? _fromApiMap(recordRaw) : record,
+          );
+        } on TimeoutException {
+          return const _ResidentRbiApiResult(
+            success: false,
+            message: 'RBI save timed out.',
+          );
+        } catch (_) {
+          return const _ResidentRbiApiResult(
+            success: false,
+            message: 'Unable to save RBI record.',
+          );
+        }
+      }
+    }
+
+    return const _ResidentRbiApiResult(
+      success: false,
+      message: 'RBI endpoint unavailable.',
+    );
+  }
+
+  _ResidentRbiRecord _fromApiMap(Map<String, dynamic> json) {
+    String readString(String key, [String fallback = '']) {
+      final value = json[key];
+      if (value is String) return value.trim();
+      if (value != null) return value.toString().trim();
+      return fallback;
+    }
+
+    int readInt(String key, [int fallback = 0]) {
+      final value = json[key];
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      if (value is String) return int.tryParse(value.trim()) ?? fallback;
+      return fallback;
+    }
+
+    bool readBool(String key, [bool fallback = false]) {
+      final value = json[key];
+      if (value is bool) return value;
+      if (value is num) return value != 0;
+      if (value is String) {
+        final lowered = value.trim().toLowerCase();
+        return lowered == '1' || lowered == 'true' || lowered == 'yes';
+      }
+      return fallback;
+    }
+
+    DateTime readDate(String key, DateTime fallback) {
+      final value = readString(key);
+      if (value.isEmpty) return fallback;
+      return DateTime.tryParse(value) ?? fallback;
+    }
+
+    final firstName = readString('first_name');
+    final middleName = readString('middle_name');
+    final lastName = readString('last_name');
+    final now = DateTime.now();
+    final verificationStep = readInt('verification_step', 1).clamp(1, 5);
+
+    return _ResidentRbiRecord(
+      rbiId: readString('rbi_id', _residentProfileCode()),
+      firstName: firstName,
+      middleName: middleName,
+      lastName: lastName,
+      suffix: readString('suffix', 'N/A').isEmpty ? 'N/A' : readString('suffix'),
+      barangay: readString('barangay', 'West Tapinac'),
+      municipality: readString('city_municipality', 'City of Olongapo'),
+      province: readString('province', 'Zambales'),
+      streetName: readString('street_name', 'Purok 3 Main Road'),
+      zonePurok: readString('zone_purok', 'Zone 2'),
+      yearOfResidency: readInt('year_of_residency', 2018),
+      birthDate: readDate('birth_date', DateTime(1998, 3, 14)),
+      gender: readString('gender', 'Prefer not to say'),
+      disabilityTag: readString('disability_tag', 'None').isEmpty
+          ? 'None'
+          : readString('disability_tag'),
+      familyMembers: const [],
+      vehicles: const [],
+      vaccinations: const [],
+      nutritionEntries: const [],
+      bloodDonorOptIn: readBool('blood_donor_opt_in'),
+      bloodType: readString('blood_type', 'O+').isEmpty ? 'O+' : readString('blood_type'),
+      educationAidStatus: readString('education_aid_status', 'Not Enrolled').isEmpty
+          ? 'Not Enrolled'
+          : readString('education_aid_status'),
+      latestGradeAverage: readString('latest_grade_average'),
+      verificationStep: verificationStep,
+      transactions: verificationStep >= 2
+          ? const <_RbiTransactionEntry>[
+              _RbiTransactionEntry(
+                title: 'Form Sent',
+                date: 'Synced',
+                status: 'Completed',
+              ),
+              _RbiTransactionEntry(
+                title: 'Verified by Barangay Records Office',
+                date: 'Synced',
+                status: 'Completed',
+              ),
+            ]
+          : const <_RbiTransactionEntry>[
+              _RbiTransactionEntry(
+                title: 'Form Sent',
+                date: 'Synced',
+                status: 'Completed',
+              ),
+              _RbiTransactionEntry(
+                title: 'Pending Review',
+                date: 'In Queue',
+                status: 'Pending',
+              ),
+            ],
+      updatedAt: readDate('updated_at', now),
+    );
+  }
+
+  String _extractApiMessage(String body, String fallback) {
+    try {
+      final decoded = _AuthApi.instance._decodeDynamicJson(body);
+      if (decoded is Map<String, dynamic>) {
+        final message = decoded['message'];
+        if (message is String && message.trim().isNotEmpty) {
+          return message.trim();
+        }
+      }
+    } catch (_) {}
+    return fallback;
   }
 }
 

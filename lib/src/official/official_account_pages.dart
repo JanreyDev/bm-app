@@ -53,6 +53,21 @@ class _OfficialSettingsPageState extends State<OfficialSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final profile = _officialEditableProfile.value;
+    final displayName = profile.name.trim().isEmpty
+        ? 'Barangay Official'
+        : profile.name.trim();
+    final barangay = profile.barangay.trim().isNotEmpty
+        ? profile.barangay.trim()
+        : _officialBarangaySetup.barangay.trim();
+    final city = _officialBarangaySetup.city.trim();
+    final province = _officialBarangaySetup.province.trim();
+    final placeParts = <String>[barangay, city, province]
+        .where((part) => part.isNotEmpty)
+        .toList();
+    final displayBarangay = placeParts.isEmpty
+        ? 'Barangay Administration'
+        : placeParts.join(', ');
     return Scaffold(
       backgroundColor: const Color(0xFFF4F5F9),
       appBar: AppBar(
@@ -111,8 +126,8 @@ class _OfficialSettingsPageState extends State<OfficialSettingsPage> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  const Text(
-                    'Lester Nadong',
+                  Text(
+                    displayName,
                     style: TextStyle(
                       color: _officialText,
                       fontWeight: FontWeight.w800,
@@ -120,8 +135,8 @@ class _OfficialSettingsPageState extends State<OfficialSettingsPage> {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  const Text(
-                    'Barangay Old Cabalan',
+                  Text(
+                    displayBarangay,
                     style: TextStyle(
                       color: _officialSubtext,
                       fontWeight: FontWeight.w600,
@@ -443,59 +458,14 @@ class OfficialRbiRecordsPage extends StatefulWidget {
 class _OfficialRbiRecordsPageState extends State<OfficialRbiRecordsPage> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _selectedTab = 'All';
+  bool _loadingBackend = false;
+  List<_RbiPerson> _backendRecords = const <_RbiPerson>[];
 
-  static const List<_RbiPerson> _records = [
-    _RbiPerson(
-      name: 'AVSV, CSAC',
-      idNo: 'RBI-3-6-10-7727524',
-      age: 37,
-      gender: 'Male',
-      verified: false,
-      zonePurok: 'Zone 3',
-      educationAidStatus: 'Applicant',
-    ),
-    _RbiPerson(
-      name: 'HUSSEY, LOIDA',
-      idNo: 'RBI-3-7-34-7891945',
-      age: 42,
-      gender: 'Female',
-      verified: true,
-      disabilityTag: 'Orthopedic Disability',
-      zonePurok: 'Zone 2',
-      vaccinationCount: 3,
-    ),
-    _RbiPerson(
-      name: 'ELANE, ANGELO GREGG',
-      idNo: 'RBI-3-7-34-8921104',
-      age: 28,
-      gender: 'Male',
-      verified: false,
-      bloodDonor: true,
-      bloodType: 'O+',
-      zonePurok: 'Purok 4',
-      vaccinationCount: 2,
-    ),
-    _RbiPerson(
-      name: 'NADONG, LESTER',
-      idNo: 'RBI-3-7-34-11761459',
-      age: 39,
-      gender: 'Male',
-      verified: true,
-      zonePurok: 'Zone 1',
-    ),
-    _RbiPerson(
-      name: 'DELA CRUZ, LOLITA',
-      idNo: 'RBI-3-7-34-11761488',
-      age: 67,
-      gender: 'Female',
-      verified: true,
-      bloodDonor: true,
-      bloodType: 'A+',
-      zonePurok: 'Zone 5',
-      vaccinationCount: 4,
-      educationAidStatus: 'Not Enrolled',
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadBackendRecords());
+  }
 
   List<_RbiPerson> get _liveRecords {
     return _ResidentRbiStore.all.value.map((record) {
@@ -517,7 +487,20 @@ class _OfficialRbiRecordsPageState extends State<OfficialRbiRecordsPage> {
     }).toList();
   }
 
-  List<_RbiPerson> get _allRecords => [..._liveRecords, ..._records];
+  List<_RbiPerson> get _allRecords =>
+      _backendRecords.isNotEmpty ? _backendRecords : [..._liveRecords];
+
+  Future<void> _loadBackendRecords() async {
+    setState(() => _loadingBackend = true);
+    final result = await _OfficialRbiApi.instance.fetchRecords();
+    if (!mounted) return;
+    if (result.success) {
+      setState(() => _backendRecords = result.records);
+    } else {
+      _showFeature(context, result.message, tone: _ToastTone.warning);
+    }
+    setState(() => _loadingBackend = false);
+  }
 
   List<_RbiPerson> get _filtered {
     final q = _searchCtrl.text.trim().toLowerCase();
@@ -760,9 +743,16 @@ class _OfficialRbiRecordsPageState extends State<OfficialRbiRecordsPage> {
           ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-        children: [
+      body: RefreshIndicator(
+        onRefresh: _loadBackendRecords,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+          children: [
+            if (_loadingBackend)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: LinearProgressIndicator(minHeight: 2),
+              ),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -809,20 +799,160 @@ class _OfficialRbiRecordsPageState extends State<OfficialRbiRecordsPage> {
               ],
             ),
           ),
-          if (shown.isEmpty)
-            _AppEmptyState(
-              icon: Icons.badge_outlined,
-              title: _appText('No records found', 'Walang record na nahanap'),
-              subtitle: _appText(
-                'Try another resident name, RBI ID, or zone keyword.',
-                'Subukan ang ibang pangalan, RBI ID, o zone keyword.',
-              ),
-            )
-          else
-            ...shown.map(_recordCard),
-        ],
+            if (shown.isEmpty)
+              _AppEmptyState(
+                icon: Icons.badge_outlined,
+                title: _appText('No records found', 'Walang record na nahanap'),
+                subtitle: _appText(
+                  'Try another resident name, RBI ID, or zone keyword.',
+                  'Subukan ang ibang pangalan, RBI ID, o zone keyword.',
+                ),
+              )
+            else
+              ...shown.map(_recordCard),
+          ],
+        ),
       ),
     );
+  }
+}
+
+class _OfficialRbiApiResult {
+  final bool success;
+  final String message;
+  final List<_RbiPerson> records;
+
+  const _OfficialRbiApiResult({
+    required this.success,
+    required this.message,
+    this.records = const <_RbiPerson>[],
+  });
+}
+
+class _OfficialRbiApi {
+  _OfficialRbiApi._();
+  static final instance = _OfficialRbiApi._();
+
+  Future<_OfficialRbiApiResult> fetchRecords() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _OfficialRbiApiResult(success: false, message: 'Login required.');
+    }
+    const paths = <String>['rbi/records'];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http.get(
+            endpoint,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $_authToken',
+            },
+          ).timeout(const Duration(seconds: 8));
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            return _OfficialRbiApiResult(
+              success: false,
+              message: _extractApiMessage(response.body, 'Unable to load RBI records.'),
+            );
+          }
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          if (decoded is! Map<String, dynamic>) {
+            return const _OfficialRbiApiResult(success: false, message: 'Invalid RBI response.');
+          }
+          final raw = decoded['records'];
+          if (raw is! List) {
+            return _OfficialRbiApiResult(
+              success: true,
+              message: _extractApiMessage(response.body, 'No RBI records found.'),
+            );
+          }
+          final records = <_RbiPerson>[];
+          for (final item in raw) {
+            if (item is! Map<String, dynamic>) {
+              continue;
+            }
+            records.add(_toPerson(item));
+          }
+          return _OfficialRbiApiResult(
+            success: true,
+            message: _extractApiMessage(response.body, 'RBI records synced.'),
+            records: records,
+          );
+        } on TimeoutException {
+          return const _OfficialRbiApiResult(success: false, message: 'RBI request timed out.');
+        } catch (_) {
+          return const _OfficialRbiApiResult(success: false, message: 'Unable to load RBI records.');
+        }
+      }
+    }
+    return const _OfficialRbiApiResult(success: false, message: 'RBI endpoint unavailable.');
+  }
+
+  _RbiPerson _toPerson(Map<String, dynamic> item) {
+    String readString(String key, [String fallback = '']) {
+      final value = item[key];
+      if (value is String) return value.trim();
+      if (value != null) return value.toString().trim();
+      return fallback;
+    }
+
+    int readInt(String key, [int fallback = 0]) {
+      final value = item[key];
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      if (value is String) return int.tryParse(value.trim()) ?? fallback;
+      return fallback;
+    }
+
+    bool readBool(String key, [bool fallback = false]) {
+      final value = item[key];
+      if (value is bool) return value;
+      if (value is num) return value != 0;
+      if (value is String) {
+        final lowered = value.trim().toLowerCase();
+        return lowered == '1' || lowered == 'true' || lowered == 'yes';
+      }
+      return fallback;
+    }
+
+    double? readDouble(String key) {
+      final value = item[key];
+      if (value is double) return value;
+      if (value is num) return value.toDouble();
+      if (value is String) return double.tryParse(value.trim());
+      return null;
+    }
+
+    return _RbiPerson(
+      name: readString('full_name', readString('name', 'Unknown Resident')),
+      idNo: readString('rbi_id', 'RBI-UNKNOWN'),
+      age: readInt('age', 0),
+      gender: readString('gender', 'Prefer not to say'),
+      verified: readBool('is_verified', readInt('verification_step', 1) >= 2),
+      disabilityTag: readString('disability_tag', 'None'),
+      bloodDonor: readBool('blood_donor_opt_in'),
+      bloodType: readString('blood_type', 'N/A'),
+      barangay: readString('barangay', 'N/A'),
+      zonePurok: readString('zone_purok', 'N/A'),
+      vaccinationCount: readInt('vaccination_count', 0),
+      educationAidStatus: readString('education_aid_status', 'Not Enrolled'),
+      bmi: readDouble('latest_bmi'),
+    );
+  }
+
+  String _extractApiMessage(String body, String fallback) {
+    try {
+      final decoded = _AuthApi.instance._decodeDynamicJson(body);
+      if (decoded is Map<String, dynamic>) {
+        final message = decoded['message'];
+        if (message is String && message.trim().isNotEmpty) {
+          return message.trim();
+        }
+      }
+    } catch (_) {}
+    return fallback;
   }
 }
 
@@ -1517,6 +1647,7 @@ class _OfficialBugReportPageState extends State<OfficialBugReportPage> {
   final _description = TextEditingController();
   String _severity = 'Medium';
   bool _attachmentAdded = false;
+  bool _submitting = false;
 
   @override
   void dispose() {
@@ -1603,20 +1734,36 @@ class _OfficialBugReportPageState extends State<OfficialBugReportPage> {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
-                      onPressed: () {
+                      onPressed: _submitting
+                          ? null
+                          : () async {
                         if (_formKey.currentState!.validate()) {
+                          setState(() => _submitting = true);
+                          final result = await _SupportApi.instance.submitBugReport(
+                            role: UserRole.official,
+                            bugName: _bugName.text.trim(),
+                            description: _description.text.trim(),
+                            severity: _severity,
+                          );
+                          if (!mounted) return;
+                          setState(() => _submitting = false);
                           _showFeature(
                             context,
-                            'Ticket submitted (${DateTime.now().millisecondsSinceEpoch % 100000})',
+                            result.message,
+                            tone: result.success
+                                ? _ToastTone.success
+                                : _ToastTone.warning,
                           );
-                          Navigator.pop(context);
+                          if (result.success) {
+                            Navigator.pop(context);
+                          }
                         }
                       },
                       style: FilledButton.styleFrom(
                         backgroundColor: _officialHeaderStart,
                         foregroundColor: Colors.white,
                       ),
-                      child: const Text('Submit Ticket'),
+                      child: Text(_submitting ? 'Submitting...' : 'Submit Ticket'),
                     ),
                   ),
                 ],
@@ -1629,8 +1776,52 @@ class _OfficialBugReportPageState extends State<OfficialBugReportPage> {
   }
 }
 
-class OfficialTermsPoliciesPage extends StatelessWidget {
+class OfficialTermsPoliciesPage extends StatefulWidget {
   const OfficialTermsPoliciesPage({super.key});
+
+  @override
+  State<OfficialTermsPoliciesPage> createState() =>
+      _OfficialTermsPoliciesPageState();
+}
+
+class _OfficialTermsPoliciesPageState extends State<OfficialTermsPoliciesPage> {
+  bool _loading = true;
+  List<({String title, String body})> _entries =
+      const <({String title, String body})>[];
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadPolicies());
+  }
+
+  Future<void> _loadPolicies() async {
+    setState(() => _loading = true);
+    final result = await _SupportApi.instance.fetchPolicies(UserRole.official);
+    if (!mounted) return;
+    if (result.success && result.entries.isNotEmpty) {
+      setState(() {
+        _entries = result.entries;
+        _loading = false;
+      });
+      return;
+    }
+    setState(() {
+      _entries = const <({String title, String body})>[
+        (
+          title: 'Privacy Policy',
+          body:
+              'BarangayMo collects only the personal data required for service delivery, verification, and records management. All sensitive data is protected and used in compliance with local policies.',
+        ),
+        (
+          title: 'Terms and Conditions',
+          body:
+              'By using BarangayMo, users agree to provide truthful information and comply with barangay process requirements. False declarations may result in request rejection and account restrictions.',
+        ),
+      ];
+      _loading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1644,18 +1835,19 @@ class OfficialTermsPoliciesPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(14),
         children: [
-          _policyTile(
-            context,
-            title: 'Privacy Policy',
-            body:
-                'BarangayMo collects only the personal data required for service delivery, verification, and records management. All sensitive data is protected and used in compliance with local policies.',
-          ),
-          _policyTile(
-            context,
-            title: 'Terms and Conditions',
-            body:
-                'By using BarangayMo, users agree to provide truthful information and comply with barangay process requirements. False declarations may result in request rejection and account restrictions.',
-          ),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else
+            ..._entries.map(
+              (entry) => _policyTile(
+                context,
+                title: entry.title,
+                body: entry.body,
+              ),
+            ),
         ],
       ),
     );
