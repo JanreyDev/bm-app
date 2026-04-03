@@ -391,6 +391,7 @@ class _RbiPerson {
   final int vaccinationCount;
   final String educationAidStatus;
   final double? bmi;
+  final int verificationStep;
 
   const _RbiPerson({
     required this.name,
@@ -406,6 +407,7 @@ class _RbiPerson {
     this.vaccinationCount = 0,
     this.educationAidStatus = 'Not Enrolled',
     this.bmi,
+    this.verificationStep = 1,
   });
 
   bool get seniorCitizen => age >= 60;
@@ -483,6 +485,7 @@ class _OfficialRbiRecordsPageState extends State<OfficialRbiRecordsPage> {
         vaccinationCount: record.vaccinations.length,
         educationAidStatus: record.educationAidStatus,
         bmi: record.latestNutritionEntry?.bmi,
+        verificationStep: record.verificationStep,
       );
     }).toList();
   }
@@ -505,10 +508,11 @@ class _OfficialRbiRecordsPageState extends State<OfficialRbiRecordsPage> {
   List<_RbiPerson> get _filtered {
     final q = _searchCtrl.text.trim().toLowerCase();
     return _allRecords.where((person) {
+      final isVerified = person.verified || person.verificationStep >= 2;
       final matchedTab =
           _selectedTab == 'All' ||
-          (_selectedTab == 'Verified' && person.verified) ||
-          (_selectedTab == 'Unverified' && !person.verified) ||
+          (_selectedTab == 'Verified' && isVerified) ||
+          (_selectedTab == 'Unverified' && !isVerified) ||
           (_selectedTab == 'Seniors' && person.seniorCitizen) ||
           (_selectedTab == 'PWD' && person.isPwd) ||
           (_selectedTab == 'Donors' && person.bloodDonor);
@@ -925,12 +929,21 @@ class _OfficialRbiApi {
       return null;
     }
 
+    final verificationStep = readInt(
+      'verification_step',
+      readBool('is_verified', readBool('verified')) ? 2 : 1,
+    );
+    final verificationStatus = readString('verification_status');
+    final isVerified = readBool('is_verified', readBool('verified')) ||
+        verificationStep >= 2 ||
+        verificationStatus.toLowerCase().contains('verified');
+
     return _RbiPerson(
       name: readString('full_name', readString('name', 'Unknown Resident')),
       idNo: readString('rbi_id', 'RBI-UNKNOWN'),
       age: readInt('age', 0),
       gender: readString('gender', 'Prefer not to say'),
-      verified: readBool('is_verified', readInt('verification_step', 1) >= 2),
+      verified: isVerified,
       disabilityTag: readString('disability_tag', 'None'),
       bloodDonor: readBool('blood_donor_opt_in'),
       bloodType: readString('blood_type', 'N/A'),
@@ -939,6 +952,7 @@ class _OfficialRbiApi {
       vaccinationCount: readInt('vaccination_count', 0),
       educationAidStatus: readString('education_aid_status', 'Not Enrolled'),
       bmi: readDouble('latest_bmi'),
+      verificationStep: verificationStep,
     );
   }
 
