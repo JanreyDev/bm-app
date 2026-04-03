@@ -1188,9 +1188,9 @@ class _OfficialHomePageState extends State<_OfficialHomePage> {
                   context,
                   icon: Icons.local_police_outlined,
                   title: 'Police',
-                  page: const SimpleSerbilisPage(
-                    title: 'Police',
-                    isOfficial: true,
+                  page: const OfficialRequestsInboxPage(
+                    serviceCategory: 'Police',
+                    pageTitle: 'Police Requests',
                   ),
                 ),
               ],
@@ -1320,6 +1320,7 @@ class _SimplePageState extends State<_SimplePage> {
   late List<String> _rows;
   List<_SimpleTimelineItem> _officialTimeline = const <_SimpleTimelineItem>[];
   List<_SimpleTimelineItem> _marketTimeline = const <_SimpleTimelineItem>[];
+  List<_SimpleTimelineItem> _profileTimeline = const <_SimpleTimelineItem>[];
 
   static const List<String> _officialLoadingRows = <String>[
     'Council Agenda: Loading...',
@@ -1338,14 +1339,29 @@ class _SimplePageState extends State<_SimplePage> {
   void initState() {
     super.initState();
     final title = widget.title.toLowerCase();
-    _rows = title == 'official'
-        ? [..._officialLoadingRows]
-        : (title == 'market' ? [..._marketLoadingRows] : [...widget.rows]);
+    if (title == 'official') {
+      _rows = [..._officialLoadingRows];
+    } else if (title == 'market') {
+      _rows = [..._marketLoadingRows];
+    } else if (title == 'profile') {
+      _rows = _profileRowsFromContext();
+    } else {
+      _rows = [...widget.rows];
+    }
     if (title == 'official') {
       _officialTimeline = <_SimpleTimelineItem>[
         _SimpleTimelineItem(
           title: 'Loading recent activity',
           note: 'Syncing official activity feed...',
+          time: DateTime(2000, 1, 1),
+          icon: Icons.sync_rounded,
+        ),
+      ];
+    } else if (title == 'profile') {
+      _profileTimeline = <_SimpleTimelineItem>[
+        _SimpleTimelineItem(
+          title: 'Loading profile activity',
+          note: 'Syncing account activity...',
           time: DateTime(2000, 1, 1),
           icon: Icons.sync_rounded,
         ),
@@ -1371,6 +1387,8 @@ class _SimplePageState extends State<_SimplePage> {
       refreshedRows = await _resolveOfficialRows();
     } else if (title == 'market') {
       refreshedRows = await _resolveMarketRows();
+    } else if (title == 'profile') {
+      refreshedRows = await _resolveProfileRows();
     } else {
       await Future<void>.delayed(const Duration(milliseconds: 550));
     }
@@ -1386,16 +1404,79 @@ class _SimplePageState extends State<_SimplePage> {
 
   Future<void> _primeOfficialAgendaCard() async {
     final title = widget.title.toLowerCase();
-    if (title != 'official' && title != 'market') {
+    if (title != 'official' && title != 'market' && title != 'profile') {
       return;
     }
     final refreshedRows = title == 'official'
         ? await _resolveOfficialRows()
-        : await _resolveMarketRows();
+        : (title == 'market'
+            ? await _resolveMarketRows()
+            : await _resolveProfileRows());
     if (!mounted) {
       return;
     }
     setState(() => _rows = refreshedRows);
+  }
+
+  List<String> _profileRowsFromContext() {
+    final profile = _officialEditableProfile.value;
+    final name = profile.name.trim().isEmpty
+        ? 'Barangay Official'
+        : profile.name.trim();
+    final barangay = profile.barangay.trim().isNotEmpty
+        ? profile.barangay.trim()
+        : _officialBarangaySetup.barangay.trim();
+    final city = _officialBarangaySetup.city.trim();
+    final province = _officialBarangaySetup.province.trim();
+    final locationLine = [barangay, city, province]
+        .where((segment) => segment.isNotEmpty)
+        .join(', ');
+    final office = barangay.isEmpty
+        ? 'Barangay Administration'
+        : '$barangay Barangay Administration';
+    final roleText = _officialActivationCompleted
+        ? 'Records and Services'
+        : 'For Activation';
+    final statusText = _officialActivationCompleted ? 'Active' : 'Pending Activation';
+    return <String>[
+      'Account Name: $name',
+      'Office: ${locationLine.isEmpty ? office : '$office ($locationLine)'}',
+      'Role: $roleText',
+      'Status: $statusText',
+    ];
+  }
+
+  Future<List<String>> _resolveProfileRows() async {
+    final next = _profileRowsFromContext();
+    final events = await _fetchOfficialRecentActivityFromBackend();
+    if (events.isNotEmpty) {
+      _profileTimeline = events.take(3).toList();
+      return next;
+    }
+    final profile = _officialEditableProfile.value;
+    _profileTimeline = <_SimpleTimelineItem>[
+      _SimpleTimelineItem(
+        title: 'Security audit passed',
+        note: 'No suspicious sign-in attempts detected.',
+        time: _lastSynced.subtract(const Duration(minutes: 5)),
+        icon: Icons.shield_rounded,
+      ),
+      _SimpleTimelineItem(
+        title: 'Office profile updated',
+        note: '${profile.barangay.trim().isEmpty ? 'Barangay' : profile.barangay.trim()} profile details synchronized.',
+        time: _lastSynced.subtract(const Duration(minutes: 29)),
+        icon: Icons.contact_phone_rounded,
+      ),
+      _SimpleTimelineItem(
+        title: 'Role permissions verified',
+        note: _officialActivationCompleted
+            ? 'Records and services module remains active.'
+            : 'Finish activation to unlock complete permissions.',
+        time: _lastSynced.subtract(const Duration(minutes: 53)),
+        icon: Icons.verified_user_rounded,
+      ),
+    ];
+    return next;
   }
 
   Future<List<String>> _resolveOfficialRows() async {
@@ -2053,26 +2134,10 @@ class _SimplePageState extends State<_SimplePage> {
     if (t == 'market') {
       return _marketTimeline;
     }
-    return [
-      _SimpleTimelineItem(
-        title: 'Security audit passed',
-        note: 'No suspicious sign-in attempts detected.',
-        time: _lastSynced.subtract(const Duration(minutes: 5)),
-        icon: Icons.shield_rounded,
-      ),
-      _SimpleTimelineItem(
-        title: 'Office profile updated',
-        note: 'Directory contact details synchronized.',
-        time: _lastSynced.subtract(const Duration(minutes: 29)),
-        icon: Icons.contact_phone_rounded,
-      ),
-      _SimpleTimelineItem(
-        title: 'Role permissions verified',
-        note: 'Records and services module remains active.',
-        time: _lastSynced.subtract(const Duration(minutes: 53)),
-        icon: Icons.verified_user_rounded,
-      ),
-    ];
+    if (t == 'profile') {
+      return _profileTimeline;
+    }
+    return const <_SimpleTimelineItem>[];
   }
 
   String _timeAgo(DateTime value) {
@@ -2213,7 +2278,9 @@ class _SimplePageState extends State<_SimplePage> {
               final key = hasPair ? parts.first.trim() : text;
               final rawValue = hasPair ? parts.sublist(1).join(':').trim() : '';
               final titleKey = widget.title.toLowerCase();
-              final allowPulse = titleKey != 'official' && titleKey != 'market';
+              final allowPulse = titleKey != 'official' &&
+                  titleKey != 'market' &&
+                  titleKey != 'profile';
               final value = hasPair
                   ? (allowPulse ? _pulseValue(rawValue, entry.key) : rawValue)
                   : rawValue;

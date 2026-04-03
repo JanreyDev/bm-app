@@ -1020,6 +1020,9 @@ class _HelpDeskPageState extends State<_HelpDeskPage> {
   final _subject = TextEditingController();
   final _message = TextEditingController();
   final _contact = TextEditingController();
+  List<_HelpDeskTicketEntry> _remoteTickets = const <_HelpDeskTicketEntry>[];
+  bool _loadingRemote = false;
+  bool _submitting = false;
 
   bool get _hasDraft =>
       _subject.text.trim().isNotEmpty ||
@@ -1030,6 +1033,7 @@ class _HelpDeskPageState extends State<_HelpDeskPage> {
   void initState() {
     super.initState();
     _contact.text = _mobileForRole(widget.role);
+    unawaited(_syncRemoteTickets());
   }
 
   @override
@@ -1040,18 +1044,47 @@ class _HelpDeskPageState extends State<_HelpDeskPage> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _syncRemoteTickets() async {
+    setState(() => _loadingRemote = true);
+    final result = await _SupportApi.instance.fetchTickets(widget.role);
+    if (!mounted) return;
+    if (result.success) {
+      setState(() => _remoteTickets = result.entries);
+    } else {
+      _showFeature(context, result.message);
+    }
+    setState(() => _loadingRemote = false);
+  }
+
+  Future<void> _submit() async {
     if (_subject.text.trim().isEmpty || _message.text.trim().length < 10) {
       _showFeature(context, 'Enter a subject and a more detailed message.');
       return;
     }
+    setState(() => _submitting = true);
+    final remote = await _SupportApi.instance.submitTicket(
+      role: widget.role,
+      subject: _subject.text.trim(),
+      message: _message.text.trim(),
+      contact: _contact.text.trim(),
+    );
+    if (!mounted) return;
+    setState(() => _submitting = false);
+
     final id = _submitHelpDeskTicket(
       widget.role,
       subject: _subject.text.trim(),
       message: _message.text.trim(),
       contact: _contact.text.trim(),
     );
-    _showFeature(context, 'Ticket submitted: $id');
+    if (remote.success) {
+      await _syncRemoteTickets();
+    }
+    _showFeature(
+      context,
+      remote.success ? remote.message : 'Ticket submitted locally: $id',
+      tone: remote.success ? _ToastTone.success : _ToastTone.warning,
+    );
     _subject.clear();
     _message.clear();
     setState(() {});
@@ -1080,7 +1113,16 @@ class _HelpDeskPageState extends State<_HelpDeskPage> {
         body: ValueListenableBuilder<List<_HelpDeskTicketEntry>>(
           valueListenable: _helpDeskFeed,
           builder: (context, items, _) {
-            final filtered = items.where((entry) => entry.role == widget.role).toList();
+            final merged = <_HelpDeskTicketEntry>[
+              ..._remoteTickets,
+              ...items.where((entry) => entry.role == widget.role),
+            ];
+            final dedup = <String, _HelpDeskTicketEntry>{};
+            for (final entry in merged) {
+              dedup[entry.id] = entry;
+            }
+            final filtered = dedup.values.toList()
+              ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
             return ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -1127,13 +1169,15 @@ class _HelpDeskPageState extends State<_HelpDeskPage> {
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton(
-                          onPressed: _submit,
+                          onPressed: _submitting ? null : _submit,
                           style: FilledButton.styleFrom(
                             backgroundColor: primary,
                             foregroundColor: Colors.white,
                           ),
                           child: Text(
-                            _appText('Submit Ticket', 'I-submit ang Ticket'),
+                            _submitting
+                                ? _appText('Submitting...', 'Nagsu-submit...')
+                                : _appText('Submit Ticket', 'I-submit ang Ticket'),
                             style: const TextStyle(fontWeight: FontWeight.w800),
                           ),
                         ),
@@ -1142,6 +1186,11 @@ class _HelpDeskPageState extends State<_HelpDeskPage> {
                   ),
                 ),
                 const SizedBox(height: 14),
+                if (_loadingRemote)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
                 if (filtered.isEmpty)
                   _AppEmptyState(
                     icon: Icons.support_agent_rounded,
@@ -1242,8 +1291,9 @@ class _FaqCenterPage extends StatefulWidget {
 
 class _FaqCenterPageState extends State<_FaqCenterPage> {
   String _query = '';
-
-  Map<String, List<(String, String)>> get _categories => {
+  bool _loadingRemote = false;
+  Map<String, List<(String, String)>>? _remoteCategories;
+  static const Map<String, List<(String, String)>> _fallbackCategories = {
     'Account': [
       (
         'How do I change my security PIN?',
@@ -1274,6 +1324,25 @@ class _FaqCenterPageState extends State<_FaqCenterPage> {
     ],
   };
 
+  Map<String, List<(String, String)>> get _categories =>
+      _remoteCategories ?? _fallbackCategories;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadRemoteFaqs());
+  }
+
+  Future<void> _loadRemoteFaqs() async {
+    setState(() => _loadingRemote = true);
+    final result = await _SupportApi.instance.fetchFaqs(widget.role);
+    if (!mounted) return;
+    if (result.success && result.categories.isNotEmpty) {
+      setState(() => _remoteCategories = result.categories);
+    }
+    setState(() => _loadingRemote = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final primary = _systemPrimaryForRole(widget.role);
@@ -1296,6 +1365,11 @@ class _FaqCenterPageState extends State<_FaqCenterPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (_loadingRemote)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: LinearProgressIndicator(minHeight: 2),
+            ),
           TextField(
             onChanged: (value) => setState(() => _query = value),
             decoration: InputDecoration(
@@ -1351,6 +1425,389 @@ class _FaqCenterPageState extends State<_FaqCenterPage> {
       ),
     );
   }
+}
+
+class _SupportApi {
+  _SupportApi._();
+  static final instance = _SupportApi._();
+
+  Future<_SupportFaqResult> fetchFaqs(UserRole role) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _SupportFaqResult(success: false, message: 'Login required.');
+    }
+    final roleKey = role == UserRole.official ? 'official' : 'resident';
+    final paths = <String>[
+      'support/faqs?role=$roleKey',
+      'faqs?role=$roleKey',
+      'settings/faqs?role=$roleKey',
+    ];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http.get(
+            endpoint,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $_authToken',
+            },
+          ).timeout(const Duration(seconds: 7));
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            return _SupportFaqResult(success: false, message: _extractApiMessage(response.body, 'Unable to load FAQs.'));
+          }
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          if (decoded is! Map<String, dynamic>) {
+            return const _SupportFaqResult(success: false, message: 'Invalid FAQ response.');
+          }
+          final source = decoded['data'] ?? decoded['categories'] ?? decoded['faqs'];
+          final categories = <String, List<(String, String)>>{};
+          if (source is Map<String, dynamic>) {
+            for (final entry in source.entries) {
+              final list = entry.value;
+              if (list is! List) continue;
+              final parsed = <(String, String)>[];
+              for (final item in list) {
+                if (item is Map<String, dynamic>) {
+                  final q = ((item['question'] as String?) ?? '').trim();
+                  final a = ((item['answer'] as String?) ?? '').trim();
+                  if (q.isNotEmpty && a.isNotEmpty) {
+                    parsed.add((q, a));
+                  }
+                }
+              }
+              if (parsed.isNotEmpty) {
+                categories[entry.key] = parsed;
+              }
+            }
+          }
+          if (source is List) {
+            for (final item in source) {
+              if (item is! Map<String, dynamic>) continue;
+              final category = ((item['category'] as String?) ?? 'General').trim();
+              final q = ((item['question'] as String?) ?? '').trim();
+              final a = ((item['answer'] as String?) ?? '').trim();
+              if (q.isEmpty || a.isEmpty) continue;
+              categories.putIfAbsent(category, () => <(String, String)>[]).add((q, a));
+            }
+          }
+          return _SupportFaqResult(
+            success: categories.isNotEmpty,
+            message: categories.isNotEmpty ? 'FAQ synced.' : 'No FAQ entries from backend.',
+            categories: categories,
+          );
+        } on TimeoutException {
+          return const _SupportFaqResult(success: false, message: 'FAQ request timed out.');
+        } catch (_) {
+          return const _SupportFaqResult(success: false, message: 'Unable to load FAQs right now.');
+        }
+      }
+    }
+    return const _SupportFaqResult(success: false, message: 'FAQ endpoint not available.');
+  }
+
+  Future<_SupportTicketsResult> fetchTickets(UserRole role) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _SupportTicketsResult(success: false, message: 'Login required.');
+    }
+    final roleKey = role == UserRole.official ? 'official' : 'resident';
+    final paths = <String>[
+      'support/tickets?role=$roleKey',
+      'helpdesk/tickets?role=$roleKey',
+      'tickets?role=$roleKey',
+    ];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http.get(
+            endpoint,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $_authToken',
+            },
+          ).timeout(const Duration(seconds: 7));
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            return _SupportTicketsResult(success: false, message: _extractApiMessage(response.body, 'Unable to load tickets.'));
+          }
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          if (decoded is! Map<String, dynamic>) {
+            return const _SupportTicketsResult(success: false, message: 'Invalid tickets response.');
+          }
+          final data = decoded['data'] ?? decoded['tickets'];
+          if (data is! List) {
+            return const _SupportTicketsResult(success: true, message: 'No tickets yet.', entries: <_HelpDeskTicketEntry>[]);
+          }
+          final entries = <_HelpDeskTicketEntry>[];
+          for (final item in data) {
+            if (item is! Map<String, dynamic>) continue;
+            final id = ((item['id']?.toString()) ?? (item['ticket_id'] as String?) ?? '').trim();
+            final subject = ((item['subject'] as String?) ?? '').trim();
+            final message = ((item['message'] as String?) ?? (item['description'] as String?) ?? '').trim();
+            if (id.isEmpty || subject.isEmpty || message.isEmpty) continue;
+            final contact = ((item['contact'] as String?) ?? (item['contact_number'] as String?) ?? '').trim();
+            final status = ((item['status'] as String?) ?? 'Open').trim();
+            final timeRaw = ((item['created_at'] as String?) ?? (item['createdAt'] as String?) ?? '').trim();
+            final createdAt = DateTime.tryParse(timeRaw)?.toLocal() ?? DateTime.now();
+            entries.add(
+              _HelpDeskTicketEntry(
+                id: id,
+                role: role,
+                subject: subject,
+                message: message,
+                contact: contact,
+                createdAt: createdAt,
+                status: status.isEmpty ? 'Open' : status,
+              ),
+            );
+          }
+          entries.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return _SupportTicketsResult(success: true, message: 'Tickets synced.', entries: entries);
+        } on TimeoutException {
+          return const _SupportTicketsResult(success: false, message: 'Tickets request timed out.');
+        } catch (_) {
+          return const _SupportTicketsResult(success: false, message: 'Unable to load tickets.');
+        }
+      }
+    }
+    return const _SupportTicketsResult(success: false, message: 'Tickets endpoint not available.');
+  }
+
+  Future<_SupportActionResult> submitTicket({
+    required UserRole role,
+    required String subject,
+    required String message,
+    required String contact,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _SupportActionResult(success: false, message: 'Login required.');
+    }
+    final roleKey = role == UserRole.official ? 'official' : 'resident';
+    final body = jsonEncode({
+      'role': roleKey,
+      'subject': subject,
+      'message': message,
+      'contact': contact,
+    });
+    final paths = <String>[
+      'support/tickets',
+      'helpdesk/tickets',
+      'tickets',
+    ];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http.post(
+            endpoint,
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $_authToken',
+            },
+            body: body,
+          ).timeout(const Duration(seconds: 8));
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            return _SupportActionResult(
+              success: true,
+              message: _extractApiMessage(response.body, 'Ticket submitted.'),
+            );
+          }
+          return _SupportActionResult(
+            success: false,
+            message: _extractApiMessage(response.body, 'Unable to submit ticket.'),
+          );
+        } on TimeoutException {
+          return const _SupportActionResult(success: false, message: 'Ticket request timed out.');
+        } catch (_) {
+          return const _SupportActionResult(success: false, message: 'Unable to submit ticket.');
+        }
+      }
+    }
+    return const _SupportActionResult(success: false, message: 'Tickets endpoint not available.');
+  }
+
+  Future<_SupportPoliciesResult> fetchPolicies(UserRole role) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _SupportPoliciesResult(success: false, message: 'Login required.');
+    }
+    final roleKey = role == UserRole.official ? 'official' : 'resident';
+    final paths = <String>[
+      'legal/policies?role=$roleKey',
+      'support/policies?role=$roleKey',
+      'terms-policies?role=$roleKey',
+    ];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http.get(
+            endpoint,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $_authToken',
+            },
+          ).timeout(const Duration(seconds: 7));
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            return _SupportPoliciesResult(success: false, message: _extractApiMessage(response.body, 'Unable to load policies.'));
+          }
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          if (decoded is! Map<String, dynamic>) {
+            return const _SupportPoliciesResult(success: false, message: 'Invalid policies response.');
+          }
+          final data = decoded['data'] ?? decoded['policies'];
+          final entries = <({String title, String body})>[];
+          if (data is List) {
+            for (final item in data) {
+              if (item is! Map<String, dynamic>) continue;
+              final title = ((item['title'] as String?) ?? '').trim();
+              final body = ((item['body'] as String?) ?? (item['content'] as String?) ?? '').trim();
+              if (title.isEmpty || body.isEmpty) continue;
+              entries.add((title: title, body: body));
+            }
+          } else if (data is Map<String, dynamic>) {
+            for (final entry in data.entries) {
+              final body = (entry.value as String?)?.trim() ?? '';
+              if (entry.key.trim().isEmpty || body.isEmpty) continue;
+              entries.add((title: entry.key.trim(), body: body));
+            }
+          }
+          return _SupportPoliciesResult(
+            success: entries.isNotEmpty,
+            message: entries.isNotEmpty ? 'Policies synced.' : 'No policies returned.',
+            entries: entries,
+          );
+        } on TimeoutException {
+          return const _SupportPoliciesResult(success: false, message: 'Policies request timed out.');
+        } catch (_) {
+          return const _SupportPoliciesResult(success: false, message: 'Unable to load policies.');
+        }
+      }
+    }
+    return const _SupportPoliciesResult(success: false, message: 'Policies endpoint not available.');
+  }
+
+  Future<_SupportActionResult> submitBugReport({
+    required UserRole role,
+    required String bugName,
+    required String description,
+    required String severity,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _SupportActionResult(success: false, message: 'Login required.');
+    }
+    final roleKey = role == UserRole.official ? 'official' : 'resident';
+    final body = jsonEncode({
+      'role': roleKey,
+      'bug_name': bugName,
+      'description': description,
+      'severity': severity,
+    });
+    final paths = <String>[
+      'support/bug-reports',
+      'bug-reports',
+      'feedback/bugs',
+    ];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http.post(
+            endpoint,
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $_authToken',
+            },
+            body: body,
+          ).timeout(const Duration(seconds: 8));
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            return _SupportActionResult(
+              success: true,
+              message: _extractApiMessage(response.body, 'Bug report submitted.'),
+            );
+          }
+          return _SupportActionResult(
+            success: false,
+            message: _extractApiMessage(response.body, 'Unable to submit bug report.'),
+          );
+        } on TimeoutException {
+          return const _SupportActionResult(success: false, message: 'Bug report request timed out.');
+        } catch (_) {
+          return const _SupportActionResult(success: false, message: 'Unable to submit bug report.');
+        }
+      }
+    }
+    return const _SupportActionResult(success: false, message: 'Bug report endpoint not available.');
+  }
+
+  String _extractApiMessage(String body, String fallback) {
+    try {
+      final decoded = _AuthApi.instance._decodeDynamicJson(body);
+      if (decoded is Map<String, dynamic>) {
+        final message = decoded['message'];
+        if (message is String && message.trim().isNotEmpty) {
+          return message.trim();
+        }
+      }
+    } catch (_) {}
+    return fallback;
+  }
+}
+
+class _SupportFaqResult {
+  final bool success;
+  final String message;
+  final Map<String, List<(String, String)>> categories;
+
+  const _SupportFaqResult({
+    required this.success,
+    required this.message,
+    this.categories = const <String, List<(String, String)>>{},
+  });
+}
+
+class _SupportTicketsResult {
+  final bool success;
+  final String message;
+  final List<_HelpDeskTicketEntry> entries;
+
+  const _SupportTicketsResult({
+    required this.success,
+    required this.message,
+    this.entries = const <_HelpDeskTicketEntry>[],
+  });
+}
+
+class _SupportPoliciesResult {
+  final bool success;
+  final String message;
+  final List<({String title, String body})> entries;
+
+  const _SupportPoliciesResult({
+    required this.success,
+    required this.message,
+    this.entries = const <({String title, String body})>[],
+  });
+}
+
+class _SupportActionResult {
+  final bool success;
+  final String message;
+
+  const _SupportActionResult({
+    required this.success,
+    required this.message,
+  });
 }
 
 Widget _systemInfoChip({

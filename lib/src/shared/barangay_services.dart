@@ -3,6 +3,1001 @@ part of barangaymo_app;
 bool get _hasOfficialEmergencyAccess =>
     (_currentOfficialMobile?.trim().isNotEmpty ?? false);
 
+class _EmergencyContactItem {
+  final int id;
+  final String label;
+  final String phoneNumber;
+  final String description;
+  final bool quickDial;
+  final int sortOrder;
+
+  const _EmergencyContactItem({
+    this.id = 0,
+    required this.label,
+    required this.phoneNumber,
+    required this.description,
+    this.quickDial = false,
+    this.sortOrder = 0,
+  });
+}
+
+List<_EmergencyContactItem> _defaultEmergencyContacts() {
+  return const <_EmergencyContactItem>[
+    _EmergencyContactItem(
+      label: 'BPAT',
+      phoneNumber: '0917-800-1001',
+      description: 'Barangay patrol and neighborhood security response',
+      quickDial: true,
+      sortOrder: 1,
+    ),
+    _EmergencyContactItem(
+      label: 'Police',
+      phoneNumber: '117',
+      description: 'PNP rapid response and incident dispatch',
+      quickDial: true,
+      sortOrder: 2,
+    ),
+    _EmergencyContactItem(
+      label: 'Fire Department',
+      phoneNumber: '160',
+      description: 'BFP fire suppression and rescue',
+      quickDial: true,
+      sortOrder: 3,
+    ),
+    _EmergencyContactItem(
+      label: 'Ambulance',
+      phoneNumber: '911',
+      description: 'Emergency medical support and patient transport',
+      quickDial: true,
+      sortOrder: 4,
+    ),
+  ];
+}
+
+final ValueNotifier<List<_EmergencyContactItem>> _emergencyContacts =
+    ValueNotifier<List<_EmergencyContactItem>>(_defaultEmergencyContacts());
+bool _emergencyContactsLoaded = false;
+bool _emergencyContactsLoading = false;
+
+List<_EmergencyContactItem> _activeEmergencyContacts() {
+  final contacts = _emergencyContacts.value;
+  if (contacts.isNotEmpty) return contacts;
+  return _defaultEmergencyContacts();
+}
+
+Future<void> _syncEmergencyContacts({bool force = false}) async {
+  if (_emergencyContactsLoading) return;
+  if (_emergencyContactsLoaded && !force) return;
+  _emergencyContactsLoading = true;
+  try {
+    final result = await _EmergencyContactsApi.instance.fetchContacts();
+    if (result.success) {
+      _emergencyContacts.value = result.contacts;
+      _emergencyContactsLoaded = true;
+    } else if (result.message.toLowerCase().contains('unavailable')) {
+      _emergencyContacts.value = _defaultEmergencyContacts();
+    }
+  } finally {
+    _emergencyContactsLoading = false;
+  }
+}
+
+IconData _emergencyIconForLabel(String label) {
+  final key = label.trim().toLowerCase();
+  if (key.contains('fire') || key.contains('bfp')) {
+    return Icons.local_fire_department_rounded;
+  }
+  if (key.contains('ambulance') || key.contains('medical') || key.contains('ems')) {
+    return Icons.medical_services_rounded;
+  }
+  if (key.contains('police') || key.contains('pnp') || key.contains('bpat')) {
+    return Icons.local_police_rounded;
+  }
+  return Icons.shield_outlined;
+}
+
+Color _emergencyColorForLabel(String label) {
+  final key = label.trim().toLowerCase();
+  if (key.contains('fire') || key.contains('bfp')) return const Color(0xFFD84B3F);
+  if (key.contains('ambulance') || key.contains('medical') || key.contains('ems')) {
+    return const Color(0xFF2A8D62);
+  }
+  if (key.contains('police') || key.contains('pnp') || key.contains('bpat')) {
+    return const Color(0xFF2F6BC8);
+  }
+  return const Color(0xFF6B6F7C);
+}
+
+String _quickDialLabelFromName(String label) {
+  final key = label.trim().toLowerCase();
+  if (key.contains('police')) return 'PNP';
+  if (key.contains('fire')) return 'BFP';
+  return label.trim();
+}
+
+List<_EmergencyContactItem> _quickDialContacts(List<_EmergencyContactItem> source) {
+  final prioritized = source.where((entry) => entry.quickDial).toList();
+  final list = prioritized.isNotEmpty ? prioritized : source;
+  return list.take(3).toList();
+}
+
+Map<String, String> _emergencyScopePayload() {
+  final profile = _currentResidentProfile;
+  final province = (profile?.province ?? _officialBarangaySetup.province).trim();
+  final city = (profile?.cityMunicipality ?? _officialBarangaySetup.city).trim();
+  final barangay = (profile?.barangay ?? _officialBarangaySetup.barangay).trim();
+  final payload = <String, String>{};
+  if (province.isNotEmpty) payload['province'] = province;
+  if (city.isNotEmpty) payload['city_municipality'] = city;
+  if (barangay.isNotEmpty) payload['barangay'] = barangay;
+  return payload;
+}
+
+String _pathWithScopeQuery(String path) {
+  final scope = _emergencyScopePayload();
+  if (scope.isEmpty) return path;
+  final normalized = path.startsWith('/') ? path.substring(1) : path;
+  final parsed = Uri.parse(normalized);
+  final merged = <String, String>{
+    ...parsed.queryParameters,
+    ...scope,
+  };
+  final rebuilt = Uri(
+    path: parsed.path,
+    queryParameters: merged.isEmpty ? null : merged,
+  );
+  return rebuilt.toString();
+}
+
+class _EmergencyLiveLocationApiResult {
+  final bool success;
+  final String message;
+  final _EmergencySharedLocation? location;
+
+  const _EmergencyLiveLocationApiResult({
+    required this.success,
+    required this.message,
+    this.location,
+  });
+}
+
+class _EmergencyLiveLocationFeedApiResult {
+  final bool success;
+  final String message;
+  final List<_EmergencySharedLocationFeedEntry> locations;
+
+  const _EmergencyLiveLocationFeedApiResult({
+    required this.success,
+    required this.message,
+    this.locations = const <_EmergencySharedLocationFeedEntry>[],
+  });
+}
+
+class _EmergencyLiveLocationApi {
+  _EmergencyLiveLocationApi._();
+  static final instance = _EmergencyLiveLocationApi._();
+
+  Future<_EmergencyLiveLocationApiResult> fetchLatest() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _EmergencyLiveLocationApiResult(
+        success: false,
+        message: 'Login required.',
+      );
+    }
+    final path = _pathWithScopeQuery('emergency/shared-location');
+    for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+      try {
+        final response = await http.get(
+          endpoint,
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $_authToken',
+          },
+        ).timeout(const Duration(seconds: 8));
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          return _EmergencyLiveLocationApiResult(
+            success: false,
+            message: _extractMessage(response.body, 'Unable to load live location.'),
+          );
+        }
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        if (decoded is! Map<String, dynamic>) {
+          return const _EmergencyLiveLocationApiResult(
+            success: false,
+            message: 'Invalid live location response.',
+          );
+        }
+        final raw = decoded['location'];
+        final location = (raw is Map<String, dynamic>) ? _mapLocation(raw) : null;
+        return _EmergencyLiveLocationApiResult(
+          success: true,
+          message: _extractMessage(response.body, 'Live location loaded.'),
+          location: location,
+        );
+      } on TimeoutException {
+        return const _EmergencyLiveLocationApiResult(
+          success: false,
+          message: 'Live location request timed out.',
+        );
+      } catch (_) {
+        return const _EmergencyLiveLocationApiResult(
+          success: false,
+          message: 'Unable to load live location.',
+        );
+      }
+    }
+    return const _EmergencyLiveLocationApiResult(
+      success: false,
+      message: 'Live location endpoint unavailable.',
+    );
+  }
+
+  Future<_EmergencyLiveLocationApiResult> share({
+    required LatLng point,
+    required String address,
+    required bool highAccuracy,
+    required bool includeLandmark,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _EmergencyLiveLocationApiResult(
+        success: false,
+        message: 'Login required.',
+      );
+    }
+    const path = 'emergency/shared-location';
+    final body = jsonEncode({
+      'address': address.trim(),
+      'latitude': point.latitude,
+      'longitude': point.longitude,
+      'high_accuracy': highAccuracy,
+      'include_landmark': includeLandmark,
+      ..._emergencyScopePayload(),
+    });
+    for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+      try {
+        final response = await http
+            .post(
+              endpoint,
+              headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $_authToken',
+              },
+              body: body,
+            )
+            .timeout(const Duration(seconds: 8));
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          return _EmergencyLiveLocationApiResult(
+            success: false,
+            message: _extractMessage(response.body, 'Unable to share live location.'),
+          );
+        }
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        final raw = decoded is Map<String, dynamic> ? decoded['location'] : null;
+        final location = raw is Map<String, dynamic> ? _mapLocation(raw) : null;
+        return _EmergencyLiveLocationApiResult(
+          success: true,
+          message: _extractMessage(response.body, 'Live location shared successfully.'),
+          location: location,
+        );
+      } on TimeoutException {
+        return const _EmergencyLiveLocationApiResult(
+          success: false,
+          message: 'Share location request timed out.',
+        );
+      } catch (_) {
+        return const _EmergencyLiveLocationApiResult(
+          success: false,
+          message: 'Unable to share live location.',
+        );
+      }
+    }
+    return const _EmergencyLiveLocationApiResult(
+      success: false,
+      message: 'Live location endpoint unavailable.',
+    );
+  }
+
+  Future<_EmergencyLiveLocationFeedApiResult> fetchFeed({int limit = 20}) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _EmergencyLiveLocationFeedApiResult(
+        success: false,
+        message: 'Login required.',
+      );
+    }
+    final safeLimit = limit.clamp(1, 100);
+    final path = _pathWithScopeQuery('emergency/shared-locations?limit=$safeLimit');
+    for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+      try {
+        final response = await http.get(
+          endpoint,
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $_authToken',
+          },
+        ).timeout(const Duration(seconds: 8));
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          return _EmergencyLiveLocationFeedApiResult(
+            success: false,
+            message: _extractMessage(
+              response.body,
+              'Unable to load shared locations.',
+            ),
+          );
+        }
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        if (decoded is! Map<String, dynamic>) {
+          return const _EmergencyLiveLocationFeedApiResult(
+            success: false,
+            message: 'Invalid shared locations response.',
+          );
+        }
+        final raw = decoded['locations'];
+        final items = <_EmergencySharedLocationFeedEntry>[];
+        if (raw is List) {
+          for (final entry in raw) {
+            if (entry is! Map<String, dynamic>) continue;
+            final mapped = _mapFeedEntry(entry);
+            if (mapped != null) items.add(mapped);
+          }
+        }
+        return _EmergencyLiveLocationFeedApiResult(
+          success: true,
+          message: _extractMessage(response.body, 'Shared locations loaded.'),
+          locations: items,
+        );
+      } on TimeoutException {
+        return const _EmergencyLiveLocationFeedApiResult(
+          success: false,
+          message: 'Shared locations request timed out.',
+        );
+      } catch (_) {
+        return const _EmergencyLiveLocationFeedApiResult(
+          success: false,
+          message: 'Unable to load shared locations.',
+        );
+      }
+    }
+    return const _EmergencyLiveLocationFeedApiResult(
+      success: false,
+      message: 'Shared locations endpoint unavailable.',
+    );
+  }
+
+  _EmergencySharedLocation? _mapLocation(Map<String, dynamic> json) {
+    double? readDouble(String key) {
+      final value = json[key];
+      if (value is double) return value;
+      if (value is int) return value.toDouble();
+      if (value is num) return value.toDouble();
+      if (value is String) return double.tryParse(value.trim());
+      return null;
+    }
+
+    bool readBool(String key, [bool fallback = false]) {
+      final value = json[key];
+      if (value is bool) return value;
+      if (value is num) return value != 0;
+      if (value is String) {
+        final text = value.trim().toLowerCase();
+        return text == '1' || text == 'true' || text == 'yes';
+      }
+      return fallback;
+    }
+
+    final latitude = readDouble('latitude');
+    final longitude = readDouble('longitude');
+    if (latitude == null || longitude == null) {
+      return null;
+    }
+    final address = (json['address'] as String? ?? '').trim();
+    final sharedAtRaw = (json['shared_at'] as String? ?? '').trim();
+    final sharedAt = DateTime.tryParse(sharedAtRaw)?.toLocal() ?? DateTime.now();
+    return _EmergencySharedLocation(
+      point: LatLng(latitude, longitude),
+      address: address.isEmpty ? 'Pinned location' : address,
+      updatedAt: sharedAt,
+      highAccuracy: readBool('high_accuracy', true),
+      includeLandmark: readBool('include_landmark', true),
+    );
+  }
+
+  _EmergencySharedLocationFeedEntry? _mapFeedEntry(Map<String, dynamic> json) {
+    double? readDouble(String key) {
+      final value = json[key];
+      if (value is double) return value;
+      if (value is int) return value.toDouble();
+      if (value is num) return value.toDouble();
+      if (value is String) return double.tryParse(value.trim());
+      return null;
+    }
+
+    int readInt(String key, [int fallback = 0]) {
+      final value = json[key];
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      if (value is String) return int.tryParse(value.trim()) ?? fallback;
+      return fallback;
+    }
+
+    bool readBool(String key, [bool fallback = false]) {
+      final value = json[key];
+      if (value is bool) return value;
+      if (value is num) return value != 0;
+      if (value is String) {
+        final text = value.trim().toLowerCase();
+        return text == '1' || text == 'true' || text == 'yes';
+      }
+      return fallback;
+    }
+
+    final latitude = readDouble('latitude');
+    final longitude = readDouble('longitude');
+    if (latitude == null || longitude == null) return null;
+
+    final address = (json['address'] as String? ?? '').trim();
+    final sharedAtRaw = (json['shared_at'] as String? ?? '').trim();
+    final sharedAt = DateTime.tryParse(sharedAtRaw)?.toLocal() ?? DateTime.now();
+    final name = (json['user_name'] as String? ?? '').trim();
+    final mobile = (json['user_mobile'] as String? ?? '').trim();
+
+    return _EmergencySharedLocationFeedEntry(
+      id: readInt('id'),
+      point: LatLng(latitude, longitude),
+      address: address.isEmpty ? 'Pinned location' : address,
+      updatedAt: sharedAt,
+      highAccuracy: readBool('high_accuracy', true),
+      includeLandmark: readBool('include_landmark', true),
+      residentName: name.isEmpty ? 'Resident' : name,
+      residentMobile: mobile,
+    );
+  }
+
+  String _extractMessage(String body, String fallback) {
+    try {
+      final decoded = _AuthApi.instance._decodeDynamicJson(body);
+      if (decoded is Map<String, dynamic>) {
+        final message = decoded['message'];
+        if (message is String && message.trim().isNotEmpty) {
+          return message.trim();
+        }
+      }
+    } catch (_) {}
+    return fallback;
+  }
+}
+
+bool _emergencySharedFeedLoading = false;
+bool _emergencySharedFeedLoaded = false;
+bool _emergencyOpsDataLoading = false;
+bool _emergencyOpsDataLoaded = false;
+
+Future<void> _syncEmergencySharedLocationFeed({bool force = false}) async {
+  if (_emergencySharedFeedLoading) return;
+  if (_emergencySharedFeedLoaded && !force) return;
+  _emergencySharedFeedLoading = true;
+  try {
+    final result = await _EmergencyLiveLocationApi.instance.fetchFeed(limit: 30);
+    if (result.success) {
+      _emergencyOpsStore.setSharedLocationFeed(result.locations);
+      _emergencySharedFeedLoaded = true;
+      if (result.locations.isNotEmpty) {
+        final latest = result.locations.first;
+        _emergencyOpsStore.sharedLocation.value = _EmergencySharedLocation(
+          point: latest.point,
+          address: latest.address,
+          updatedAt: latest.updatedAt,
+          highAccuracy: latest.highAccuracy,
+          includeLandmark: latest.includeLandmark,
+        );
+      }
+    }
+  } finally {
+    _emergencySharedFeedLoading = false;
+  }
+}
+
+Future<void> _syncEmergencyOpsData({bool force = false}) async {
+  if (_emergencyOpsDataLoading) return;
+  if (_emergencyOpsDataLoaded && !force) return;
+  _emergencyOpsDataLoading = true;
+  try {
+    await _syncEmergencyContacts(force: force);
+    final requests = await _ServiceRequestApi.instance.fetchRequests();
+    if (!requests.success) {
+      return;
+    }
+
+    final incidents = <_EmergencyIncident>[];
+    final patrols = <_PatrolRequestEntry>[];
+    for (final item in requests.entries) {
+      final category = item.category.trim().toLowerCase();
+      final title = item.title.trim().toLowerCase();
+      final purpose = item.purpose.trim().toLowerCase();
+      final isEmergency = category.contains('responder') ||
+          category.contains('bpat') ||
+          category.contains('police') ||
+          category.contains('health') ||
+          title.contains('responder') ||
+          title.contains('bpat') ||
+          title.contains('patrol') ||
+          title.contains('emergency');
+      if (!isEmergency) continue;
+
+      final createdAt = item.submittedAt ?? DateTime.now();
+      final location = _emergencyLocationFromRequest(item);
+      final details = item.purpose.trim().isNotEmpty
+          ? item.purpose.trim()
+          : item.title.trim();
+      final requestRef = item.requestId.trim().isEmpty
+          ? 'REQ-${item.id}'
+          : item.requestId.trim();
+      final requesterName = item.requesterName.trim().isEmpty
+          ? 'Resident'
+          : item.requesterName.trim();
+      final status = item.status.trim().isEmpty ? 'Pending' : item.status.trim();
+
+      incidents.add(
+        _EmergencyIncident(
+          reference: requestRef,
+          type: _emergencyTypeFromRequest(item),
+          status: status,
+          priority: _emergencyPriorityFromRequest(item),
+          location: location,
+          details: details,
+          victimName: requesterName,
+          reporterName: requesterName,
+          reporterMobile: item.requesterMobile.trim(),
+          createdAt: createdAt,
+          point: _defaultEmergencyPoint(),
+          channel: 'Service Request',
+        ),
+      );
+
+      final isPatrol = category.contains('bpat') ||
+          title.contains('patrol') ||
+          purpose.contains('patrol');
+      if (isPatrol) {
+        patrols.add(
+          _PatrolRequestEntry(
+            reference: requestRef,
+            location: location,
+            reason: item.title.trim().isEmpty ? 'Patrol request' : item.title.trim(),
+            requestedBy: requesterName,
+            scheduledAt: createdAt,
+            notes: details,
+            status: status,
+          ),
+        );
+      }
+    }
+
+    final contacts = _activeEmergencyContacts();
+    final tanods = contacts
+        .where((entry) {
+          final label = entry.label.trim().toLowerCase();
+          return label.contains('bpat') ||
+              label.contains('tanod') ||
+              label.contains('police');
+        })
+        .map(
+          (entry) => _TanodDutyEntry(
+            name: '${entry.label.trim()} Desk',
+            zone: 'Barangay',
+            shift: '24/7',
+            online: true,
+            assignment: entry.description.trim().isEmpty
+                ? 'Emergency response'
+                : entry.description.trim(),
+          ),
+        )
+        .toList();
+
+    _emergencyOpsStore.setIncidents(incidents);
+    _emergencyOpsStore.setPatrolRequests(patrols);
+    _emergencyOpsStore.setTanods(tanods);
+    _emergencyOpsDataLoaded = true;
+  } finally {
+    _emergencyOpsDataLoading = false;
+  }
+}
+
+String _emergencyLocationFromRequest(_ResidentRequestEntry item) {
+  final purpose = item.purpose.trim();
+  if (purpose.isNotEmpty) {
+    final firstLine = purpose.split('\n').first.trim();
+    if (firstLine.length >= 4 && firstLine.length <= 72) {
+      return firstLine;
+    }
+  }
+  final category = item.category.trim();
+  return category.isEmpty ? 'Reported via Responder' : 'Reported via $category';
+}
+
+String _emergencyTypeFromRequest(_ResidentRequestEntry item) {
+  final text = '${item.category} ${item.title} ${item.purpose}'.toLowerCase();
+  if (text.contains('fire')) return 'Fire';
+  if (text.contains('medical') || text.contains('ambulance') || text.contains('health')) {
+    return 'Medical';
+  }
+  if (text.contains('noise')) return 'Noise';
+  if (text.contains('patrol') || text.contains('bpat')) return 'Patrol';
+  if (text.contains('theft') || text.contains('rob') || text.contains('stolen')) {
+    return 'Theft';
+  }
+  return 'Incident';
+}
+
+String _emergencyPriorityFromRequest(_ResidentRequestEntry item) {
+  final text = '${item.category} ${item.title} ${item.purpose}'.toLowerCase();
+  if (text.contains('urgent') || text.contains('critical') || text.contains('emergency')) {
+    return 'Urgent';
+  }
+  if (item.status.trim().toLowerCase() == 'pending') return 'High';
+  return 'Normal';
+}
+
+class _EmergencyContactsApiResult {
+  final bool success;
+  final String message;
+  final List<_EmergencyContactItem> contacts;
+
+  const _EmergencyContactsApiResult({
+    required this.success,
+    required this.message,
+    this.contacts = const <_EmergencyContactItem>[],
+  });
+}
+
+class _EmergencyContactsActionResult {
+  final bool success;
+  final String message;
+
+  const _EmergencyContactsActionResult({
+    required this.success,
+    required this.message,
+  });
+}
+
+class _EmergencyContactsApi {
+  _EmergencyContactsApi._();
+  static final instance = _EmergencyContactsApi._();
+
+  Map<String, String> _scopePayload() {
+    final province = _officialBarangaySetup.province.trim();
+    final city = _officialBarangaySetup.city.trim();
+    final barangay = _officialBarangaySetup.barangay.trim();
+    final payload = <String, String>{};
+    if (province.isNotEmpty) payload['province'] = province;
+    if (city.isNotEmpty) payload['city_municipality'] = city;
+    if (barangay.isNotEmpty) payload['barangay'] = barangay;
+    return payload;
+  }
+
+  String _withScopeQuery(String path) {
+    final scope = _scopePayload();
+    if (scope.isEmpty) return path;
+    final normalized = path.startsWith('/') ? path.substring(1) : path;
+    final query = Uri(queryParameters: scope).query;
+    return '$normalized?$query';
+  }
+
+  Future<_EmergencyContactsApiResult> fetchContacts() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _EmergencyContactsApiResult(
+        success: false,
+        message: 'Login required.',
+      );
+    }
+    final paths = <String>[_withScopeQuery('emergency/contacts')];
+    final attempted = <String>[];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        attempted.add(endpoint.toString());
+        try {
+          final response = await http.get(
+            endpoint,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $_authToken',
+            },
+          ).timeout(const Duration(seconds: 8));
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            return _EmergencyContactsApiResult(
+              success: false,
+              message: _extractMessage(response.body, 'Unable to load contacts.'),
+            );
+          }
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          if (decoded is! Map<String, dynamic>) {
+            return const _EmergencyContactsApiResult(
+              success: false,
+              message: 'Invalid contacts response.',
+            );
+          }
+          final raw = decoded['contacts'];
+          if (raw is! List) {
+            return _EmergencyContactsApiResult(
+              success: true,
+              message: _extractMessage(response.body, 'No contacts yet.'),
+              contacts: const <_EmergencyContactItem>[],
+            );
+          }
+          final contacts = <_EmergencyContactItem>[];
+          for (final item in raw) {
+            if (item is! Map<String, dynamic>) continue;
+            contacts.add(_fromJson(item));
+          }
+          contacts.sort((a, b) {
+            final bySort = a.sortOrder.compareTo(b.sortOrder);
+            if (bySort != 0) return bySort;
+            return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+          });
+          return _EmergencyContactsApiResult(
+            success: true,
+            message: _extractMessage(response.body, 'Contacts loaded.'),
+            contacts: contacts,
+          );
+        } on TimeoutException {
+          return const _EmergencyContactsApiResult(
+            success: false,
+            message: 'Contacts request timed out.',
+          );
+        } catch (_) {
+          return const _EmergencyContactsApiResult(
+            success: false,
+            message: 'Unable to load contacts.',
+          );
+        }
+      }
+    }
+    return _EmergencyContactsApiResult(
+      success: false,
+      message:
+          'Contacts endpoint unavailable on configured API base URL ($_configuredApiBaseUrl). Tried: ${attempted.isEmpty ? "none" : attempted.first}',
+    );
+  }
+
+  Future<_EmergencyContactsActionResult> createContact({
+    required String label,
+    required String phoneNumber,
+    required String description,
+    required bool quickDial,
+    required int sortOrder,
+  }) {
+    return _upsertContact(
+      contactId: null,
+      label: label,
+      phoneNumber: phoneNumber,
+      description: description,
+      quickDial: quickDial,
+      sortOrder: sortOrder,
+    );
+  }
+
+  Future<_EmergencyContactsActionResult> updateContact({
+    required int contactId,
+    required String label,
+    required String phoneNumber,
+    required String description,
+    required bool quickDial,
+    required int sortOrder,
+  }) {
+    return _upsertContact(
+      contactId: contactId,
+      label: label,
+      phoneNumber: phoneNumber,
+      description: description,
+      quickDial: quickDial,
+      sortOrder: sortOrder,
+    );
+  }
+
+  Future<_EmergencyContactsActionResult> _upsertContact({
+    required int? contactId,
+    required String label,
+    required String phoneNumber,
+    required String description,
+    required bool quickDial,
+    required int sortOrder,
+  }) async {
+    final normalizedContactId =
+        (contactId != null && contactId > 0) ? contactId : null;
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _EmergencyContactsActionResult(
+        success: false,
+        message: 'Login required.',
+      );
+    }
+    final body = jsonEncode({
+      'label': label.trim(),
+      'phone_number': phoneNumber.trim(),
+      'description': description.trim(),
+      'quick_dial': quickDial,
+      'sort_order': sortOrder,
+      ..._scopePayload(),
+    });
+    final path = normalizedContactId == null
+        ? 'emergency/contacts'
+        : 'emergency/contacts/$normalizedContactId';
+    final attempted = <String>[];
+    for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+      attempted.add(endpoint.toString());
+      try {
+        final response = normalizedContactId == null
+            ? await http
+                  .post(
+                    endpoint,
+                    headers: {
+                      'Accept': 'application/json',
+                      'Content-Type': 'application/json',
+                      'Authorization': 'Bearer $_authToken',
+                    },
+                    body: body,
+                  )
+                  .timeout(const Duration(seconds: 8))
+            : await http
+                  .patch(
+                    endpoint,
+                    headers: {
+                      'Accept': 'application/json',
+                      'Content-Type': 'application/json',
+                      'Authorization': 'Bearer $_authToken',
+                    },
+                    body: body,
+                  )
+                  .timeout(const Duration(seconds: 8));
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          return _EmergencyContactsActionResult(
+            success: true,
+            message: _extractMessage(
+              response.body,
+              normalizedContactId == null
+                  ? 'Emergency contact added.'
+                  : 'Emergency contact updated.',
+            ),
+          );
+        }
+        return _EmergencyContactsActionResult(
+          success: false,
+          message: _extractMessage(response.body, 'Unable to save contact.'),
+        );
+      } on TimeoutException {
+        return const _EmergencyContactsActionResult(
+          success: false,
+          message: 'Contact request timed out.',
+        );
+      } catch (_) {
+        return const _EmergencyContactsActionResult(
+          success: false,
+          message: 'Unable to save contact.',
+        );
+      }
+    }
+    return _EmergencyContactsActionResult(
+      success: false,
+      message:
+          'Contacts endpoint unavailable on configured API base URL ($_configuredApiBaseUrl). Tried: ${attempted.isEmpty ? "none" : attempted.first}',
+    );
+  }
+
+  Future<_EmergencyContactsActionResult> deleteContact(int contactId) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _EmergencyContactsActionResult(
+        success: false,
+        message: 'Login required.',
+      );
+    }
+    final path = _withScopeQuery('emergency/contacts/$contactId');
+    final attempted = <String>[];
+    for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+      attempted.add(endpoint.toString());
+      try {
+        final response = await http.delete(
+          endpoint,
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $_authToken',
+          },
+        ).timeout(const Duration(seconds: 8));
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          return _EmergencyContactsActionResult(
+            success: true,
+            message: _extractMessage(response.body, 'Emergency contact deleted.'),
+          );
+        }
+        return _EmergencyContactsActionResult(
+          success: false,
+          message: _extractMessage(response.body, 'Unable to delete contact.'),
+        );
+      } on TimeoutException {
+        return const _EmergencyContactsActionResult(
+          success: false,
+          message: 'Delete request timed out.',
+        );
+      } catch (_) {
+        return const _EmergencyContactsActionResult(
+          success: false,
+          message: 'Unable to delete contact.',
+        );
+      }
+    }
+    return _EmergencyContactsActionResult(
+      success: false,
+      message:
+          'Contacts endpoint unavailable on configured API base URL ($_configuredApiBaseUrl). Tried: ${attempted.isEmpty ? "none" : attempted.first}',
+    );
+  }
+
+  _EmergencyContactItem _fromJson(Map<String, dynamic> json) {
+    String readString(String key, [String fallback = '']) {
+      final value = json[key];
+      if (value is String) return value.trim();
+      if (value != null) return value.toString().trim();
+      return fallback;
+    }
+
+    int readInt(String key, [int fallback = 0]) {
+      final value = json[key];
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      if (value is String) return int.tryParse(value.trim()) ?? fallback;
+      return fallback;
+    }
+
+    bool readBool(String key, [bool fallback = false]) {
+      final value = json[key];
+      if (value is bool) return value;
+      if (value is num) return value != 0;
+      if (value is String) {
+        final text = value.trim().toLowerCase();
+        return text == '1' || text == 'true' || text == 'yes';
+      }
+      return fallback;
+    }
+
+    return _EmergencyContactItem(
+      id: readInt('id'),
+      label: readString('label', 'Emergency'),
+      phoneNumber: readString('phone_number', 'N/A'),
+      description: readString('description', ''),
+      quickDial: readBool('quick_dial'),
+      sortOrder: readInt('sort_order'),
+    );
+  }
+
+  String _extractMessage(String body, String fallback) {
+    try {
+      final decoded = _AuthApi.instance._decodeDynamicJson(body);
+      if (decoded is Map<String, dynamic>) {
+        final message = decoded['message'];
+        if (message is String && message.trim().isNotEmpty) {
+          return message.trim();
+        }
+      }
+    } catch (_) {}
+    return fallback;
+  }
+}
+
 class _EmergencyIncident {
   final String reference;
   final String type;
@@ -116,6 +1111,28 @@ class _EmergencySharedLocation {
     required this.updatedAt,
     required this.highAccuracy,
     required this.includeLandmark,
+  });
+}
+
+class _EmergencySharedLocationFeedEntry {
+  final int id;
+  final LatLng point;
+  final String address;
+  final DateTime updatedAt;
+  final bool highAccuracy;
+  final bool includeLandmark;
+  final String residentName;
+  final String residentMobile;
+
+  const _EmergencySharedLocationFeedEntry({
+    required this.id,
+    required this.point,
+    required this.address,
+    required this.updatedAt,
+    required this.highAccuracy,
+    required this.includeLandmark,
+    required this.residentName,
+    required this.residentMobile,
   });
 }
 
@@ -574,6 +1591,9 @@ class _EmergencyOpsStore {
     ),
   );
 
+  final ValueNotifier<List<_EmergencySharedLocationFeedEntry>> sharedLocationFeed =
+      ValueNotifier(const <_EmergencySharedLocationFeedEntry>[]);
+
   List<_EmergencyIncident> get sortedIncidents {
     final list = [...incidents.value];
     list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -584,10 +1604,20 @@ class _EmergencyOpsStore {
     incidents.value = [entry, ...sortedIncidents];
   }
 
+  void setIncidents(List<_EmergencyIncident> entries) {
+    final sorted = [...entries]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    incidents.value = sorted;
+  }
+
   void addPatrolRequest(_PatrolRequestEntry entry) {
     final next = [...patrolRequests.value, entry];
     next.sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
     patrolRequests.value = next;
+  }
+
+  void setPatrolRequests(List<_PatrolRequestEntry> entries) {
+    final sorted = [...entries]..sort((a, b) => b.scheduledAt.compareTo(a.scheduledAt));
+    patrolRequests.value = sorted;
   }
 
   void addChatMessage(_EmergencyChatMessage entry) {
@@ -616,6 +1646,29 @@ class _EmergencyOpsStore {
         createdAt: DateTime.now(),
       ),
     );
+    final currentName = _residentDisplayName().trim();
+    final currentMobile = (_currentResidentProfile?.mobile ?? '').trim();
+    final entry = _EmergencySharedLocationFeedEntry(
+      id: 0,
+      point: point,
+      address: address,
+      updatedAt: DateTime.now(),
+      highAccuracy: highAccuracy,
+      includeLandmark: includeLandmark,
+      residentName: currentName.isEmpty ? 'Resident' : currentName,
+      residentMobile: currentMobile,
+    );
+    final next = <_EmergencySharedLocationFeedEntry>[entry, ...sharedLocationFeed.value];
+    sharedLocationFeed.value = next.take(50).toList();
+  }
+
+  void setSharedLocationFeed(List<_EmergencySharedLocationFeedEntry> entries) {
+    sharedLocationFeed.value = [...entries]
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+  }
+
+  void setTanods(List<_TanodDutyEntry> entries) {
+    tanods.value = [...entries];
   }
 
   void toggleTanod(int index) {
@@ -739,17 +1792,9 @@ class ResponderPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    _syncEmergencyContacts();
+    _syncEmergencyOpsData();
     final isOfficialView = _hasOfficialEmergencyAccess;
-    const contacts = [
-      (
-        'BPAT',
-        '0917-800-1001',
-        'Barangay patrol and neighborhood security response',
-      ),
-      ('Police', '117', 'PNP rapid response and incident dispatch'),
-      ('Fire Department', '160', 'BFP fire suppression and rescue'),
-      ('Ambulance', '911', 'Emergency medical support and patient transport'),
-    ];
     const emergencyTips = [
       (
         'How to Use a Fire Extinguisher',
@@ -900,97 +1945,119 @@ class ResponderPage extends StatelessWidget {
             const SizedBox(height: 12),
             _sectionTitle('Quick Dial'),
             const SizedBox(height: 8),
-            Row(
-              children: const [
-                Expanded(
-                  child: _EmergencyQuickDialButton(
-                    label: 'PNP',
-                    number: '117',
-                    icon: Icons.local_police_rounded,
-                    color: Color(0xFF2F6BC8),
-                  ),
-                ),
-                SizedBox(width: 8),
-                Expanded(
-                  child: _EmergencyQuickDialButton(
-                    label: 'BFP',
-                    number: '160',
-                    icon: Icons.local_fire_department_rounded,
-                    color: Color(0xFFD84B3F),
-                  ),
-                ),
-                SizedBox(width: 8),
-                Expanded(
-                  child: _EmergencyQuickDialButton(
-                    label: 'Ambulance',
-                    number: '911',
-                    icon: Icons.medical_services_rounded,
-                    color: Color(0xFF2A8D62),
-                  ),
-                ),
-              ],
+            ValueListenableBuilder<List<_EmergencyContactItem>>(
+              valueListenable: _emergencyContacts,
+              builder: (_, __, ___) {
+                final contacts = _quickDialContacts(_activeEmergencyContacts());
+                if (contacts.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+                return Row(
+                  children: contacts.indexed.map((entry) {
+                    final index = entry.$1;
+                    final contact = entry.$2;
+                    return Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.only(left: index == 0 ? 0 : 8),
+                        child: _EmergencyQuickDialButton(
+                          label: _quickDialLabelFromName(contact.label),
+                          number: contact.phoneNumber,
+                          icon: _emergencyIconForLabel(contact.label),
+                          color: _emergencyColorForLabel(contact.label),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
             ),
             const SizedBox(height: 12),
             _sectionTitle('Emergency Contacts'),
-            ...contacts.map(
-              (e) => Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE5E7F3)),
-                ),
-                child: ListTile(
-                  leading: Container(
-                    width: 40,
-                    height: 40,
+            ValueListenableBuilder<List<_EmergencyContactItem>>(
+              valueListenable: _emergencyContacts,
+              builder: (_, __, ___) {
+                final contacts = _activeEmergencyContacts();
+                if (contacts.isEmpty) {
+                  return Container(
+                    margin: const EdgeInsets.only(top: 8, bottom: 8),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF1EBEC),
-                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFE5E7F3)),
                     ),
-                    child: const Icon(
-                      Icons.shield_outlined,
-                      color: Color(0xFF5D4C52),
+                    child: const Text(
+                      'No emergency contacts configured yet.',
+                      style: TextStyle(
+                        color: Color(0xFF646B84),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                  title: Text(
-                    e.$1,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  subtitle: Text(
-                    '${e.$2} | ${e.$3}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Color(0xFF6A6E84)),
-                  ),
-                  trailing: FilledButton(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => EmergencyContactActionPage(
-                          contactName: e.$1,
-                          phoneNumber: e.$2,
-                          description: e.$3,
+                  );
+                }
+                return Column(
+                  children: contacts.map((contact) {
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE5E7F3)),
+                      ),
+                      child: ListTile(
+                        leading: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1EBEC),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            _emergencyIconForLabel(contact.label),
+                            color: const Color(0xFF5D4C52),
+                          ),
+                        ),
+                        title: Text(
+                          contact.label,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        subtitle: Text(
+                          '${contact.phoneNumber} | ${contact.description}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Color(0xFF6A6E84)),
+                        ),
+                        trailing: FilledButton(
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => EmergencyContactActionPage(
+                                contactName: contact.label,
+                                phoneNumber: contact.phoneNumber,
+                                description: contact.description,
+                              ),
+                            ),
+                          ),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF7C818C),
+                          ),
+                          child: const Text('Call'),
+                        ),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => EmergencyContactActionPage(
+                              contactName: contact.label,
+                              phoneNumber: contact.phoneNumber,
+                              description: contact.description,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF7C818C),
-                    ),
-                    child: const Text('Call'),
-                  ),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => EmergencyContactActionPage(
-                        contactName: e.$1,
-                        phoneNumber: e.$2,
-                        description: e.$3,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+                    );
+                  }).toList(),
+                );
+              },
             ),
             _sectionTitle('Quick Actions'),
             _goTile(

@@ -190,6 +190,326 @@ class SerbilisServicesPage extends StatelessWidget {
   }
 }
 
+class OfficialRequestsInboxPage extends StatefulWidget {
+  final String? serviceCategory;
+  final String? pageTitle;
+
+  const OfficialRequestsInboxPage({
+    super.key,
+    this.serviceCategory,
+    this.pageTitle,
+  });
+
+  @override
+  State<OfficialRequestsInboxPage> createState() => _OfficialRequestsInboxPageState();
+}
+
+class _OfficialRequestsInboxPageState extends State<OfficialRequestsInboxPage> {
+  final _statusFilters = const <String>['All', 'Pending', 'Approved', 'Rejected', 'Completed'];
+  final _entries = <_ResidentRequestEntry>[];
+  bool _loading = true;
+  bool _updating = false;
+  String _selectedStatus = 'All';
+  String _search = '';
+
+  bool get _isResponderFilter =>
+      (widget.serviceCategory ?? '').trim().toLowerCase() == 'responder';
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    final result = await _ServiceRequestApi.instance.fetchRequests();
+    if (!mounted) return;
+    if (result.success) {
+      setState(() {
+        _entries
+          ..clear()
+          ..addAll(result.entries);
+        _loading = false;
+      });
+      return;
+    }
+    setState(() => _loading = false);
+    _showFeature(context, result.message);
+  }
+
+  List<_ResidentRequestEntry> get _filtered {
+    final requestedCategory = widget.serviceCategory?.trim().toLowerCase();
+    return _entries.where((item) {
+      if (requestedCategory != null && requestedCategory.isNotEmpty) {
+        final itemCategory = item.category.trim().toLowerCase();
+        if (itemCategory != requestedCategory) {
+          return false;
+        }
+      }
+      final statusOk = _selectedStatus == 'All' || item.status == _selectedStatus;
+      if (!statusOk) return false;
+      if (_search.trim().isEmpty) return true;
+      final q = _search.trim().toLowerCase();
+      final bucket =
+          '${item.category} ${item.title} ${item.requestId} ${item.purpose} ${item.requesterName} ${item.requesterMobile}'
+              .toLowerCase();
+      return bucket.contains(q);
+    }).toList();
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'Approved':
+        return const Color(0xFF1F8A55);
+      case 'Rejected':
+        return const Color(0xFFC0483C);
+      case 'Completed':
+        return const Color(0xFF3557C8);
+      case 'Pending':
+      default:
+        return const Color(0xFFB1762B);
+    }
+  }
+
+  Future<void> _changeStatus(_ResidentRequestEntry item) async {
+    final next = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: ['Pending', 'Approved', 'Rejected', 'Completed'].map((status) {
+                final selected = item.status == status;
+                return ListTile(
+                  leading: Icon(
+                    selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                  ),
+                  title: Text(status),
+                  onTap: () => Navigator.pop(context, status),
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
+    );
+    if (!mounted || next == null || next == item.status || item.id <= 0) {
+      return;
+    }
+    setState(() => _updating = true);
+    final result = await _ServiceRequestApi.instance.updateRequestStatus(
+      serviceRequestId: item.id,
+      status: next,
+    );
+    if (!mounted) return;
+    setState(() => _updating = false);
+    _showFeature(context, result.message, tone: result.success ? _ToastTone.success : _ToastTone.warning);
+    if (result.success) {
+      await _load();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.pageTitle ?? 'Requests Inbox'),
+        backgroundColor: _officialHeaderStart,
+        foregroundColor: Colors.white,
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFF7F8FC), _officialSurfaceBlend],
+          ),
+        ),
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            padding: const EdgeInsets.all(12),
+            children: [
+              if (_isResponderFilter) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const EmergencyResponderDashboardPage(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.map_rounded),
+                    label: const Text('Open Responder Dashboard'),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              TextField(
+                onChanged: (value) => setState(() => _search = value),
+                decoration: const InputDecoration(
+                  hintText: 'Search by request ID, title, requester...',
+                  prefixIcon: Icon(Icons.search),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _statusFilters.map((label) {
+                  final selected = _selectedStatus == label;
+                  return ChoiceChip(
+                    label: Text(label),
+                    selected: selected,
+                    onSelected: (_) => setState(() => _selectedStatus = label),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 10),
+              if ((widget.serviceCategory ?? '').trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.filter_alt_rounded, size: 16, color: _officialSubtext),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Service filter: ${widget.serviceCategory}',
+                          style: const TextStyle(
+                            color: _officialSubtext,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (_loading)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              else if (_filtered.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    (widget.serviceCategory ?? '').trim().isEmpty
+                        ? 'No requests found for this filter.'
+                        : 'No ${widget.serviceCategory} requests found for this filter.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: _officialSubtext,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                )
+              else
+                ..._filtered.map((item) {
+                  final accent = _statusColor(item.status);
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: _officialCardBorder),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                item.title,
+                                style: const TextStyle(
+                                  color: _officialText,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: accent.withValues(alpha: 0.14),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                item.status,
+                                style: TextStyle(
+                                  color: accent,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'ID: ${item.requestId} | ${item.date}',
+                          style: const TextStyle(
+                            color: _officialSubtext,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                        ),
+                        if (item.requesterName.trim().isNotEmpty || item.requesterMobile.trim().isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              'Requester: ${item.requesterName.isEmpty ? '-' : item.requesterName}'
+                              '${item.requesterMobile.isEmpty ? '' : ' • ${item.requesterMobile}'}',
+                              style: const TextStyle(
+                                color: _officialSubtext,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 6),
+                        Text(
+                          item.purpose,
+                          style: const TextStyle(
+                            color: _officialText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: FilledButton.icon(
+                            onPressed: _updating ? null : () => _changeStatus(item),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: _officialHeaderStart,
+                            ),
+                            icon: const Icon(Icons.edit_note_rounded),
+                            label: Text(_updating ? 'Updating...' : 'Update Status'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _OfficialFeedbackQuickSheet extends StatelessWidget {
   const _OfficialFeedbackQuickSheet();
 
@@ -707,75 +1027,193 @@ class _ServiceAction {
 }
 
 const _brgyServices = [
-  _ServiceAction('Assistance', Icons.volunteer_activism, AssistancePage()),
-  _ServiceAction('BPAT', Icons.shield, BpatPage()),
-  _ServiceAction('Clearance', Icons.description, ClearancePage()),
+  _ServiceAction('Requests', Icons.assignment_rounded, OfficialRequestsInboxPage()),
+  _ServiceAction(
+    'Assistance',
+    Icons.volunteer_activism,
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Assistance',
+      pageTitle: 'Assistance Requests',
+    ),
+  ),
+  _ServiceAction(
+    'BPAT',
+    Icons.shield,
+    OfficialRequestsInboxPage(
+      serviceCategory: 'BPAT',
+      pageTitle: 'BPAT Requests',
+    ),
+  ),
+  _ServiceAction(
+    'Clearance',
+    Icons.description,
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Clearance',
+      pageTitle: 'Clearance Requests',
+    ),
+  ),
   _ServiceAction(
     'Council',
     Icons.groups,
-    OfficialBarangayProfilePage(initialTabIndex: 2),
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Council',
+      pageTitle: 'Council Requests',
+    ),
   ),
-  _ServiceAction('Disclosure', Icons.table_chart, DisclosureBoardPage()),
+  _ServiceAction(
+    'Disclosure',
+    Icons.table_chart,
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Disclosure',
+      pageTitle: 'Disclosure Requests',
+    ),
+  ),
   _ServiceAction(
     'Education',
     Icons.menu_book,
-    SimpleSerbilisPage(title: 'Education', isOfficial: true),
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Education',
+      pageTitle: 'Education Requests',
+    ),
   ),
   _ServiceAction(
     'Provincial Govt',
     Icons.apartment_rounded,
-    GovAgenciesPage(),
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Provincial Gov',
+      pageTitle: 'Provincial Gov Requests',
+    ),
   ),
   _ServiceAction(
     'Gov Agencies',
     Icons.account_balance,
-    const OfficialGovAgenciesPage(),
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Gov Agencies',
+      pageTitle: 'Gov Agencies Requests',
+    ),
   ),
-  _ServiceAction('Health', Icons.health_and_safety, HealthPage()),
-  _ServiceAction('Lupon', Icons.gavel_rounded, KatarungangPambarangayPage()),
+  _ServiceAction(
+    'Health',
+    Icons.health_and_safety,
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Health',
+      pageTitle: 'Health Requests',
+    ),
+  ),
+  _ServiceAction(
+    'Lupon',
+    Icons.gavel_rounded,
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Council',
+      pageTitle: 'Lupon Requests',
+    ),
+  ),
   _ServiceAction(
     'Other Barangay',
     Icons.travel_explore,
-    SimpleSerbilisPage(title: 'Other Barangay', isOfficial: true),
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Other Barangay',
+      pageTitle: 'Other Barangay Requests',
+    ),
   ),
   _ServiceAction(
     'Police',
     Icons.local_police,
-    SimpleSerbilisPage(title: 'Police', isOfficial: true),
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Police',
+      pageTitle: 'Police Requests',
+    ),
   ),
-  _ServiceAction('QR ID', Icons.qr_code_scanner, ScanQrPage()),
-  _ServiceAction('RBI', Icons.badge, ResidentRbiCardPage()),
-  _ServiceAction('Responder', Icons.local_shipping, ResponderPage()),
+  _ServiceAction(
+    'QR ID',
+    Icons.qr_code_scanner,
+    OfficialRequestsInboxPage(
+      serviceCategory: 'QR ID',
+      pageTitle: 'QR ID Requests',
+    ),
+  ),
+  _ServiceAction(
+    'RBI',
+    Icons.badge,
+    OfficialRequestsInboxPage(
+      serviceCategory: 'RBI',
+      pageTitle: 'RBI Requests',
+    ),
+  ),
+  _ServiceAction(
+    'Responder',
+    Icons.local_shipping,
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Responder',
+      pageTitle: 'Responder Requests',
+    ),
+  ),
   _ServiceAction(
     'Special Docs',
     Icons.stars,
-    SimpleSerbilisPage(title: 'Special Docs', isOfficial: true),
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Special Docs',
+      pageTitle: 'Special Docs Requests',
+    ),
   ),
-  _ServiceAction('Community', Icons.forum, CommunityPage()),
+  _ServiceAction(
+    'Community',
+    Icons.forum,
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Community',
+      pageTitle: 'Community Requests',
+    ),
+  ),
 ];
 
 const _skServices = [
-  _ServiceAction('Community', Icons.hub, CommunityPage()),
+  _ServiceAction(
+    'Community',
+    Icons.hub,
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Community',
+      pageTitle: 'Community Requests',
+    ),
+  ),
   _ServiceAction(
     'Education',
     Icons.school,
-    SimpleSerbilisPage(title: 'SK Education', isOfficial: true),
+    OfficialRequestsInboxPage(
+      serviceCategory: 'SK Education',
+      pageTitle: 'SK Education Requests',
+    ),
   ),
   _ServiceAction(
     'Officials',
     Icons.groups_2,
-    OfficialBarangayProfilePage(initialTabIndex: 2),
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Officials',
+      pageTitle: 'Officials Requests',
+    ),
   ),
   _ServiceAction(
     'Programs',
     Icons.assignment,
-    SimpleSerbilisPage(title: 'Programs', isOfficial: true),
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Programs',
+      pageTitle: 'Programs Requests',
+    ),
   ),
-  _ServiceAction('Scholarship', Icons.card_giftcard, AssistancePage()),
+  _ServiceAction(
+    'Scholarship',
+    Icons.card_giftcard,
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Scholarship',
+      pageTitle: 'Scholarship Requests',
+    ),
+  ),
   _ServiceAction(
     'Sports',
     Icons.sports_basketball,
-    SimpleSerbilisPage(title: 'Sports', isOfficial: true),
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Sports',
+      pageTitle: 'Sports Requests',
+    ),
   ),
 ];
 

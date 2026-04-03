@@ -1189,6 +1189,18 @@ class _ServiceRequestSubmitResult {
   });
 }
 
+class _ServiceRequestStatusUpdateResult {
+  final bool success;
+  final String message;
+  final _ResidentRequestEntry? entry;
+
+  const _ServiceRequestStatusUpdateResult({
+    required this.success,
+    required this.message,
+    this.entry,
+  });
+}
+
 class _ServiceRequestAttachmentPayload {
   final String fileName;
   final String imageBase64;
@@ -1395,6 +1407,90 @@ class _ServiceRequestApi {
     );
   }
 
+  Future<_ServiceRequestStatusUpdateResult> updateRequestStatus({
+    required int serviceRequestId,
+    required String status,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _ServiceRequestStatusUpdateResult(
+        success: false,
+        message: 'Please log in again before updating request status.',
+      );
+    }
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    final payload = jsonEncode({'status': status.trim()});
+    final paths = <String>[
+      'services/requests/$serviceRequestId/status',
+      'requests/$serviceRequestId/status',
+    ];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http
+              .patch(
+                endpoint,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $_authToken',
+                },
+                body: payload,
+              )
+              .timeout(_requestTimeout);
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          final body = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final raw = body['request'] ?? body['data'];
+            final mapped = raw is Map<String, dynamic> ? _mapRequest(raw) : null;
+            return _ServiceRequestStatusUpdateResult(
+              success: true,
+              message: _extractApiMessage(
+                body,
+                fallback: 'Service request status updated.',
+              ),
+              entry: mapped,
+            );
+          }
+          return _ServiceRequestStatusUpdateResult(
+            success: false,
+            message: _extractApiMessage(
+              body,
+              fallback: 'Unable to update request status.',
+            ),
+          );
+        } on TimeoutException {
+          sawTimeout = true;
+        } catch (_) {
+          sawConnectionError = true;
+        }
+      }
+    }
+
+    if (sawTimeout) {
+      return const _ServiceRequestStatusUpdateResult(
+        success: false,
+        message: 'Updating request status timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _ServiceRequestStatusUpdateResult(
+        success: false,
+        message: 'Cannot connect to server to update request status.',
+      );
+    }
+    return const _ServiceRequestStatusUpdateResult(
+      success: false,
+      message: 'Request status endpoint is not available yet.',
+    );
+  }
+
   _ResidentRequestEntry? _mapRequest(Map<String, dynamic> raw) {
     String read(String key, {String fallback = ''}) {
       final value = raw[key];
@@ -1416,7 +1512,8 @@ class _ServiceRequestApi {
     final submittedAtRaw = read('submitted_at', fallback: read('created_at'));
     DateTime submittedAt = DateTime.now();
     if (submittedAtRaw.isNotEmpty) {
-      submittedAt = DateTime.tryParse(submittedAtRaw) ?? submittedAt;
+      submittedAt =
+          DateTime.tryParse(submittedAtRaw)?.toLocal() ?? submittedAt;
     }
     final monthNames = const [
       'Jan',
@@ -1435,12 +1532,16 @@ class _ServiceRequestApi {
     final dateText =
         '${monthNames[submittedAt.month - 1]} ${submittedAt.day}, ${submittedAt.year}';
     return _ResidentRequestEntry(
+      id: int.tryParse(read('id')) ?? 0,
       category: read('service_category', fallback: 'General'),
       title: title,
       requestId: read('request_id', fallback: read('id', fallback: 'REQ')),
       status: read('status', fallback: 'Pending'),
       purpose: read('purpose', fallback: read('details')),
       date: dateText,
+      requesterName: read('requester_name'),
+      requesterMobile: read('requester_mobile'),
+      submittedAt: submittedAt,
     );
   }
 
@@ -1471,19 +1572,27 @@ class _ServiceRequestApi {
 }
 
 class _ResidentRequestEntry {
+  final int id;
   final String category;
   final String title;
   final String requestId;
   final String status;
   final String purpose;
   final String date;
+  final String requesterName;
+  final String requesterMobile;
+  final DateTime? submittedAt;
   const _ResidentRequestEntry({
+    this.id = 0,
     required this.category,
     required this.title,
     required this.requestId,
     required this.status,
     required this.purpose,
     required this.date,
+    this.requesterName = '',
+    this.requesterMobile = '',
+    this.submittedAt,
   });
 }
 
@@ -1514,6 +1623,9 @@ class _ResidentServiceCategoryRequestPageState
   final _attachments = <_ResidentServiceAttachmentValue>[];
   bool _loading = true;
   bool _submitting = false;
+
+  bool get _isResponderService =>
+      widget.serviceCategory.trim().toLowerCase() == 'responder';
 
   @override
   void initState() {
@@ -1702,6 +1814,20 @@ class _ResidentServiceCategoryRequestPageState
                 ],
               ),
             ),
+            if (_isResponderService) ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const EmergencyLocationSharePage(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.my_location_rounded),
+                label: const Text('Open Share Live Location'),
+              ),
+            ],
             const SizedBox(height: 10),
             TextField(
               controller: _purposeController,

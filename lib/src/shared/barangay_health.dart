@@ -1660,8 +1660,22 @@ class _FirstAidGuideDetailPage extends StatelessWidget {
   }
 }
 
-class EmergencyResponderDashboardPage extends StatelessWidget {
+class EmergencyResponderDashboardPage extends StatefulWidget {
   const EmergencyResponderDashboardPage({super.key});
+
+  @override
+  State<EmergencyResponderDashboardPage> createState() =>
+      _EmergencyResponderDashboardPageState();
+}
+
+class _EmergencyResponderDashboardPageState
+    extends State<EmergencyResponderDashboardPage> {
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_syncEmergencyOpsData(force: true));
+    unawaited(_syncEmergencySharedLocationFeed(force: true));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1677,48 +1691,61 @@ class EmergencyResponderDashboardPage extends StatelessWidget {
           return ValueListenableBuilder<_EmergencySharedLocation?>(
             valueListenable: _emergencyOpsStore.sharedLocation,
             builder: (_, sharedLocation, __) {
-              final activeIncidents = incidents
-                  .where((incident) => incident.status != 'Resolved')
-                  .toList();
-              final patrols = _emergencyOpsStore.patrolRequests.value;
-              final tanods = _emergencyOpsStore.tanods.value;
-              final markers = <Marker>[
-                for (final incident in activeIncidents)
-                  Marker(
-                    point: incident.point,
-                    width: 42,
-                    height: 42,
-                    child: Icon(
-                      incident.type == 'Fire'
-                          ? Icons.local_fire_department_rounded
-                          : incident.type == 'Medical'
-                              ? Icons.health_and_safety_rounded
-                              : Icons.report_gmailerrorred_rounded,
-                      color: _incidentTypeColor(incident.type),
-                    ),
-                  ),
-                if (sharedLocation != null)
-                  Marker(
-                    point: sharedLocation.point,
-                    width: 44,
-                    height: 44,
-                    child: const Icon(
-                      Icons.my_location_rounded,
-                      color: Color(0xFF2E35D3),
-                    ),
-                  ),
-              ];
-              return ListView(
-                padding: const EdgeInsets.all(12),
-                children: [
+              return ValueListenableBuilder<List<_EmergencySharedLocationFeedEntry>>(
+                valueListenable: _emergencyOpsStore.sharedLocationFeed,
+                builder: (_, sharedFeed, __) {
+                  final activeIncidents = incidents
+                      .where((incident) => incident.status != 'Resolved')
+                      .toList();
+                  final markers = <Marker>[
+                    for (final incident in activeIncidents)
+                      Marker(
+                        point: incident.point,
+                        width: 42,
+                        height: 42,
+                        child: Icon(
+                          incident.type == 'Fire'
+                              ? Icons.local_fire_department_rounded
+                              : incident.type == 'Medical'
+                                  ? Icons.health_and_safety_rounded
+                                  : Icons.report_gmailerrorred_rounded,
+                          color: _incidentTypeColor(incident.type),
+                        ),
+                      ),
+                    for (final feed in sharedFeed.take(20))
+                      Marker(
+                        point: feed.point,
+                        width: 44,
+                        height: 44,
+                        child: const Icon(
+                          Icons.my_location_rounded,
+                          color: Color(0xFF2E35D3),
+                        ),
+                      ),
+                    if (sharedFeed.isEmpty && sharedLocation != null)
+                      Marker(
+                        point: sharedLocation.point,
+                        width: 44,
+                        height: 44,
+                        child: const Icon(
+                          Icons.my_location_rounded,
+                          color: Color(0xFF2E35D3),
+                        ),
+                      ),
+                  ];
+                  final initialCenter = sharedFeed.isNotEmpty
+                      ? sharedFeed.first.point
+                      : (sharedLocation?.point ?? _defaultEmergencyPoint());
+                  return ListView(
+                    padding: const EdgeInsets.all(12),
+                    children: [
                   SizedBox(
                     height: 240,
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(20),
                       child: FlutterMap(
                         options: MapOptions(
-                          initialCenter:
-                              sharedLocation?.point ?? _defaultEmergencyPoint(),
+                          initialCenter: initialCenter,
                           initialZoom: 14.7,
                         ),
                         children: [
@@ -1733,6 +1760,50 @@ class EmergencyResponderDashboardPage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
+                  _sectionTitle('Live Shared Locations'),
+                  const SizedBox(height: 8),
+                  if (sharedFeed.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFFE5E7F3)),
+                      ),
+                      child: const Text(
+                        'No resident has shared live location yet.',
+                        style: TextStyle(
+                          color: Color(0xFF646A84),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ...sharedFeed.take(5).map(
+                    (entry) => Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFFE5E7F3)),
+                      ),
+                      child: ListTile(
+                        leading: const Icon(
+                          Icons.my_location_rounded,
+                          color: Color(0xFF2E35D3),
+                        ),
+                        title: Text(
+                          entry.residentName,
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        subtitle: Text(
+                          '${entry.address}\n${entry.residentMobile.isEmpty ? "No mobile" : entry.residentMobile} • ${_formatEmergencyDateTime(entry.updatedAt)}',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        isThreeLine: true,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   if (sharedLocation != null)
                     Container(
                       padding: const EdgeInsets.all(14),
@@ -1784,71 +1855,9 @@ class EmergencyResponderDashboardPage extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  _sectionTitle('Patrol Queue'),
-                  const SizedBox(height: 8),
-                  ...patrols.take(2).map(
-                    (item) => Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE5E7F3)),
-                      ),
-                      child: ListTile(
-                        leading: const Icon(
-                          Icons.directions_walk_rounded,
-                          color: Color(0xFF8E4E45),
-                        ),
-                        title: Text(
-                          item.location,
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                        subtitle: Text(
-                          '${item.reason}\n${_formatEmergencyDateTime(item.scheduledAt)}',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  _sectionTitle('Tanod Status'),
-                  const SizedBox(height: 8),
-                  ...tanods.take(3).map(
-                    (tanod) => Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE5E7F3)),
-                      ),
-                      child: ListTile(
-                        leading: Icon(
-                          tanod.online
-                              ? Icons.check_circle_rounded
-                              : Icons.remove_circle_rounded,
-                          color: tanod.online
-                              ? const Color(0xFF2D8A57)
-                              : const Color(0xFF9A2E2E),
-                        ),
-                        title: Text(
-                          tanod.name,
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                        subtitle: Text(
-                          '${tanod.zone} • ${tanod.assignment}',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        trailing: _EmergencyStatusPill(
-                          label: tanod.online ? 'Online' : 'Offline',
-                          color: tanod.online
-                              ? const Color(0xFF2D8A57)
-                              : const Color(0xFF9A2E2E),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                    ],
+                  );
+                },
               );
             },
           );
@@ -2000,6 +2009,9 @@ class _EmergencyLocationSharePageState
     extends State<EmergencyLocationSharePage> {
   bool _includeLandmark = true;
   bool _highAccuracy = true;
+  bool _loading = true;
+  bool _resolvingCurrentLocation = false;
+  bool _sharing = false;
   late final TextEditingController _addressController;
   LatLng _currentPoint = _defaultEmergencyPoint();
 
@@ -2015,6 +2027,7 @@ class _EmergencyLocationSharePageState
     );
     _includeLandmark = shared?.includeLandmark ?? true;
     _highAccuracy = shared?.highAccuracy ?? true;
+    _loadLatestFromApi();
   }
 
   @override
@@ -2023,13 +2036,139 @@ class _EmergencyLocationSharePageState
     super.dispose();
   }
 
-  void _refreshMockLocation() {
-    setState(() {
-      _currentPoint = LatLng(
-        double.parse((_currentPoint.latitude + 0.0002).toStringAsFixed(6)),
-        double.parse((_currentPoint.longitude - 0.0002).toStringAsFixed(6)),
-      );
-    });
+  Future<void> _refreshCurrentLocation() async {
+    if (_resolvingCurrentLocation) return;
+    setState(() => _resolvingCurrentLocation = true);
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showFeature(
+          context,
+          'Location service is off. Turn on GPS/location first.',
+        );
+        return;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever) {
+        _showFeature(
+          context,
+          'Location permission is permanently denied. Enable it in app settings.',
+        );
+        return;
+      }
+      if (permission == LocationPermission.denied) {
+        _showFeature(
+          context,
+          'Location permission is required to refresh current pin.',
+        );
+        return;
+      }
+
+      Position? position;
+      try {
+        position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: _highAccuracy
+              ? LocationAccuracy.bestForNavigation
+              : LocationAccuracy.medium,
+          timeLimit: const Duration(seconds: 12),
+        );
+      } on TimeoutException {
+        position = await Geolocator.getLastKnownPosition();
+      }
+
+      if (position == null) {
+        _showFeature(
+          context,
+          'No GPS fix yet. If using emulator: open Extended controls > Location and set a pin.',
+        );
+        return;
+      }
+
+      final lat = double.parse(position.latitude.toStringAsFixed(6));
+      final lng = double.parse(position.longitude.toStringAsFixed(6));
+      final point = LatLng(lat, lng);
+
+      String resolvedAddress = _addressController.text.trim();
+      try {
+        final placemarks = await placemarkFromCoordinates(lat, lng);
+        if (placemarks.isNotEmpty) {
+          final place = placemarks.first;
+          final parts = <String>[
+            if ((place.subLocality ?? '').trim().isNotEmpty)
+              place.subLocality!.trim(),
+            if ((place.locality ?? '').trim().isNotEmpty) place.locality!.trim(),
+            if ((place.administrativeArea ?? '').trim().isNotEmpty)
+              place.administrativeArea!.trim(),
+          ];
+          if (parts.isNotEmpty) {
+            resolvedAddress = parts.join(', ');
+          }
+        }
+      } catch (_) {}
+
+      if (!mounted) return;
+      setState(() => _currentPoint = point);
+      _addressController.text = resolvedAddress.isEmpty
+          ? '${lat.toStringAsFixed(6)}, ${lng.toStringAsFixed(6)}'
+          : resolvedAddress;
+      _showFeature(context, 'Current location loaded.');
+    } catch (error) {
+      _showFeature(context, 'Unable to get current location. $error');
+    } finally {
+      if (mounted) {
+        setState(() => _resolvingCurrentLocation = false);
+      }
+    }
+  }
+
+  Future<void> _loadLatestFromApi() async {
+    final result = await _EmergencyLiveLocationApi.instance.fetchLatest();
+    if (!mounted) return;
+    if (result.success && result.location != null) {
+      final location = result.location!;
+      setState(() {
+        _currentPoint = location.point;
+        _highAccuracy = location.highAccuracy;
+        _includeLandmark = location.includeLandmark;
+      });
+      _addressController.text = location.address;
+    }
+    setState(() => _loading = false);
+    if (result.location == null) {
+      _refreshCurrentLocation();
+    }
+  }
+
+  Future<void> _submitShare() async {
+    if (_sharing) return;
+    final address = _addressController.text.trim().isEmpty
+        ? 'Pinned location'
+        : _addressController.text.trim();
+    setState(() => _sharing = true);
+    final result = await _EmergencyLiveLocationApi.instance.share(
+      point: _currentPoint,
+      address: address,
+      highAccuracy: _highAccuracy,
+      includeLandmark: _includeLandmark,
+    );
+    if (!mounted) return;
+    setState(() => _sharing = false);
+    if (!result.success) {
+      _showFeature(context, result.message);
+      return;
+    }
+    final location = result.location;
+    _emergencyOpsStore.shareLocation(
+      point: location?.point ?? _currentPoint,
+      address: location?.address ?? address,
+      highAccuracy: location?.highAccuracy ?? _highAccuracy,
+      includeLandmark: location?.includeLandmark ?? _includeLandmark,
+    );
+    _showFeature(context, result.message);
   }
 
   @override
@@ -2040,7 +2179,9 @@ class _EmergencyLocationSharePageState
         backgroundColor: const Color(0xFFD70000),
         foregroundColor: Colors.white,
       ),
-      body: ListView(
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
         padding: const EdgeInsets.all(12),
         children: [
           Container(
@@ -2094,9 +2235,11 @@ class _EmergencyLocationSharePageState
           ),
           const SizedBox(height: 10),
           OutlinedButton.icon(
-            onPressed: _refreshMockLocation,
+            onPressed: _resolvingCurrentLocation ? null : _refreshCurrentLocation,
             icon: const Icon(Icons.gps_fixed_outlined),
-            label: const Text('Refresh Current Pin'),
+            label: Text(
+              _resolvingCurrentLocation ? 'Locating...' : 'Refresh Current Pin',
+            ),
           ),
           const SizedBox(height: 10),
           TextField(
@@ -2121,22 +2264,21 @@ class _EmergencyLocationSharePageState
           ),
           const SizedBox(height: 6),
           FilledButton.icon(
-            onPressed: () {
-              _emergencyOpsStore.shareLocation(
-                point: _currentPoint,
-                address: _addressController.text.trim().isEmpty
-                    ? 'Pinned location'
-                    : _addressController.text.trim(),
-                highAccuracy: _highAccuracy,
-                includeLandmark: _includeLandmark,
-              );
-              _showFeature(context, 'Location shared to responders. Ref: LOC-26-001');
-            },
+            onPressed: _sharing ? null : _submitShare,
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFF2E35D3),
             ),
-            icon: const Icon(Icons.send),
-            label: const Text('Share Location'),
+            icon: _sharing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.send),
+            label: Text(_sharing ? 'Sharing...' : 'Share Location'),
           ),
         ],
       ),

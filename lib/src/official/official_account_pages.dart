@@ -239,6 +239,16 @@ class _OfficialSettingsPageState extends State<OfficialSettingsPage> {
                           ),
                         ),
                         _settingsRow(
+                          icon: Icons.local_phone_outlined,
+                          title: 'Emergency Contacts',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const OfficialEmergencyContactsPage(),
+                            ),
+                          ),
+                        ),
+                        _settingsRow(
                           icon: Icons.lock_outline_rounded,
                           title: 'Secure Settings',
                           highlight: true,
@@ -373,6 +383,353 @@ class _OfficialSettingsPageState extends State<OfficialSettingsPage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class OfficialEmergencyContactsPage extends StatefulWidget {
+  const OfficialEmergencyContactsPage({super.key});
+
+  @override
+  State<OfficialEmergencyContactsPage> createState() =>
+      _OfficialEmergencyContactsPageState();
+}
+
+class _OfficialEmergencyContactsPageState
+    extends State<OfficialEmergencyContactsPage> {
+  bool _loading = true;
+  List<_EmergencyContactItem> _items = const <_EmergencyContactItem>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
+  Future<void> _reload() async {
+    if (!mounted) return;
+    setState(() => _loading = true);
+    await _syncEmergencyContacts(force: true);
+    final items = [..._emergencyContacts.value]
+      ..sort((a, b) {
+        final bySort = a.sortOrder.compareTo(b.sortOrder);
+        if (bySort != 0) return bySort;
+        return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+      });
+    if (!mounted) return;
+    setState(() {
+      _items = items;
+      _loading = false;
+    });
+  }
+
+  void _toast(String text, {bool success = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text),
+        backgroundColor: success
+            ? const Color(0xFF1C8C4B)
+            : const Color(0xFFC0392B),
+      ),
+    );
+  }
+
+  Future<void> _createOrEdit({_EmergencyContactItem? existing}) async {
+    final result = await showDialog<_EmergencyContactFormData>(
+      context: context,
+      builder: (_) => _EmergencyContactEditorDialog(existing: existing),
+    );
+    if (result == null) return;
+    final response = existing == null
+        ? await _EmergencyContactsApi.instance.createContact(
+            label: result.label,
+            phoneNumber: result.phoneNumber,
+            description: result.description,
+            quickDial: result.quickDial,
+            sortOrder: result.sortOrder,
+          )
+        : await _EmergencyContactsApi.instance.updateContact(
+            contactId: existing.id,
+            label: result.label,
+            phoneNumber: result.phoneNumber,
+            description: result.description,
+            quickDial: result.quickDial,
+            sortOrder: result.sortOrder,
+          );
+    _toast(response.message, success: response.success);
+    if (!response.success) return;
+    await _reload();
+  }
+
+  Future<void> _delete(_EmergencyContactItem item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete contact?'),
+        content: Text('Remove ${item.label} from emergency contacts?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final result = await _EmergencyContactsApi.instance.deleteContact(item.id);
+    _toast(result.message, success: result.success);
+    if (!result.success) return;
+    await _reload();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F5F9),
+      appBar: AppBar(
+        title: const Text('Emergency Contacts'),
+        backgroundColor: Colors.white,
+        foregroundColor: _officialText,
+        elevation: 0,
+        actions: [
+          IconButton(
+            onPressed: _reload,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _createOrEdit,
+        backgroundColor: const Color(0xFFD32A2A),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('Add Contact'),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _items.isEmpty
+          ? Center(
+              child: Container(
+                width: 300,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE5E7F3)),
+                ),
+                child: const Text(
+                  'No emergency contacts yet.\nTap Add Contact to create one.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFF646B84),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 92),
+              itemBuilder: (_, index) {
+                final item = _items[index];
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE5E7F3)),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+                    leading: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF4F6FD),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        _emergencyIconForLabel(item.label),
+                        color: const Color(0xFF59607A),
+                      ),
+                    ),
+                    title: Text(
+                      item.label,
+                      style: const TextStyle(
+                        color: Color(0xFF2D3348),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text(
+                        '${item.phoneNumber} | ${item.description}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF646B84),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    trailing: Wrap(
+                      spacing: 4,
+                      children: [
+                        if (item.quickDial)
+                          const Chip(
+                            visualDensity: VisualDensity.compact,
+                            label: Text('Quick'),
+                          ),
+                        IconButton(
+                          tooltip: 'Edit',
+                          onPressed: () =>
+                            _createOrEdit(existing: item),
+                          icon: const Icon(Icons.edit_outlined),
+                        ),
+                        IconButton(
+                          tooltip: 'Delete',
+                          onPressed: () => _delete(item),
+                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemCount: _items.length,
+            ),
+    );
+  }
+}
+
+class _EmergencyContactFormData {
+  final String label;
+  final String phoneNumber;
+  final String description;
+  final bool quickDial;
+  final int sortOrder;
+
+  const _EmergencyContactFormData({
+    required this.label,
+    required this.phoneNumber,
+    required this.description,
+    required this.quickDial,
+    required this.sortOrder,
+  });
+}
+
+class _EmergencyContactEditorDialog extends StatefulWidget {
+  final _EmergencyContactItem? existing;
+  const _EmergencyContactEditorDialog({this.existing});
+
+  @override
+  State<_EmergencyContactEditorDialog> createState() =>
+      _EmergencyContactEditorDialogState();
+}
+
+class _EmergencyContactEditorDialogState
+    extends State<_EmergencyContactEditorDialog> {
+  late final TextEditingController _labelController;
+  late final TextEditingController _numberController;
+  late final TextEditingController _descriptionController;
+  late final TextEditingController _sortController;
+  late bool _quickDial;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existing;
+    _labelController = TextEditingController(text: existing?.label ?? '');
+    _numberController = TextEditingController(text: existing?.phoneNumber ?? '');
+    _descriptionController = TextEditingController(
+      text: existing?.description ?? '',
+    );
+    _sortController = TextEditingController(
+      text: '${existing?.sortOrder ?? 0}',
+    );
+    _quickDial = existing?.quickDial ?? false;
+  }
+
+  @override
+  void dispose() {
+    _labelController.dispose();
+    _numberController.dispose();
+    _descriptionController.dispose();
+    _sortController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final label = _labelController.text.trim();
+    final number = _numberController.text.trim();
+    final description = _descriptionController.text.trim();
+    final sortOrder = int.tryParse(_sortController.text.trim()) ?? 0;
+    if (label.isEmpty || number.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter contact name and number.')),
+      );
+      return;
+    }
+    Navigator.pop(
+      context,
+      _EmergencyContactFormData(
+        label: label,
+        phoneNumber: number,
+        description: description,
+        quickDial: _quickDial,
+        sortOrder: sortOrder,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.existing == null ? 'Add Contact' : 'Edit Contact'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _labelController,
+              decoration: const InputDecoration(labelText: 'Label'),
+            ),
+            TextField(
+              controller: _numberController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(labelText: 'Phone Number'),
+            ),
+            TextField(
+              controller: _descriptionController,
+              decoration: const InputDecoration(labelText: 'Description'),
+            ),
+            TextField(
+              controller: _sortController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Sort Order'),
+            ),
+            const SizedBox(height: 8),
+            SwitchListTile.adaptive(
+              value: _quickDial,
+              onChanged: (v) => setState(() => _quickDial = v),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Show in Quick Dial'),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Save')),
+      ],
     );
   }
 }
