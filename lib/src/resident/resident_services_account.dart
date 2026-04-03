@@ -1511,6 +1511,7 @@ class _ResidentServiceCategoryRequestPageState
   final _purposeController = TextEditingController();
   final _detailsController = TextEditingController();
   final _history = <_ResidentRequestEntry>[];
+  final _attachments = <_ResidentServiceAttachmentValue>[];
   bool _loading = true;
   bool _submitting = false;
 
@@ -1525,6 +1526,32 @@ class _ResidentServiceCategoryRequestPageState
     _purposeController.dispose();
     _detailsController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickAttachment() async {
+    final image = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 72,
+    );
+    if (image == null || !mounted) {
+      return;
+    }
+    final bytes = await image.readAsBytes();
+    if (bytes.isEmpty) {
+      _showFeature(
+        context,
+        'Selected image is invalid.',
+        tone: _ToastTone.warning,
+      );
+      return;
+    }
+    setState(() {
+      _attachments.add(
+        _ResidentServiceAttachmentValue(fileName: image.name, bytes: bytes),
+      );
+    });
   }
 
   Future<void> _loadHistory() async {
@@ -1568,11 +1595,27 @@ class _ResidentServiceCategoryRequestPageState
     }
 
     setState(() => _submitting = true);
+    final attachmentPayload = _attachments
+        .map(
+          (item) => _ServiceRequestAttachmentPayload(
+            fileName: item.fileName,
+            imageBase64: base64Encode(item.bytes),
+          ),
+        )
+        .toList();
+    final detailsText = _detailsController.text.trim();
+    final detailsWithAttachments = [
+      if (detailsText.isNotEmpty) detailsText,
+      if (_attachments.isNotEmpty) 'Attachments:',
+      ..._attachments.map((item) => '- ${item.fileName}'),
+    ].join('\n');
+
     final result = await _ServiceRequestApi.instance.submitRequest(
       serviceCategory: widget.serviceCategory,
       serviceTitle: widget.serviceTitle,
       purpose: purpose,
-      details: _detailsController.text.trim(),
+      details: detailsWithAttachments,
+      attachments: attachmentPayload,
     );
     if (!mounted) {
       return;
@@ -1584,6 +1627,7 @@ class _ResidentServiceCategoryRequestPageState
       }
       _purposeController.clear();
       _detailsController.clear();
+      _attachments.clear();
       _showFeature(context, result.message, tone: _ToastTone.success);
       setState(() {});
       return;
@@ -1674,6 +1718,66 @@ class _ResidentServiceCategoryRequestPageState
               decoration: const InputDecoration(
                 labelText: 'Details',
                 border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE4E7F4)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.attach_file_rounded,
+                        size: 18,
+                        color: Color(0xFF4D59BF),
+                      ),
+                      const SizedBox(width: 6),
+                      const Expanded(
+                        child: Text(
+                          'Attachments',
+                          style: TextStyle(
+                            color: Color(0xFF2F334A),
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: _pickAttachment,
+                        icon: const Icon(Icons.image_outlined, size: 18),
+                        label: const Text('Upload'),
+                      ),
+                    ],
+                  ),
+                  if (_attachments.isEmpty)
+                    const Text(
+                      'No image attached yet.',
+                      style: TextStyle(
+                        color: Color(0xFF676D88),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    )
+                  else
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: List.generate(_attachments.length, (index) {
+                        final item = _attachments[index];
+                        return Chip(
+                          label: Text(item.fileName),
+                          onDeleted: () {
+                            setState(() => _attachments.removeAt(index));
+                          },
+                        );
+                      }),
+                    ),
+                ],
               ),
             ),
             const SizedBox(height: 10),
@@ -1783,6 +1887,16 @@ class _ResidentServiceCategoryRequestPageState
       ),
     );
   }
+}
+
+class _ResidentServiceAttachmentValue {
+  final String fileName;
+  final Uint8List bytes;
+
+  const _ResidentServiceAttachmentValue({
+    required this.fileName,
+    required this.bytes,
+  });
 }
 
 class ResidentServicesPage extends StatelessWidget {
