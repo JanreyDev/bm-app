@@ -2514,7 +2514,12 @@ class _AssistanceRequestPageState extends State<AssistanceRequestPage> {
   Future<void> _pickAttachment(
     ValueChanged<_AssistanceAttachmentValue> onPicked,
   ) async {
-    final image = await ImagePicker().pickImage(source: ImageSource.gallery);
+    final image = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 72,
+    );
     if (image == null) {
       return;
     }
@@ -2592,12 +2597,36 @@ class _AssistanceRequestPageState extends State<AssistanceRequestPage> {
         'Grade Attachment: ${_gradeAttachment!.fileName}',
     ].join('\n');
 
+    final attachments = <_ServiceRequestAttachmentPayload>[
+      if (_hospitalBillAttachment != null)
+        _ServiceRequestAttachmentPayload(
+          fileName: _hospitalBillAttachment!.fileName,
+          imageBase64: base64Encode(_hospitalBillAttachment!.bytes),
+        ),
+      if (_prescriptionAttachment != null)
+        _ServiceRequestAttachmentPayload(
+          fileName: _prescriptionAttachment!.fileName,
+          imageBase64: base64Encode(_prescriptionAttachment!.bytes),
+        ),
+      if (_deathCertificateAttachment != null)
+        _ServiceRequestAttachmentPayload(
+          fileName: _deathCertificateAttachment!.fileName,
+          imageBase64: base64Encode(_deathCertificateAttachment!.bytes),
+        ),
+      if (_gradeAttachment != null)
+        _ServiceRequestAttachmentPayload(
+          fileName: _gradeAttachment!.fileName,
+          imageBase64: base64Encode(_gradeAttachment!.bytes),
+        ),
+    ];
+
     setState(() => _submitting = true);
     final result = await _ServiceRequestApi.instance.submitRequest(
       serviceCategory: 'Assistance',
       serviceTitle: widget.assistanceType,
       purpose: detail.isEmpty ? widget.assistanceDescription : detail,
       details: notes,
+      attachments: attachments,
     );
     if (!mounted) {
       return;

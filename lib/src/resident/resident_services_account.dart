@@ -1189,6 +1189,16 @@ class _ServiceRequestSubmitResult {
   });
 }
 
+class _ServiceRequestAttachmentPayload {
+  final String fileName;
+  final String imageBase64;
+
+  const _ServiceRequestAttachmentPayload({
+    required this.fileName,
+    required this.imageBase64,
+  });
+}
+
 class _ServiceRequestApi {
   _ServiceRequestApi._();
   static final _ServiceRequestApi instance = _ServiceRequestApi._();
@@ -1286,6 +1296,7 @@ class _ServiceRequestApi {
     required String serviceTitle,
     required String purpose,
     String details = '',
+    List<_ServiceRequestAttachmentPayload> attachments = const [],
   }) async {
     if (_authToken == null || _authToken!.isEmpty) {
       return const _ServiceRequestSubmitResult(
@@ -1299,6 +1310,20 @@ class _ServiceRequestApi {
       'service_title': serviceTitle.trim(),
       'purpose': purpose.trim(),
       if (details.trim().isNotEmpty) 'details': details.trim(),
+      if (attachments.isNotEmpty)
+        'attachments': attachments
+            .where(
+              (item) =>
+                  item.fileName.trim().isNotEmpty &&
+                  item.imageBase64.trim().isNotEmpty,
+            )
+            .map(
+              (item) => {
+                'file_name': item.fileName.trim(),
+                'image_base64': item.imageBase64.trim(),
+              },
+            )
+            .toList(),
     });
 
     var sawTimeout = false;
