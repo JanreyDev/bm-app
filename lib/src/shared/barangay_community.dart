@@ -497,7 +497,11 @@ class _CommunityApi {
 
     var sawConnectionError = false;
     var sawTimeout = false;
-    for (final endpoint in _AuthApi.instance._endpointCandidates('community/posts')) {
+    final locationQuery = _communityLocationQuery();
+    final fetchPath = locationQuery.isEmpty
+        ? 'community/posts'
+        : 'community/posts$locationQuery';
+    for (final endpoint in _AuthApi.instance._endpointCandidates(fetchPath)) {
       try {
         final response = await http
             .get(
@@ -593,6 +597,15 @@ class _CommunityApi {
         message: 'Image is too large. Please choose a smaller image.',
       );
     }
+    final payload = <String, dynamic>{
+      'message': message,
+      if (imagePayload != null && imagePayload.isNotEmpty)
+        'image_base64': imagePayload,
+    };
+    final fallbackBarangay = _communityBarangayFallback();
+    if (fallbackBarangay.isNotEmpty) {
+      payload['barangay'] = fallbackBarangay;
+    }
     for (final endpoint in _AuthApi.instance._endpointCandidates('community/posts')) {
       try {
         final response = await http
@@ -603,11 +616,7 @@ class _CommunityApi {
                 'Accept': 'application/json',
                 'Authorization': 'Bearer $_authToken',
               },
-              body: jsonEncode({
-                'message': message,
-                if (imagePayload != null && imagePayload.isNotEmpty)
-                  'image_base64': imagePayload,
-              }),
+              body: jsonEncode(payload),
             )
             .timeout(_requestTimeout);
         final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
@@ -1098,7 +1107,11 @@ class _CommunityApi {
     final barangay = ((raw['barangay'] as String?) ?? '').trim();
     final official = parseBool(raw['is_official']);
     final canManage = parseBool(raw['can_manage']);
-    final imageBase64 = ((raw['image_base64'] as String?) ?? '').trim();
+    final imageBase64 = ((raw['image_base64'] as String?) ??
+            (raw['image'] as String?) ??
+            (raw['photo_base64'] as String?) ??
+            '')
+        .trim();
     final decodedImage = _decodeImageBase64(imageBase64);
     final rawLikesCount = raw['likes_count'];
     final likesCount = parseInt(rawLikesCount, fallback: parseInt(raw['likes']));
@@ -1147,6 +1160,24 @@ class _CommunityApi {
       commentEntries: commentEntries,
       commentCount: commentsCount,
     );
+  }
+
+  String _communityBarangayFallback() {
+    final officialBarangay = _officialEditableProfile.value.barangay.trim().isNotEmpty
+        ? _officialEditableProfile.value.barangay.trim()
+        : _officialBarangaySetup.barangay.trim();
+    if (officialBarangay.isNotEmpty) {
+      return officialBarangay;
+    }
+    return _currentResidentProfile?.barangay.trim() ?? '';
+  }
+
+  String _communityLocationQuery() {
+    final barangay = _communityBarangayFallback();
+    if (barangay.isEmpty) {
+      return '';
+    }
+    return '?barangay=${Uri.encodeQueryComponent(barangay)}';
   }
 
   String _extractApiMessage(

@@ -2524,15 +2524,14 @@ class _AuthApi {
       );
     }
 
-    if (response.statusCode == 404 &&
-        ((body['message'] as String?) ?? '')
-            .toLowerCase()
-            .contains('could not be found')) {
-      return const _AuthApiResult(
-        success: true,
-        message:
-            'Server activation endpoint is not available yet. Activation is saved on this device.',
-        activationCompleted: true,
+    if (response.statusCode == 404) {
+      return _AuthApiResult(
+        success: false,
+        message: _extractMessage(
+          body,
+          fallback:
+              'Activation endpoint is not available on the server yet. Please update/deploy the API first.',
+        ),
       );
     }
 

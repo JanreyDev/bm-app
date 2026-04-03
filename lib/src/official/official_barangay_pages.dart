@@ -35,6 +35,18 @@ class _OfficialBarangayProfilePageState
   late double _longitude;
   Uint8List? _logoBytes;
   bool _showSkCouncil = false;
+  bool get _isReadOnlyAfterActivation => _officialActivationCompleted;
+
+  bool _ensureEditable() {
+    if (!_isReadOnlyAfterActivation) {
+      return true;
+    }
+    _showFeature(
+      context,
+      'Read-only mode: barangay setup can only be edited during first activation.',
+    );
+    return false;
+  }
 
   LatLng get _mapCenter => LatLng(_latitude, _longitude);
 
@@ -120,6 +132,9 @@ class _OfficialBarangayProfilePageState
   ];
 
   Future<void> _editAddressDetails() async {
+    if (!_ensureEditable()) {
+      return;
+    }
     final pin = TextEditingController(text: _addressPin);
     final barangay = TextEditingController(text: _addressBarangay);
     final city = TextEditingController(text: _addressCity);
@@ -297,6 +312,9 @@ class _OfficialBarangayProfilePageState
   }
 
   void _reorderCouncilMember(int oldIndex, int newIndex) {
+    if (!_ensureEditable()) {
+      return;
+    }
     final list = _activeCouncilMembers;
     if (oldIndex < _fixedCouncilCount || newIndex < _fixedCouncilCount) {
       return;
@@ -311,6 +329,9 @@ class _OfficialBarangayProfilePageState
   }
 
   Future<void> _editCouncilMember({int? index}) async {
+    if (!_ensureEditable()) {
+      return;
+    }
     final list = _activeCouncilMembers;
     final isEdit = index != null;
     final current = isEdit ? list[index] : null;
@@ -946,7 +967,9 @@ class _OfficialBarangayProfilePageState
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: _editAddressDetails,
+                  onPressed: _isReadOnlyAfterActivation
+                      ? null
+                      : _editAddressDetails,
                   style: FilledButton.styleFrom(
                     backgroundColor: _officialHeaderStart,
                     foregroundColor: Colors.white,
@@ -973,7 +996,8 @@ class _OfficialBarangayProfilePageState
     required int index,
     required _CouncilMember member,
   }) {
-    final canReorder = index >= _fixedCouncilCount && !member.pinned;
+    final canReorder =
+        !_isReadOnlyAfterActivation && index >= _fixedCouncilCount && !member.pinned;
     return Container(
       key: ValueKey('${member.name}-${member.role}-$index'),
       margin: const EdgeInsets.only(bottom: 8),
@@ -1038,7 +1062,9 @@ class _OfficialBarangayProfilePageState
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  onPressed: () => _editCouncilMember(index: index),
+                  onPressed: _isReadOnlyAfterActivation
+                      ? null
+                      : () => _editCouncilMember(index: index),
                   icon: const Icon(Icons.edit_outlined, size: 18),
                   color: _profileIcon,
                 ),
@@ -1076,6 +1102,9 @@ class _OfficialBarangayProfilePageState
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () async {
+                        if (!_ensureEditable()) {
+                          return;
+                        }
                         final updated = await Navigator.push<bool>(
                           context,
                           MaterialPageRoute(
@@ -1102,6 +1131,9 @@ class _OfficialBarangayProfilePageState
                   Expanded(
                     child: FilledButton.icon(
                       onPressed: () async {
+                        if (!_ensureEditable()) {
+                          return;
+                        }
                         final updated = await Navigator.push<bool>(
                           context,
                           MaterialPageRoute(
@@ -1227,7 +1259,9 @@ class _OfficialBarangayProfilePageState
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: () => _editCouncilMember(),
+                  onPressed: _isReadOnlyAfterActivation
+                      ? null
+                      : () => _editCouncilMember(),
                   style: FilledButton.styleFrom(
                     backgroundColor: _officialHeaderStart,
                     foregroundColor: Colors.white,

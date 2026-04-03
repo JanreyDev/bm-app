@@ -214,6 +214,16 @@ class _OfficialSettingsPageState extends State<OfficialSettingsPage> {
                           ),
                         ),
                         _settingsRow(
+                          icon: Icons.location_city_outlined,
+                          title: 'Barangay Setup',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const OfficialBarangaySetupPage(),
+                            ),
+                          ),
+                        ),
+                        _settingsRow(
                           icon: Icons.lock_outline_rounded,
                           title: 'Secure Settings',
                           highlight: true,
@@ -955,6 +965,258 @@ class OfficialProfileSettingsPage extends StatefulWidget {
   @override
   State<OfficialProfileSettingsPage> createState() =>
       _OfficialProfileSettingsPageState();
+}
+
+class OfficialBarangaySetupPage extends StatefulWidget {
+  const OfficialBarangaySetupPage({super.key});
+
+  @override
+  State<OfficialBarangaySetupPage> createState() =>
+      _OfficialBarangaySetupPageState();
+}
+
+class _OfficialBarangaySetupPageState extends State<OfficialBarangaySetupPage> {
+  final _population = TextEditingController(
+    text: _officialBarangaySetup.population.toString(),
+  );
+  final _divisionCount = TextEditingController(
+    text: _officialBarangaySetup.divisionCount.toString(),
+  );
+  String _divisionType = _officialBarangaySetup.divisionType;
+  final _foundedYear = TextEditingController(
+    text: _officialBarangaySetup.foundingYear.toString(),
+  );
+  final _website = TextEditingController(text: _officialBarangaySetup.website);
+  final _facebook = TextEditingController(text: _officialBarangaySetup.facebook);
+  final _latitude = TextEditingController(
+    text: _formatCoordinateValue(_officialBarangaySetup.latitude),
+  );
+  final _longitude = TextEditingController(
+    text: _formatCoordinateValue(_officialBarangaySetup.longitude),
+  );
+  Uint8List? _logoBytes = _officialBarangaySetup.logoBytes;
+  String? _logoName = _officialBarangaySetup.logoFileName;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _population.dispose();
+    _divisionCount.dispose();
+    _foundedYear.dispose();
+    _website.dispose();
+    _facebook.dispose();
+    _latitude.dispose();
+    _longitude.dispose();
+    super.dispose();
+  }
+
+  InputDecoration _field(String label, {String? hint}) => InputDecoration(
+    labelText: label,
+    hintText: hint,
+    filled: true,
+    fillColor: Colors.white,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: const BorderSide(color: _actBorder),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: const BorderSide(color: _actBorder),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: const BorderSide(color: _actRed, width: 1.2),
+    ),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+  );
+
+  Future<void> _pickFoundingYear() async {
+    final currentYear = DateTime.now().year;
+    var selectedYear =
+        int.tryParse(_foundedYear.text.trim()) ?? _officialBarangaySetup.foundingYear;
+    selectedYear = selectedYear.clamp(_minimumFoundingYear, currentYear).toInt();
+
+    final pickedYear = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) {
+        var tempYear = selectedYear;
+        return StatefulBuilder(
+          builder: (context, setLocalState) {
+            return AlertDialog(
+              title: const Text('Select Founding Year'),
+              content: DropdownButtonFormField<int>(
+                initialValue: tempYear,
+                decoration: _field('Founding Year'),
+                items: [
+                  for (var year = currentYear; year >= _minimumFoundingYear; year--)
+                    DropdownMenuItem<int>(value: year, child: Text('$year')),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setLocalState(() => tempYear = value);
+                  }
+                },
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, tempYear),
+                  style: FilledButton.styleFrom(backgroundColor: _actRed),
+                  child: const Text('Apply'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (pickedYear == null || !mounted) {
+      return;
+    }
+    setState(() => _foundedYear.text = '$pickedYear');
+  }
+
+  Future<void> _pickBarangayLogo() async {
+    final result = await _pickAndPrepareBarangayLogo();
+    if (result == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _logoBytes = result.bytes;
+      _logoName = result.fileName;
+    });
+  }
+
+  Future<void> _saveSetup() async {
+    final population = int.tryParse(_population.text.trim());
+    final divisionCount = int.tryParse(_divisionCount.text.trim());
+    final foundingYear = int.tryParse(_foundedYear.text.trim());
+    final latitude = _parseCoordinateValue(_latitude.text, min: -90, max: 90);
+    final longitude = _parseCoordinateValue(_longitude.text, min: -180, max: 180);
+
+    if (population == null || population <= 0) {
+      _showFeature(context, 'Population must be a valid number.');
+      return;
+    }
+    if (divisionCount == null || divisionCount <= 0) {
+      _showFeature(context, 'Division count must be a valid number.');
+      return;
+    }
+    if (foundingYear == null || !_isValidFoundingYearValue(foundingYear)) {
+      _showFeature(
+        context,
+        'Founding year must be between $_minimumFoundingYear and ${DateTime.now().year}.',
+      );
+      return;
+    }
+    if (!_isValidSchemaUrl(_website.text) || !_isValidSchemaUrl(_facebook.text)) {
+      _showFeature(
+        context,
+        'Website and Facebook links must start with http:// or https://.',
+      );
+      return;
+    }
+    if (latitude == null || longitude == null) {
+      _showFeature(context, 'Latitude and longitude must be valid values.');
+      return;
+    }
+
+    setState(() => _saving = true);
+
+    _officialBarangaySetup
+      ..population = population
+      ..divisionType = _divisionType
+      ..divisionCount = divisionCount
+      ..foundingYear = foundingYear
+      ..website = _website.text.trim()
+      ..facebook = _facebook.text.trim()
+      ..latitude = latitude
+      ..longitude = longitude
+      ..logoBytes = _logoBytes
+      ..logoFileName = _logoName;
+
+    final result = await _AuthApi.instance.completeOfficialActivation(
+      payload: {
+        'population': population,
+        'division_type': _divisionType,
+        'division_count': divisionCount,
+        'founding_year': foundingYear,
+        if (_website.text.trim().isNotEmpty) 'website': _website.text.trim(),
+        if (_facebook.text.trim().isNotEmpty)
+          'facebook_url': _facebook.text.trim(),
+        'latitude': latitude,
+        'longitude': longitude,
+        if (_logoName != null) 'logo_file_name': _logoName,
+        if (_logoBytes != null) 'logo_image_base64': base64Encode(_logoBytes!),
+      },
+    );
+
+    if (!mounted) {
+      return;
+    }
+    setState(() => _saving = false);
+    _showFeature(
+      context,
+      result.success
+          ? 'Barangay setup saved.'
+          : 'Saved locally. ${result.message}',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _actSurface,
+      appBar: AppBar(
+        title: const Text('Barangay Setup'),
+        backgroundColor: Colors.white,
+        foregroundColor: _officialText,
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: _ActivationSetupStep(
+              field: _field,
+              population: _population,
+              divisionCount: _divisionCount,
+              divisionType: _divisionType,
+              onDivision: (v) => setState(() => _divisionType = v ?? 'Zone'),
+              foundedYear: _foundedYear,
+              website: _website,
+              facebook: _facebook,
+              latitude: _latitude,
+              longitude: _longitude,
+              logoBytes: _logoBytes,
+              logoName: _logoName,
+              onPickFoundedYear: _pickFoundingYear,
+              onPickLogo: _pickBarangayLogo,
+            ),
+          ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _saving ? null : _saveSetup,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _actRed,
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  child: Text(_saving ? 'SAVING...' : 'SAVE SETUP'),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _OfficialProfileSettingsPageState

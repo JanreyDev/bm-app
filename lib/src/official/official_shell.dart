@@ -363,6 +363,16 @@ class _HomeShellState extends State<HomeShell> {
                 );
                 return;
               case 'Barangay Activation':
+                if (_officialActivationCompleted) {
+                  ScaffoldMessenger.of(c).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Barangay activation is already completed. Setup is now read-only for regular officials.',
+                      ),
+                    ),
+                  );
+                  return;
+                }
                 Navigator.push(
                   c,
                   MaterialPageRoute(
@@ -451,6 +461,7 @@ class _HomeShellState extends State<HomeShell> {
 
 class _OfficialHomeSnapshot {
   final int totalPopulation;
+  final int rbiCount;
   final int pendingRequests;
   final int totalRequests;
   final int marketProductCount;
@@ -462,6 +473,7 @@ class _OfficialHomeSnapshot {
 
   const _OfficialHomeSnapshot({
     required this.totalPopulation,
+    required this.rbiCount,
     required this.pendingRequests,
     required this.totalRequests,
     required this.marketProductCount,
@@ -475,6 +487,7 @@ class _OfficialHomeSnapshot {
   factory _OfficialHomeSnapshot.initial() {
     return _OfficialHomeSnapshot(
       totalPopulation: 0,
+      rbiCount: 0,
       pendingRequests: 0,
       totalRequests: 0,
       marketProductCount: 0,
@@ -509,40 +522,109 @@ class _OfficialHomePageState extends State<_OfficialHomePage> {
       setState(() => _loading = true);
     }
 
+    final summaryFuture = _fetchOfficialSummaryFromBackend();
     final requestsFuture = _ServiceRequestApi.instance.fetchRequests();
     final productsFuture = _SellerApi.instance.fetchMarketProducts();
     final postsFuture = _CommunityApi.instance.fetchPosts();
     final populationFuture = _fetchPopulationFromBackend();
 
+    final summary = await summaryFuture;
     final requestsResult = await requestsFuture;
     final productsResult = await productsFuture;
     final postsResult = await postsFuture;
     final population = await populationFuture;
 
+    final summaryPopulation = _readSummaryInt(summary, [
+      ['population'],
+      ['summary', 'population'],
+      ['population', 'estimated'],
+      ['population', 'registered_residents'],
+      ['metrics', 'population'],
+    ]);
+    final summaryPendingRequests = _readSummaryInt(summary, [
+      ['pending_requests'],
+      ['requests_pending'],
+      ['summary', 'pending_requests'],
+      ['summary', 'requests_pending'],
+      ['requests', 'pending'],
+      ['metrics', 'pending_requests'],
+    ]);
+    final summaryTotalRequests = _readSummaryInt(summary, [
+      ['total_requests'],
+      ['requests_total'],
+      ['summary', 'total_requests'],
+      ['summary', 'requests_total'],
+      ['requests', 'total'],
+      ['metrics', 'total_requests'],
+    ]);
+    final summaryMarketProducts = _readSummaryInt(summary, [
+      ['market_product_count'],
+      ['market_products'],
+      ['summary', 'market_products'],
+      ['summary', 'market_products_total'],
+      ['marketplace', 'products'],
+      ['metrics', 'market_products'],
+    ]);
+    final summaryVerifiedListings = _readSummaryInt(summary, [
+      ['verified_market_product_count'],
+      ['verified_market_products'],
+      ['summary', 'verified_market_products'],
+      ['summary', 'market_products_verified'],
+      ['marketplace', 'verified_products'],
+      ['metrics', 'verified_market_products'],
+    ]);
+    final summaryCommunityPosts = _readSummaryInt(summary, [
+      ['community_post_count'],
+      ['community_posts'],
+      ['summary', 'community_posts'],
+      ['summary', 'community_posts_total'],
+      ['community', 'posts'],
+      ['metrics', 'community_posts'],
+    ]);
+    final summaryRbiCount = _readSummaryInt(summary, [
+      ['rbi_count'],
+      ['verified_rbi_count'],
+      ['registered_residents'],
+      ['summary', 'rbi_count'],
+      ['summary', 'verified_rbi_count'],
+      ['summary', 'registered_residents'],
+      ['metrics', 'rbi_count'],
+    ]);
+
     final warnings = <String>[];
     final requests = requestsResult.success ? requestsResult.entries : const <_ResidentRequestEntry>[];
-    if (!requestsResult.success) {
+    if (!requestsResult.success && summaryPendingRequests == null && summaryTotalRequests == null) {
       warnings.add('Requests');
     }
     final marketProducts = productsResult.success ? productsResult.products : const <_ResidentProductData>[];
-    if (!productsResult.success) {
+    if (!productsResult.success && summaryMarketProducts == null && summaryVerifiedListings == null) {
       warnings.add('Marketplace');
     }
     final posts = postsResult.success ? postsResult.posts : const <_CommunityPost>[];
-    if (!postsResult.success) {
+    if (!postsResult.success && summaryCommunityPosts == null) {
       warnings.add('Community');
     }
-    if (population == null) {
+    if (population == null && summaryPopulation == null) {
       warnings.add('Population');
     }
 
-    final pendingRequests = requests
-        .where((entry) => entry.status.toLowerCase().contains('pending'))
-        .length;
-    final verifiedListings = marketProducts.where((item) => item.verified).length;
+    final pendingRequests = summaryPendingRequests ??
+        requests.where((entry) => entry.status.toLowerCase().contains('pending')).length;
+    final totalRequests = summaryTotalRequests ?? requests.length;
+    final marketProductCount = summaryMarketProducts ?? marketProducts.length;
+    final verifiedListings =
+        summaryVerifiedListings ?? marketProducts.where((item) => item.verified).length;
+    final communityPostCount = summaryCommunityPosts ?? posts.length;
+    final rbiCount = summaryRbiCount ?? _ResidentRbiStore.all.value.length;
 
     final sortedPosts = [...posts]..sort((a, b) => b.postedAt.compareTo(a.postedAt));
-    final computedPopulation = population ?? _ResidentRbiStore.all.value.length;
+    final latestWithPhoto = sortedPosts.cast<_CommunityPost?>().firstWhere(
+      (post) => post?.photoBytes != null,
+      orElse: () => null,
+    );
+    final previewPost = latestWithPhoto ?? (sortedPosts.isEmpty ? null : sortedPosts.first);
+    final computedPopulation =
+        summaryPopulation ?? population ?? _ResidentRbiStore.all.value.length;
     final warningMessage = warnings.isEmpty
         ? ''
         : 'Partial sync: ${warnings.join(', ')} unavailable.';
@@ -553,12 +635,13 @@ class _OfficialHomePageState extends State<_OfficialHomePage> {
     setState(() {
       _snapshot = _OfficialHomeSnapshot(
         totalPopulation: computedPopulation,
+        rbiCount: rbiCount,
         pendingRequests: pendingRequests,
-        totalRequests: requests.length,
-        marketProductCount: marketProducts.length,
+        totalRequests: totalRequests,
+        marketProductCount: marketProductCount,
         verifiedMarketProductCount: verifiedListings,
-        communityPostCount: posts.length,
-        latestPost: sortedPosts.isEmpty ? null : sortedPosts.first,
+        communityPostCount: communityPostCount,
+        latestPost: previewPost,
         syncedAt: DateTime.now(),
         warningMessage: warningMessage,
       );
@@ -770,6 +853,97 @@ class _OfficialHomePageState extends State<_OfficialHomePage> {
     return null;
   }
 
+  Future<Map<String, dynamic>?> _fetchOfficialSummaryFromBackend() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return null;
+    }
+    final query = _officialLocationQuery();
+    final paths = <String>[
+      'official/dashboard-summary$query',
+      'official/dashboard$query',
+      'official/summary$query',
+    ];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http.get(
+            endpoint,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $_authToken',
+            },
+          ).timeout(const Duration(seconds: 7));
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            return null;
+          }
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          if (decoded is! Map<String, dynamic>) {
+            return null;
+          }
+          final data = decoded['data'];
+          if (data is Map<String, dynamic>) {
+            return data;
+          }
+          return decoded;
+        } on TimeoutException {
+          return null;
+        } catch (_) {
+          return null;
+        }
+      }
+    }
+    return null;
+  }
+
+  String _officialLocationQuery() {
+    final city = _officialBarangaySetup.city.trim();
+    final province = _officialBarangaySetup.province.trim();
+    final barangay = _officialEditableProfile.value.barangay.trim().isNotEmpty
+        ? _officialEditableProfile.value.barangay.trim()
+        : _officialBarangaySetup.barangay.trim();
+    final params = <String, String>{};
+    if (province.isNotEmpty) {
+      params['province'] = province;
+    }
+    if (city.isNotEmpty) {
+      params['city_municipality'] = city;
+    }
+    if (barangay.isNotEmpty) {
+      params['barangay'] = barangay;
+    }
+    if (params.isEmpty) {
+      return '';
+    }
+    final qs = params.entries
+        .map((entry) => '${Uri.encodeQueryComponent(entry.key)}=${Uri.encodeQueryComponent(entry.value)}')
+        .join('&');
+    return '?$qs';
+  }
+
+  int? _readSummaryInt(Map<String, dynamic>? summary, List<List<String>> keyPaths) {
+    if (summary == null) {
+      return null;
+    }
+    for (final path in keyPaths) {
+      dynamic node = summary;
+      for (final part in path) {
+        if (node is! Map<String, dynamic>) {
+          node = null;
+          break;
+        }
+        node = node[part];
+      }
+      final value = _asInt(node);
+      if (value != null) {
+        return value;
+      }
+    }
+    return null;
+  }
+
   int? _asInt(dynamic value) {
     if (value is int) {
       return value;
@@ -955,14 +1129,11 @@ class _OfficialHomePageState extends State<_OfficialHomePage> {
                 value: '${_snapshot.totalPopulation}',
                 note: 'Live barangay dashboard count',
               ),
-              ValueListenableBuilder<List<_ResidentRbiRecord>>(
-                valueListenable: _ResidentRbiStore.all,
-                builder: (context, records, _) => _metricCard(
-                  icon: Icons.verified_user_outlined,
-                  label: 'RBI Count',
-                  value: '${records.length}',
-                  note: 'Verified resident records',
-                ),
+              _metricCard(
+                icon: Icons.verified_user_outlined,
+                label: 'RBI Count',
+                value: '${_snapshot.rbiCount}',
+                note: 'Verified resident records',
               ),
               _metricCard(
                 icon: Icons.description_outlined,
@@ -1206,6 +1377,8 @@ class _SimplePageState extends State<_SimplePage> {
 
   Future<List<String>> _resolveOfficialRows() async {
     final next = [..._rows];
+    final summary = await _fetchOfficialSummaryFromBackend();
+    final backendTimeline = await _fetchOfficialRecentActivityFromBackend();
 
     final requestsResult = await _ServiceRequestApi.instance.fetchRequests();
     if (next.length < 4) {
@@ -1213,6 +1386,20 @@ class _SimplePageState extends State<_SimplePage> {
         next.add('');
       }
     }
+    final summaryPendingRequests = _readSummaryInt(summary, [
+      ['pending_requests'],
+      ['requests_pending'],
+      ['summary', 'pending_requests'],
+      ['summary', 'requests_pending'],
+      ['requests', 'pending'],
+    ]);
+    final summaryTotalRequests = _readSummaryInt(summary, [
+      ['total_requests'],
+      ['requests_total'],
+      ['summary', 'total_requests'],
+      ['summary', 'requests_total'],
+      ['requests', 'total'],
+    ]);
     if (requestsResult.success) {
       final pending = requestsResult.entries
           .where((entry) => entry.status.toLowerCase().contains('pending'))
@@ -1230,14 +1417,20 @@ class _SimplePageState extends State<_SimplePage> {
       }).length;
       next[1] = 'Pending Approvals: $pending request(s) pending review';
       next[3] = 'Scheduled Hearings: $hearingCount mediation case(s) this week';
+    } else if (summaryPendingRequests != null || summaryTotalRequests != null) {
+      final pending = summaryPendingRequests ?? 0;
+      final total = summaryTotalRequests ?? pending;
+      next[1] = 'Pending Approvals: $pending request(s) pending review';
+      // We cannot infer hearing keywords without full request payload.
+      next[3] = 'Scheduled Hearings: based on $total total request(s)';
     } else {
       next[1] = 'Pending Approvals: Queue unavailable right now';
       next[3] = 'Scheduled Hearings: Schedule unavailable right now';
     }
 
     final result = await _CommunityApi.instance.fetchPosts();
-    final timelineEvents = <_SimpleTimelineItem>[];
-    if (requestsResult.success) {
+    final timelineEvents = <_SimpleTimelineItem>[...backendTimeline];
+    if (timelineEvents.isEmpty && requestsResult.success) {
       final requestEvents = [...requestsResult.entries];
       for (var i = 0; i < requestEvents.length && i < 3; i++) {
         final entry = requestEvents[i];
@@ -1251,7 +1444,7 @@ class _SimplePageState extends State<_SimplePage> {
         );
       }
     }
-    if (result.success) {
+    if (timelineEvents.isEmpty && result.success) {
       final postEvents = [...result.posts]..sort((a, b) => b.postedAt.compareTo(a.postedAt));
       for (var i = 0; i < postEvents.length && i < 3; i++) {
         final post = postEvents[i];
@@ -1279,13 +1472,21 @@ class _SimplePageState extends State<_SimplePage> {
       _officialTimeline = timelineEvents.take(3).toList();
     }
 
+    final summaryCommunityPosts = _readSummaryInt(summary, [
+      ['community_post_count'],
+      ['community_posts'],
+      ['summary', 'community_posts'],
+      ['summary', 'community_posts_total'],
+      ['community', 'posts'],
+    ]);
     if (!result.success || result.posts.isEmpty) {
       if (next.isEmpty) {
         next.add('Council Agenda: No council agenda published yet.');
       } else {
         next[0] = 'Council Agenda: No council agenda published yet.';
       }
-      next[2] = 'Public Notices: 0 active posting(s) this week';
+      final notices = summaryCommunityPosts ?? 0;
+      next[2] = 'Public Notices: $notices active posting(s) this week';
       return next;
     }
     final officialPosts = result.posts.where((entry) => entry.isOfficial).toList();
@@ -1311,6 +1512,194 @@ class _SimplePageState extends State<_SimplePage> {
     }
     next[2] = 'Public Notices: ${result.posts.length} active posting(s) this week';
     return next;
+  }
+
+  Future<Map<String, dynamic>?> _fetchOfficialSummaryFromBackend() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return null;
+    }
+    final query = _officialLocationQuery();
+    final paths = <String>[
+      'official/dashboard-summary$query',
+      'official/dashboard$query',
+      'official/summary$query',
+    ];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http.get(
+            endpoint,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $_authToken',
+            },
+          ).timeout(const Duration(seconds: 7));
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            return null;
+          }
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          if (decoded is! Map<String, dynamic>) {
+            return null;
+          }
+          final data = decoded['data'];
+          if (data is Map<String, dynamic>) {
+            return data;
+          }
+          return decoded;
+        } on TimeoutException {
+          return null;
+        } catch (_) {
+          return null;
+        }
+      }
+    }
+    return null;
+  }
+
+  Future<List<_SimpleTimelineItem>> _fetchOfficialRecentActivityFromBackend() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const <_SimpleTimelineItem>[];
+    }
+    final query = _officialLocationQuery();
+    final paths = <String>[
+      'official/recent-activity$query',
+      'official/activity$query',
+    ];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http.get(
+            endpoint,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $_authToken',
+            },
+          ).timeout(const Duration(seconds: 7));
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            return const <_SimpleTimelineItem>[];
+          }
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          if (decoded is! Map<String, dynamic>) {
+            return const <_SimpleTimelineItem>[];
+          }
+          final rawActivities = decoded['activities'] ?? decoded['data'];
+          if (rawActivities is! List) {
+            return const <_SimpleTimelineItem>[];
+          }
+          final entries = <_SimpleTimelineItem>[];
+          for (final item in rawActivities) {
+            if (item is! Map<String, dynamic>) {
+              continue;
+            }
+            final title = ((item['title'] as String?) ?? '').trim();
+            final note = ((item['note'] as String?) ?? '').trim();
+            final rawTime = ((item['timestamp'] as String?) ??
+                    (item['time'] as String?) ??
+                    (item['created_at'] as String?) ??
+                    '')
+                .trim();
+            final parsedTime = DateTime.tryParse(rawTime)?.toLocal() ?? DateTime.now();
+            final type = ((item['type'] as String?) ?? '').trim().toLowerCase();
+            if (title.isEmpty || note.isEmpty) {
+              continue;
+            }
+            entries.add(
+              _SimpleTimelineItem(
+                title: title,
+                note: note,
+                time: parsedTime,
+                icon: _iconForActivityType(type),
+              ),
+            );
+          }
+          entries.sort((a, b) => b.time.compareTo(a.time));
+          return entries.take(3).toList();
+        } on TimeoutException {
+          return const <_SimpleTimelineItem>[];
+        } catch (_) {
+          return const <_SimpleTimelineItem>[];
+        }
+      }
+    }
+    return const <_SimpleTimelineItem>[];
+  }
+
+  IconData _iconForActivityType(String type) {
+    if (type.contains('request')) {
+      return Icons.assignment_turned_in_rounded;
+    }
+    if (type.contains('community') || type.contains('post')) {
+      return Icons.campaign_rounded;
+    }
+    if (type.contains('market') || type.contains('product')) {
+      return Icons.storefront_rounded;
+    }
+    return Icons.history_toggle_off_rounded;
+  }
+
+  String _officialLocationQuery() {
+    final city = _officialBarangaySetup.city.trim();
+    final province = _officialBarangaySetup.province.trim();
+    final barangay = _officialEditableProfile.value.barangay.trim().isNotEmpty
+        ? _officialEditableProfile.value.barangay.trim()
+        : _officialBarangaySetup.barangay.trim();
+    final params = <String, String>{};
+    if (province.isNotEmpty) {
+      params['province'] = province;
+    }
+    if (city.isNotEmpty) {
+      params['city_municipality'] = city;
+    }
+    if (barangay.isNotEmpty) {
+      params['barangay'] = barangay;
+    }
+    if (params.isEmpty) {
+      return '';
+    }
+    final qs = params.entries
+        .map((entry) => '${Uri.encodeQueryComponent(entry.key)}=${Uri.encodeQueryComponent(entry.value)}')
+        .join('&');
+    return '?$qs';
+  }
+
+  int? _readSummaryInt(Map<String, dynamic>? summary, List<List<String>> keyPaths) {
+    if (summary == null) {
+      return null;
+    }
+    for (final path in keyPaths) {
+      dynamic node = summary;
+      for (final part in path) {
+        if (node is! Map<String, dynamic>) {
+          node = null;
+          break;
+        }
+        node = node[part];
+      }
+      final value = _asInt(node);
+      if (value != null) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  int? _asInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value.trim());
+    }
+    return null;
   }
 
   DateTime _parseRequestDate(String raw) {

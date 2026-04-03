@@ -408,44 +408,6 @@ class _ActivationFlowState extends State<ActivationFlow> {
       _msg('Please accept certification terms.');
       return false;
     }
-    if (_step == 7) {
-      final population = int.tryParse(_population.text.trim());
-      final divisionCount = int.tryParse(_divisionCount.text.trim());
-      final foundingYear = int.tryParse(_foundedYear.text.trim());
-      final latitude = _parseCoordinateValue(
-        _latitude.text,
-        min: -90,
-        max: 90,
-      );
-      final longitude = _parseCoordinateValue(
-        _longitude.text,
-        min: -180,
-        max: 180,
-      );
-
-      if (population == null || population <= 0) {
-        _msg('Population must be a valid number.');
-        return false;
-      }
-      if (divisionCount == null || divisionCount <= 0) {
-        _msg('Division count must be a valid number.');
-        return false;
-      }
-      if (foundingYear == null || !_isValidFoundingYearValue(foundingYear)) {
-        _msg(
-          'Founding year must be between $_minimumFoundingYear and ${DateTime.now().year}.',
-        );
-        return false;
-      }
-      if (!_isValidSchemaUrl(_website.text) || !_isValidSchemaUrl(_facebook.text)) {
-        _msg('Website and Facebook links must start with http:// or https://.');
-        return false;
-      }
-      if (latitude == null || longitude == null) {
-        _msg('Latitude and longitude must be valid with up to 6 decimals.');
-        return false;
-      }
-    }
     return true;
   }
 
@@ -559,7 +521,7 @@ class _ActivationFlowState extends State<ActivationFlow> {
 
   Future<void> _next() async {
     if (!_validate()) return;
-    if (_step >= 8) {
+    if (_step >= 7) {
       await _finish();
       return;
     }
@@ -586,11 +548,10 @@ class _ActivationFlowState extends State<ActivationFlow> {
 
   int get _tab => _step == 0 ? 0 : (_step == 1 ? 1 : (_step <= 5 ? 2 : -1));
   bool get _showTabs => _step <= 5;
-  bool get _showFooterButton => _step != 8;
+  bool get _showFooterButton => _step != 7;
   String get _buttonLabel {
     if (_step == 5) return 'SUBMIT';
     if (_step == 6) return 'CONTINUE';
-    if (_step == 7) return 'I-SAVE AT MAGPATULOY';
     return 'NEXT';
   }
 
@@ -717,23 +678,6 @@ class _ActivationFlowState extends State<ActivationFlow> {
                           .trim(),
                 ),
                 _ActivationMabuhayStep(barangay: _barangay ?? 'Old Cabalan'),
-                _ActivationSetupStep(
-                  field: _field,
-                  population: _population,
-                  divisionCount: _divisionCount,
-                  divisionType: _divisionType,
-                  onDivision: (v) =>
-                      setState(() => _divisionType = v ?? 'Zone'),
-                  foundedYear: _foundedYear,
-                  website: _website,
-                  facebook: _facebook,
-                  latitude: _latitude,
-                  longitude: _longitude,
-                  logoBytes: _logoBytes,
-                  logoName: _logoName,
-                  onPickFoundedYear: _pickFoundingYear,
-                  onPickLogo: _pickBarangayLogo,
-                ),
                 _ActivationCouncilStep(onUpdate: _finish, onLater: _finish),
               ],
             ),
