@@ -378,6 +378,7 @@ class _OfficialSettingsPageState extends State<OfficialSettingsPage> {
 }
 
 class _RbiPerson {
+  final int apiId;
   final String name;
   final String idNo;
   final int age;
@@ -394,6 +395,7 @@ class _RbiPerson {
   final int verificationStep;
 
   const _RbiPerson({
+    this.apiId = 0,
     required this.name,
     required this.idNo,
     required this.age,
@@ -472,6 +474,7 @@ class _OfficialRbiRecordsPageState extends State<OfficialRbiRecordsPage> {
   List<_RbiPerson> get _liveRecords {
     return _ResidentRbiStore.all.value.map((record) {
       return _RbiPerson(
+        apiId: 0,
         name: record.fullName,
         idNo: record.rbiId,
         age: record.age,
@@ -608,12 +611,18 @@ class _OfficialRbiRecordsPageState extends State<OfficialRbiRecordsPage> {
     final query = _searchCtrl.text.trim();
     return InkWell(
       borderRadius: BorderRadius.circular(14),
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => _OfficialRbiProfilePage(person: person),
-        ),
-      ),
+      onTap: () async {
+        final changed = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => _OfficialRbiProfilePage(person: person),
+          ),
+        );
+        if (!mounted) return;
+        if (changed == true) {
+          await _loadBackendRecords();
+        }
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
@@ -939,6 +948,7 @@ class _OfficialRbiApi {
         verificationStatus.toLowerCase().contains('verified');
 
     return _RbiPerson(
+      apiId: readInt('id', 0),
       name: readString('full_name', readString('name', 'Unknown Resident')),
       idNo: readString('rbi_id', 'RBI-UNKNOWN'),
       age: readInt('age', 0),
@@ -956,6 +966,65 @@ class _OfficialRbiApi {
     );
   }
 
+  Future<_OfficialRbiApiActionResult> updateVerification({
+    required int recordId,
+    required bool verified,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _OfficialRbiApiActionResult(
+        success: false,
+        message: 'Login required.',
+      );
+    }
+    final body = jsonEncode({'verified': verified});
+    final paths = <String>[
+      'rbi/records/$recordId/verification',
+      'rbi/records/$recordId/verify',
+    ];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http.patch(
+            endpoint,
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $_authToken',
+            },
+            body: body,
+          ).timeout(const Duration(seconds: 8));
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            return _OfficialRbiApiActionResult(
+              success: true,
+              message: _extractApiMessage(response.body, 'RBI verification updated.'),
+            );
+          }
+          return _OfficialRbiApiActionResult(
+            success: false,
+            message: _extractApiMessage(response.body, 'Unable to update RBI verification.'),
+          );
+        } on TimeoutException {
+          return const _OfficialRbiApiActionResult(
+            success: false,
+            message: 'Verification request timed out.',
+          );
+        } catch (_) {
+          return const _OfficialRbiApiActionResult(
+            success: false,
+            message: 'Unable to update verification.',
+          );
+        }
+      }
+    }
+    return const _OfficialRbiApiActionResult(
+      success: false,
+      message: 'Verification endpoint unavailable.',
+    );
+  }
+
   String _extractApiMessage(String body, String fallback) {
     try {
       final decoded = _AuthApi.instance._decodeDynamicJson(body);
@@ -970,12 +1039,65 @@ class _OfficialRbiApi {
   }
 }
 
-class _OfficialRbiProfilePage extends StatelessWidget {
+class _OfficialRbiApiActionResult {
+  final bool success;
+  final String message;
+
+  const _OfficialRbiApiActionResult({
+    required this.success,
+    required this.message,
+  });
+}
+
+class _OfficialRbiProfilePage extends StatefulWidget {
   final _RbiPerson person;
   const _OfficialRbiProfilePage({required this.person});
 
   @override
+  State<_OfficialRbiProfilePage> createState() => _OfficialRbiProfilePageState();
+}
+
+class _OfficialRbiProfilePageState extends State<_OfficialRbiProfilePage> {
+  late bool _verified;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _verified = widget.person.verified || widget.person.verificationStep >= 2;
+  }
+
+  Future<void> _toggleVerification() async {
+    if (widget.person.apiId <= 0) {
+      _showFeature(
+        context,
+        'This record has no backend ID yet.',
+        tone: _ToastTone.warning,
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    final next = !_verified;
+    final result = await _OfficialRbiApi.instance.updateVerification(
+      recordId: widget.person.apiId,
+      verified: next,
+    );
+    if (!mounted) return;
+    setState(() => _saving = false);
+    _showFeature(
+      context,
+      result.message,
+      tone: result.success ? _ToastTone.success : _ToastTone.warning,
+    );
+    if (result.success) {
+      setState(() => _verified = next);
+      Navigator.pop(context, true);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final person = widget.person;
     return Scaffold(
       backgroundColor: const Color(0xFFF4F5F9),
       appBar: AppBar(
@@ -1004,7 +1126,7 @@ class _OfficialRbiProfilePage extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 32,
-                  backgroundColor: person.verified
+                  backgroundColor: _verified
                       ? const Color(0xFFE8F8EF)
                       : const Color(0xFFF7F0E8),
                   child: Text(
@@ -1012,7 +1134,7 @@ class _OfficialRbiProfilePage extends StatelessWidget {
                         ? '?'
                         : person.name.trim().substring(0, 1).toUpperCase(),
                     style: TextStyle(
-                      color: person.verified
+                      color: _verified
                           ? const Color(0xFF1A8F50)
                           : const Color(0xFFB9771D),
                       fontWeight: FontWeight.w900,
@@ -1050,7 +1172,7 @@ class _OfficialRbiProfilePage extends StatelessWidget {
           _officialDataCard([
             ('Age', '${person.age}'),
             ('Gender', person.gender),
-            ('Status', person.verified ? 'Verified' : 'Unverified'),
+            ('Status', _verified ? 'Verified' : 'Unverified'),
             ('Barangay', person.barangay),
             ('Zone / Purok', person.zonePurok),
             ('PWD Tag', person.disabilityTag),
@@ -1065,24 +1187,21 @@ class _OfficialRbiProfilePage extends StatelessWidget {
             children: [
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: () => _showFeature(
-                    context,
-                    person.verified
-                        ? 'Marked as unverified'
-                        : 'Marked as verified',
-                  ),
+                  onPressed: _saving ? null : _toggleVerification,
                   style: FilledButton.styleFrom(
                     backgroundColor: _officialHeaderStart,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   icon: Icon(
-                    person.verified
+                    _verified
                         ? Icons.rule_folder_outlined
                         : Icons.verified_user_outlined,
                   ),
                   label: Text(
-                    person.verified ? 'Mark Unverified' : 'Verify Record',
+                    _saving
+                        ? 'Saving...'
+                        : (_verified ? 'Mark Unverified' : 'Verify Record'),
                   ),
                 ),
               ),
