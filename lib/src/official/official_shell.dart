@@ -1929,63 +1929,62 @@ class _SimplePageState extends State<_SimplePage> {
     return raw.replaceFirst(match.group(0)!, '$nextValue');
   }
 
-  _RowBadge _badgeForRow(String key, String value) {
+  _RowMeta _rowMeta(String key, String value) {
     final combined = '$key $value'.toLowerCase();
-    if (combined.contains('pending') ||
-        combined.contains('delivery') ||
-        combined.contains('hearing')) {
-      return const _RowBadge(
-        label: 'Needs Attention',
-        icon: Icons.warning_amber_rounded,
-        bg: Color(0xFFFFF3E8),
-        fg: Color(0xFFB45309),
+    final hasUnavailable = combined.contains('unavailable') ||
+        combined.contains('loading') ||
+        combined.contains('not available');
+    if (hasUnavailable) {
+      return const _RowMeta(
+        badge: _RowBadge(
+          label: 'API Unavailable',
+          icon: Icons.cloud_off_rounded,
+          bg: Color(0xFFFFF0F0),
+          fg: Color(0xFFAA2E2E),
+        ),
+        hint: 'No backend payload for this metric yet.',
       );
     }
-    if (combined.contains('status') ||
-        combined.contains('active') ||
-        combined.contains('account')) {
-      return const _RowBadge(
-        label: 'Stable',
-        icon: Icons.verified_rounded,
-        bg: Color(0xFFEAF7EE),
-        fg: Color(0xFF1F6B3D),
+
+    final number = _firstNumber(value);
+    if (number != null) {
+      if (number > 0) {
+        return const _RowMeta(
+          badge: _RowBadge(
+            label: 'Live Data',
+            icon: Icons.cloud_done_rounded,
+            bg: Color(0xFFEAF7EE),
+            fg: Color(0xFF1F6B3D),
+          ),
+          hint: 'Synced from backend data source.',
+        );
+      }
+      return const _RowMeta(
+        badge: _RowBadge(
+          label: 'No Records',
+          icon: Icons.inbox_outlined,
+          bg: Color(0xFFEEF1F7),
+          fg: Color(0xFF445270),
+        ),
+        hint: 'No records found in backend yet.',
       );
     }
-    if (combined.contains('transactions') ||
-        combined.contains('vendors') ||
-        combined.contains('category')) {
-      return const _RowBadge(
-        label: 'Trending',
-        icon: Icons.trending_up_rounded,
+
+    return const _RowMeta(
+      badge: _RowBadge(
+        label: 'Live Text',
+        icon: Icons.description_outlined,
         bg: Color(0xFFEAF0FF),
         fg: Color(0xFF2A4DA3),
-      );
-    }
-    if (combined.contains('agenda')) {
-      return const _RowBadge(
-        label: 'Upcoming',
-        icon: Icons.calendar_month_rounded,
-        bg: Color(0xFFFFEFE8),
-        fg: Color(0xFFA13A1D),
-      );
-    }
-    return const _RowBadge(
-      label: 'Monitored',
-      icon: Icons.visibility_rounded,
-      bg: Color(0xFFEEF1F7),
-      fg: Color(0xFF445270),
+      ),
+      hint: 'Rendered from latest backend text value.',
     );
   }
 
-  String _hintForRow(String key, String value) {
-    final combined = '$key $value'.toLowerCase();
-    if (combined.contains('pending')) return 'Queue requires same-day review';
-    if (combined.contains('transaction')) return 'Compared with latest sync';
-    if (combined.contains('status')) return 'Identity and access validated';
-    if (combined.contains('account')) return 'Verified account profile';
-    if (combined.contains('delivery')) return 'Dispatch route updated';
-    if (combined.contains('agenda')) return 'Published to council feed';
-    return 'Monitored by operations desk';
+  int? _firstNumber(String value) {
+    final match = RegExp(r'-?\d+').firstMatch(value);
+    if (match == null) return null;
+    return int.tryParse(match.group(0)!);
   }
 
   Widget _statChip(
@@ -2200,7 +2199,7 @@ class _SimplePageState extends State<_SimplePage> {
                   ? (allowPulse ? _pulseValue(rawValue, entry.key) : rawValue)
                   : rawValue;
               final isPureNumber = RegExp(r'^\d+$').hasMatch(value);
-              final badge = _badgeForRow(key, value);
+              final meta = _rowMeta(key, value);
 
               return TweenAnimationBuilder<double>(
                 tween: Tween(begin: 0, end: 1),
@@ -2286,22 +2285,22 @@ class _SimplePageState extends State<_SimplePage> {
                                     vertical: 4,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: badge.bg,
+                                    color: meta.badge.bg,
                                     borderRadius: BorderRadius.circular(999),
                                   ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        badge.icon,
-                                        size: 14,
-                                        color: badge.fg,
-                                      ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                        meta.badge.icon,
+                                          size: 14,
+                                        color: meta.badge.fg,
+                                        ),
                                       const SizedBox(width: 5),
                                       Text(
-                                        badge.label,
+                                        meta.badge.label,
                                         style: TextStyle(
-                                          color: badge.fg,
+                                          color: meta.badge.fg,
                                           fontWeight: FontWeight.w700,
                                           fontSize: 11,
                                         ),
@@ -2315,7 +2314,7 @@ class _SimplePageState extends State<_SimplePage> {
                             ),
                             const SizedBox(height: 5),
                             Text(
-                              _hintForRow(key, value),
+                              meta.hint,
                               style: const TextStyle(
                                 color: _officialSubtext,
                                 fontWeight: FontWeight.w600,
@@ -2441,6 +2440,16 @@ class _RowBadge {
     required this.icon,
     required this.bg,
     required this.fg,
+  });
+}
+
+class _RowMeta {
+  final _RowBadge badge;
+  final String hint;
+
+  const _RowMeta({
+    required this.badge,
+    required this.hint,
   });
 }
 

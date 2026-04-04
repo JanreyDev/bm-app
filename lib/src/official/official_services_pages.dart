@@ -1072,6 +1072,72 @@ class _OfficialGovAgenciesPageState extends State<OfficialGovAgenciesPage> {
                 ),
               ),
             Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _officialCardBorder),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFECEC),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.assignment_rounded,
+                      color: _officialHeaderStart,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Gov Agencies Requests',
+                          style: TextStyle(
+                            color: _officialText,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        Text(
+                          'Review and update resident requests related to government agencies.',
+                          style: TextStyle(
+                            color: _officialSubtext,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const OfficialRequestsInboxPage(
+                            serviceCategory: 'Gov Agencies',
+                            pageTitle: 'Gov Agencies Requests',
+                          ),
+                        ),
+                      );
+                    },
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _officialHeaderStart,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    child: const Text('View'),
+                  ),
+                ],
+              ),
+            ),
+            Container(
               padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -1632,10 +1698,7 @@ const _brgyServices = [
   _ServiceAction(
     'Gov Agencies',
     Icons.account_balance,
-    OfficialRequestsInboxPage(
-      serviceCategory: 'Gov Agencies',
-      pageTitle: 'Gov Agencies Requests',
-    ),
+    OfficialGovAgenciesPage(),
   ),
   _ServiceAction(
     'Health',
