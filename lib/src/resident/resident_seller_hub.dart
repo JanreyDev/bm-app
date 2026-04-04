@@ -759,8 +759,10 @@ class ResidentCommercialPage extends StatelessWidget {
           builder: (_, ___, ____) {
             final registration = _ResidentCommercialSellerHub.registration;
             final canAccessCommercial = verified || registration?.merchantVerified == true;
-            final inventory = _ResidentCommercialSellerHub.inventoryProducts;
             final sellerName = registration?.businessName ?? 'Commercial Seller';
+            final inventory = _ResidentCommercialSellerHub.inventoryProducts
+                .where((p) => p.seller == sellerName)
+                .toList();
             final salesCount = _ResidentCommercialSellerHub.salesCountForSeller(
               sellerName,
             );
@@ -778,47 +780,44 @@ class ResidentCommercialPage extends StatelessWidget {
                 .length;
             return Column(
               children: [
-                Card(
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      child: Icon(
-                        registration?.merchantVerified == true
-                            ? Icons.verified_user_rounded
-                            : Icons.person,
+                if (registration != null)
+                  Card(
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        child: Icon(
+                          registration.merchantVerified
+                              ? Icons.verified_user_rounded
+                              : Icons.person,
+                        ),
+                      ),
+                      title: Text(registration.ownerName),
+                      subtitle: Text(registration.businessName),
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: registration.merchantVerified
+                              ? const Color(0xFFE6F7EE)
+                              : const Color(0xFFFFF1E1),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          registration.merchantVerified
+                              ? 'Verified Merchant'
+                              : registration.verificationStatus,
+                          style: TextStyle(
+                            color: registration.merchantVerified
+                                ? const Color(0xFF197A46)
+                                : const Color(0xFFB86919),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                          ),
+                        ),
                       ),
                     ),
-                    title: Text(registration?.ownerName ?? 'Shamira Balandra'),
-                    subtitle: Text(
-                      registration == null ? 'Commercial Seller' : sellerName,
-                    ),
-                    trailing: registration == null
-                        ? null
-                        : Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: registration.merchantVerified
-                                  ? const Color(0xFFE6F7EE)
-                                  : const Color(0xFFFFF1E1),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              registration.merchantVerified
-                                  ? 'Verified Merchant'
-                                  : registration.verificationStatus,
-                              style: TextStyle(
-                                color: registration.merchantVerified
-                                    ? const Color(0xFF197A46)
-                                    : const Color(0xFFB86919),
-                                fontWeight: FontWeight.w800,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
                   ),
-                ),
                 if (!canAccessCommercial)
                   _CommercialGateCard(
                     icon: Icons.verified_user,
@@ -843,7 +842,23 @@ class ResidentCommercialPage extends StatelessWidget {
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const ResidentCommercialRegistrationPage(),
+                        builder: (_) =>
+                            const ResidentCommercialRegistrationPage(),
+                      ),
+                    ),
+                  )
+                else if (!registration.merchantVerified)
+                  _CommercialGateCard(
+                    icon: Icons.hourglass_empty_rounded,
+                    title: 'Review in Progress',
+                    subtitle:
+                        'Your business registration is currently being reviewed by the barangay officials. Once approved, you can start listing products.',
+                    buttonLabel: 'View Application',
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            const ResidentCommercialRegistrationPage(),
                       ),
                     ),
                   )
@@ -1649,9 +1664,11 @@ class ResidentMerchantInventoryPage extends StatelessWidget {
       body: ValueListenableBuilder<int>(
         valueListenable: _ResidentCommercialSellerHub.refresh,
         builder: (_, __, ___) {
-          final items = _ResidentCommercialSellerHub.inventoryProducts;
           final registration = _ResidentCommercialSellerHub.registration;
           final sellerName = registration?.businessName ?? 'Commercial Seller';
+          final items = _ResidentCommercialSellerHub.inventoryProducts
+              .where((p) => p.seller == sellerName)
+              .toList();
           final salesValue = _ResidentCommercialSellerHub.salesValueForSeller(
             sellerName,
           );

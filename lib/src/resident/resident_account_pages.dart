@@ -2689,73 +2689,138 @@ class _ResidentVerifyProfilePageState extends State<ResidentVerifyProfilePage> {
               ),
             ),
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFFE7EAFF), Color(0xFFF4F2FF)],
-                ),
-                border: Border.all(color: const Color(0xFFD9DFFF)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.verified_user, color: Color(0xFF2E35D3)),
-                      SizedBox(width: 8),
-                      Text(
-                        'Verify Your Account',
-                        style: TextStyle(
-                          fontSize: 23,
-                          fontWeight: FontWeight.w800,
-                        ),
+            _ResidentProfileStore.profile.isVerified
+                ? Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFFE8F5E9), Color(0xFFF1F8F1)],
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'To access comprehensive barangay services, e-commerce, and job benefits, ensure your profile details are complete and accurate.',
-                    style: TextStyle(
-                      color: Color(0xFF4B4F69),
-                      fontWeight: FontWeight.w600,
+                      border: Border.all(color: const Color(0xFFC8E6C9)),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x12000000),
+                          blurRadius: 8,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.check_circle, color: Color(0xFF2E7D32)),
+                            SizedBox(width: 10),
+                            Text(
+                              'Profile Verified',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF1B5E20),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Your profile is verified. You now have full access to barangay digital services, e-commerce, and employment benefits.',
+                          style: TextStyle(
+                            color: Color(0xFF2E7D32),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: _isSubmitting
+                                ? null
+                                : () async {
+                                    await _submitVerification();
+                                  },
+                            icon: const Icon(Icons.refresh_rounded, size: 18),
+                            label: Text(
+                              _isSubmitting ? 'Updating...' : 'Update Information',
+                            ),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF2E7D32),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : Container(
+                    padding: const EdgeInsets.all(15),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFFE7EAFF), Color(0xFFF4F2FF)],
+                      ),
+                      border: Border.all(color: const Color(0xFFD9DFFF)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.verified_user, color: Color(0xFF2E35D3)),
+                            SizedBox(width: 8),
+                            Text(
+                              'Verify Your Account',
+                              style: TextStyle(
+                                fontSize: 23,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'To access comprehensive barangay services, e-commerce, and job benefits, ensure your profile details are complete and accurate.',
+                          style: TextStyle(
+                            color: Color(0xFF4B4F69),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: FilledButton(
+                                onPressed: _isSubmitting
+                                    ? null
+                                    : () async {
+                                        await _submitVerification();
+                                      },
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: const Color(0xFF2E35D3),
+                                ),
+                                child: Text(
+                                  _isSubmitting ? 'Submitting...' : 'Verify Now',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: _isSubmitting
+                                    ? null
+                                    : () => Navigator.pop(context),
+                                child: const Text('Maybe Later'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: _isSubmitting
-                              ? null
-                              : () async {
-                                  await _submitVerification();
-                                },
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF2E35D3),
-                          ),
-                          child: Text(
-                            _isSubmitting ? 'Submitting...' : 'Verify Now',
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _isSubmitting
-                              ? null
-                              : () => Navigator.pop(context),
-                          child: const Text('Maybe Later'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
       ),

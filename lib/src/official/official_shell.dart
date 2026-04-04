@@ -499,6 +499,7 @@ class _OfficialHomeSnapshot {
   final int totalRequests;
   final int marketProductCount;
   final int verifiedMarketProductCount;
+  final int verifiedMerchantCount;
   final int communityPostCount;
   final _CommunityPost? latestPost;
   final DateTime syncedAt;
@@ -511,6 +512,7 @@ class _OfficialHomeSnapshot {
     required this.totalRequests,
     required this.marketProductCount,
     required this.verifiedMarketProductCount,
+    required this.verifiedMerchantCount,
     required this.communityPostCount,
     required this.latestPost,
     required this.syncedAt,
@@ -525,6 +527,7 @@ class _OfficialHomeSnapshot {
       totalRequests: 0,
       marketProductCount: 0,
       verifiedMarketProductCount: 0,
+      verifiedMerchantCount: 0,
       communityPostCount: 0,
       latestPost: null,
       syncedAt: DateTime.now(),
@@ -614,6 +617,12 @@ class _OfficialHomePageState extends State<_OfficialHomePage> {
       ['community', 'posts'],
       ['metrics', 'community_posts'],
     ]);
+    final summaryVerifiedMerchants = _readSummaryInt(summary, [
+      ['verified_merchants'],
+      ['merchant_verified_count'],
+      ['summary', 'verified_merchants'],
+      ['metrics', 'verified_merchants'],
+    ]);
     final summaryRbiCount = _readSummaryInt(summary, [
       ['rbi_count'],
       ['verified_rbi_count'],
@@ -647,6 +656,7 @@ class _OfficialHomePageState extends State<_OfficialHomePage> {
     final marketProductCount = summaryMarketProducts ?? marketProducts.length;
     final verifiedListings =
         summaryVerifiedListings ?? marketProducts.where((item) => item.verified).length;
+    final verifiedMerchantsCount = summaryVerifiedMerchants ?? 0;
     final communityPostCount = summaryCommunityPosts ?? posts.length;
     final rbiCount = summaryRbiCount ?? _ResidentRbiStore.all.value.length;
 
@@ -673,6 +683,7 @@ class _OfficialHomePageState extends State<_OfficialHomePage> {
         totalRequests: totalRequests,
         marketProductCount: marketProductCount,
         verifiedMarketProductCount: verifiedListings,
+        verifiedMerchantCount: verifiedMerchantsCount,
         communityPostCount: communityPostCount,
         latestPost: previewPost,
         syncedAt: DateTime.now(),
@@ -1196,9 +1207,9 @@ class _OfficialHomePageState extends State<_OfficialHomePage> {
               ),
               _metricCard(
                 icon: Icons.storefront_outlined,
-                label: 'Market Products',
-                value: '${_snapshot.marketProductCount}',
-                note: '${_snapshot.verifiedMarketProductCount} verified listing(s)',
+                label: 'Verified Merchants',
+                value: '${_snapshot.verifiedMerchantCount}',
+                note: '${_snapshot.verifiedMarketProductCount} verified / ${_snapshot.marketProductCount} total listings',
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
