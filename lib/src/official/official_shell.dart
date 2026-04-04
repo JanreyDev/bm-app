@@ -21,6 +21,7 @@ class _HomeShellState extends State<HomeShell> {
   final pages = const [
     _OfficialHomePage(),
     _SimplePage(
+      key: ValueKey('official-tab'),
       'Official',
       [
         'Council Agenda: Regular session on Monday at 9:00 AM',
@@ -32,6 +33,7 @@ class _HomeShellState extends State<HomeShell> {
       subtitle: 'Governance operations and council updates',
     ),
     _SimplePage(
+      key: ValueKey('market-tab'),
       'Market',
       [
         'Marketplace Vendors: 118 registered stalls',
@@ -44,6 +46,7 @@ class _HomeShellState extends State<HomeShell> {
     ),
     SerbilisServicesPage(),
     _SimplePage(
+      key: ValueKey('profile-tab'),
       'Profile',
       [
         'Account Name: Barangay Official',
@@ -1351,6 +1354,7 @@ class _SimplePage extends StatefulWidget {
   const _SimplePage(
     this.title,
     this.rows, {
+    super.key,
     this.icon = Icons.dashboard_customize,
     this.subtitle,
   });
@@ -1389,6 +1393,12 @@ class _SimplePageState extends State<_SimplePage> {
   @override
   void initState() {
     super.initState();
+    _initRowsByTitle();
+    _lastSynced = DateTime.now();
+    _primeOfficialAgendaCard();
+  }
+
+  void _initRowsByTitle() {
     final title = widget.title.toLowerCase();
     if (title == 'official') {
       _rows = [..._officialLoadingRows];
@@ -1399,8 +1409,19 @@ class _SimplePageState extends State<_SimplePage> {
     } else {
       _rows = [...widget.rows];
     }
-    _lastSynced = DateTime.now();
-    _primeOfficialAgendaCard();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SimplePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.title.toLowerCase() != widget.title.toLowerCase()) {
+      _officialTimeline = const <_SimpleTimelineItem>[];
+      _marketTimeline = const <_SimpleTimelineItem>[];
+      _profileTimeline = const <_SimpleTimelineItem>[];
+      _initRowsByTitle();
+      _lastSynced = DateTime.now();
+      unawaited(_primeOfficialAgendaCard());
+    }
   }
 
   Future<void> _refreshData() async {
