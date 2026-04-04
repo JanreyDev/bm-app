@@ -403,6 +403,10 @@ final ValueNotifier<List<_NotificationDispatchLogEntry>> _notificationDispatchLo
 
 final ValueNotifier<List<_DeferredNotificationEnvelope>> _deferredNotifications =
     ValueNotifier<List<_DeferredNotificationEnvelope>>([]);
+final ValueNotifier<Uint8List?> _scopedBarangayLogoBytes =
+    ValueNotifier<Uint8List?>(null);
+final ValueNotifier<int> _scopedBarangayLogoRefresh =
+    ValueNotifier<int>(0);
 
 const List<_BroadcastResidentProfile> _broadcastResidentDirectory = [
   _BroadcastResidentProfile(
@@ -1404,6 +1408,8 @@ Future<void> _clearSessionAfterAccountDeletion(UserRole role) async {
 
   _authToken = null;
   _deletionRequestForRole(role).value = null;
+  _scopedBarangayLogoBytes.value = null;
+  _scopedBarangayLogoRefresh.value = _scopedBarangayLogoRefresh.value + 1;
 }
 
 String _normalizeMobileForKey(String input) {
@@ -1546,6 +1552,101 @@ class _ResidentMpinStore {
     final last = prefs.getString(_lastMobileKey);
     if (last != null && _mobileKeyVariants(mobile).contains(last)) {
       await prefs.remove(_lastMobileKey);
+    }
+  }
+}
+
+String _currentScopeKeyForBranding() {
+  if (_currentOfficialMobile != null && _currentOfficialMobile!.trim().isNotEmpty) {
+    final p = _officialBarangaySetup.province.trim().toLowerCase();
+    final c = _officialBarangaySetup.city.trim().toLowerCase();
+    final b = _officialBarangaySetup.barangay.trim().toLowerCase();
+    return '$p|$c|$b';
+  }
+  final resident = _currentResidentProfile;
+  if (resident != null) {
+    final p = resident.province.trim().toLowerCase();
+    final c = resident.cityMunicipality.trim().toLowerCase();
+    final b = resident.barangay.trim().toLowerCase();
+    return '$p|$c|$b';
+  }
+  return '';
+}
+
+Future<void> _syncScopedBarangayBranding({bool force = false}) async {
+  if (_authToken == null || _authToken!.isEmpty) {
+    return;
+  }
+  final scopeKey = _currentScopeKeyForBranding();
+  if (!force && scopeKey.isEmpty) {
+    return;
+  }
+  final paths = <String>[
+    'barangay/branding',
+    if (_currentOfficialMobile != null && _currentOfficialMobile!.isNotEmpty)
+      'official/barangay-setup',
+  ];
+  for (final path in paths) {
+    for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+      try {
+        final response = await http.get(
+          endpoint,
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $_authToken',
+          },
+        ).timeout(const Duration(seconds: 8));
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          continue;
+        }
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        if (decoded is! Map<String, dynamic>) {
+          continue;
+        }
+        final contentType = (response.headers['content-type'] ?? '').toLowerCase();
+        final looksLikeHtml = contentType.contains('text/html') ||
+            response.body.trimLeft().toLowerCase().startsWith('<!doctype html') ||
+            response.body.trimLeft().toLowerCase().startsWith('<html');
+        if (looksLikeHtml) {
+          continue;
+        }
+        final source = decoded['branding'] is Map<String, dynamic>
+            ? decoded['branding'] as Map<String, dynamic>
+            : (decoded['setup'] is Map<String, dynamic>
+                ? decoded['setup'] as Map<String, dynamic>
+                : <String, dynamic>{});
+        if (source.isEmpty) {
+          continue;
+        }
+        final raw = (source['logo_image_base64'] ?? '').toString().trim();
+        Uint8List? logoBytes;
+        if (raw.isNotEmpty) {
+          try {
+            final cleaned = raw.startsWith('data:image/')
+                ? raw.split(',').last
+                : raw;
+            logoBytes = base64Decode(cleaned);
+          } catch (_) {
+            logoBytes = null;
+          }
+        }
+        _scopedBarangayLogoBytes.value = logoBytes;
+        _scopedBarangayLogoRefresh.value = _scopedBarangayLogoRefresh.value + 1;
+
+        if (source['logo_file_name'] != null) {
+          final logoName = source['logo_file_name'].toString().trim();
+          _officialBarangaySetup.logoFileName = logoName.isEmpty ? null : logoName;
+          _officialBarangaySetup.logoBytes = logoBytes;
+        }
+        return;
+      } on TimeoutException {
+        continue;
+      } catch (_) {
+        continue;
+      }
     }
   }
 }
@@ -1884,6 +1985,7 @@ Future<void> _completeResidentSignIn(
   }
   await _ResidentMpinStore.rememberMobile(mobile);
   await _FirstRoleAccessStore.markRegistered(UserRole.resident);
+  await _syncScopedBarangayBranding(force: true);
   _recordSecurityLog(
     UserRole.resident,
     mobile: normalizedMobile,
@@ -1956,6 +2058,7 @@ Future<void> _completeOfficialSignIn(
   }
   await _OfficialMpinStore.rememberMobile(normalized);
   await _FirstRoleAccessStore.markRegistered(UserRole.official);
+  await _syncScopedBarangayBranding(force: true);
   _recordSecurityLog(
     UserRole.official,
     mobile: normalized,

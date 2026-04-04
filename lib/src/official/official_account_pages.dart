@@ -1492,9 +1492,7 @@ class OfficialBarangaySetupPage extends StatefulWidget {
 }
 
 class _OfficialBarangaySetupPageState extends State<OfficialBarangaySetupPage> {
-  final _population = TextEditingController(
-    text: _officialBarangaySetup.population.toString(),
-  );
+  final _populationPlaceholder = TextEditingController();
   final _divisionCount = TextEditingController(
     text: _officialBarangaySetup.divisionCount.toString(),
   );
@@ -1512,11 +1510,19 @@ class _OfficialBarangaySetupPageState extends State<OfficialBarangaySetupPage> {
   );
   Uint8List? _logoBytes = _officialBarangaySetup.logoBytes;
   String? _logoName = _officialBarangaySetup.logoFileName;
+  int? _computedPopulation;
+  bool _loading = true;
   bool _saving = false;
 
   @override
+  void initState() {
+    super.initState();
+    _loadSetup();
+  }
+
+  @override
   void dispose() {
-    _population.dispose();
+    _populationPlaceholder.dispose();
     _divisionCount.dispose();
     _foundedYear.dispose();
     _website.dispose();
@@ -1545,6 +1551,44 @@ class _OfficialBarangaySetupPageState extends State<OfficialBarangaySetupPage> {
     ),
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
   );
+
+  Future<void> _loadSetup() async {
+    setState(() => _loading = true);
+    final result = await _OfficialBarangaySetupApi.instance.fetch();
+    if (!mounted) {
+      return;
+    }
+    if (result.success && result.setup != null) {
+      final setup = result.setup!;
+      _divisionType = setup.divisionType;
+      _divisionCount.text = '${setup.divisionCount}';
+      _foundedYear.text = '${setup.foundingYear}';
+      _website.text = setup.website;
+      _facebook.text = setup.facebookUrl;
+      _latitude.text = setup.latitude == null ? '' : _formatCoordinateValue(setup.latitude!);
+      _longitude.text = setup.longitude == null ? '' : _formatCoordinateValue(setup.longitude!);
+      _logoName = setup.logoFileName;
+      _logoBytes = setup.logoBytes;
+
+      _officialBarangaySetup
+        ..divisionType = setup.divisionType
+        ..divisionCount = setup.divisionCount
+        ..foundingYear = setup.foundingYear
+        ..website = setup.website
+        ..facebook = setup.facebookUrl
+        ..latitude = setup.latitude ?? _officialBarangaySetup.latitude
+        ..longitude = setup.longitude ?? _officialBarangaySetup.longitude
+        ..logoBytes = setup.logoBytes
+        ..logoFileName = setup.logoFileName;
+      _scopedBarangayLogoBytes.value = setup.logoBytes;
+      _scopedBarangayLogoRefresh.value = _scopedBarangayLogoRefresh.value + 1;
+    }
+    _computedPopulation = result.computedPopulation;
+    setState(() => _loading = false);
+    if (!result.success) {
+      _showFeature(context, result.message, tone: _ToastTone.warning);
+    }
+  }
 
   Future<void> _pickFoundingYear() async {
     final currentYear = DateTime.now().year;
@@ -1608,16 +1652,11 @@ class _OfficialBarangaySetupPageState extends State<OfficialBarangaySetupPage> {
   }
 
   Future<void> _saveSetup() async {
-    final population = int.tryParse(_population.text.trim());
     final divisionCount = int.tryParse(_divisionCount.text.trim());
     final foundingYear = int.tryParse(_foundedYear.text.trim());
     final latitude = _parseCoordinateValue(_latitude.text, min: -90, max: 90);
     final longitude = _parseCoordinateValue(_longitude.text, min: -180, max: 180);
 
-    if (population == null || population <= 0) {
-      _showFeature(context, 'Population must be a valid number.');
-      return;
-    }
     if (divisionCount == null || divisionCount <= 0) {
       _showFeature(context, 'Division count must be a valid number.');
       return;
@@ -1642,33 +1681,16 @@ class _OfficialBarangaySetupPageState extends State<OfficialBarangaySetupPage> {
     }
 
     setState(() => _saving = true);
-
-    _officialBarangaySetup
-      ..population = population
-      ..divisionType = _divisionType
-      ..divisionCount = divisionCount
-      ..foundingYear = foundingYear
-      ..website = _website.text.trim()
-      ..facebook = _facebook.text.trim()
-      ..latitude = latitude
-      ..longitude = longitude
-      ..logoBytes = _logoBytes
-      ..logoFileName = _logoName;
-
-    final result = await _AuthApi.instance.completeOfficialActivation(
-      payload: {
-        'population': population,
-        'division_type': _divisionType,
-        'division_count': divisionCount,
-        'founding_year': foundingYear,
-        if (_website.text.trim().isNotEmpty) 'website': _website.text.trim(),
-        if (_facebook.text.trim().isNotEmpty)
-          'facebook_url': _facebook.text.trim(),
-        'latitude': latitude,
-        'longitude': longitude,
-        if (_logoName != null) 'logo_file_name': _logoName,
-        if (_logoBytes != null) 'logo_image_base64': base64Encode(_logoBytes!),
-      },
+    final result = await _OfficialBarangaySetupApi.instance.save(
+      divisionType: _divisionType,
+      divisionCount: divisionCount,
+      foundingYear: foundingYear,
+      website: _website.text.trim(),
+      facebookUrl: _facebook.text.trim(),
+      latitude: latitude,
+      longitude: longitude,
+      logoName: _logoName,
+      logoBytes: _logoBytes,
     );
 
     if (!mounted) {
@@ -1677,10 +1699,12 @@ class _OfficialBarangaySetupPageState extends State<OfficialBarangaySetupPage> {
     setState(() => _saving = false);
     _showFeature(
       context,
-      result.success
-          ? 'Barangay setup saved.'
-          : 'Saved locally. ${result.message}',
+      result.message,
+      tone: result.success ? _ToastTone.success : _ToastTone.warning,
     );
+    if (result.success) {
+      await _loadSetup();
+    }
   }
 
   @override
@@ -1692,46 +1716,301 @@ class _OfficialBarangaySetupPageState extends State<OfficialBarangaySetupPage> {
         backgroundColor: Colors.white,
         foregroundColor: _officialText,
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _ActivationSetupStep(
-              field: _field,
-              population: _population,
-              divisionCount: _divisionCount,
-              divisionType: _divisionType,
-              onDivision: (v) => setState(() => _divisionType = v ?? 'Zone'),
-              foundedYear: _foundedYear,
-              website: _website,
-              facebook: _facebook,
-              latitude: _latitude,
-              longitude: _longitude,
-              logoBytes: _logoBytes,
-              logoName: _logoName,
-              onPickFoundedYear: _pickFoundingYear,
-              onPickLogo: _pickBarangayLogo,
-            ),
-          ),
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _saving ? null : _saveSetup,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _actRed,
-                    minimumSize: const Size.fromHeight(48),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                Expanded(
+                  child: _ActivationSetupStep(
+                    field: _field,
+                    population: _populationPlaceholder,
+                    showPopulationInput: false,
+                    populationReadonlyLabel: _computedPopulation == null
+                        ? 'No resident records yet'
+                        : '${_computedPopulation!} resident(s) auto-detected',
+                    divisionCount: _divisionCount,
+                    divisionType: _divisionType,
+                    onDivision: (v) => setState(() => _divisionType = v ?? 'Zone'),
+                    foundedYear: _foundedYear,
+                    website: _website,
+                    facebook: _facebook,
+                    latitude: _latitude,
+                    longitude: _longitude,
+                    logoBytes: _logoBytes,
+                    logoName: _logoName,
+                    onPickFoundedYear: _pickFoundingYear,
+                    onPickLogo: _pickBarangayLogo,
                   ),
-                  child: Text(_saving ? 'SAVING...' : 'SAVE SETUP'),
                 ),
-              ),
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _saving ? null : _saveSetup,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _actRed,
+                          minimumSize: const Size.fromHeight(48),
+                        ),
+                        child: Text(_saving ? 'SAVING...' : 'SAVE SETUP'),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     );
+  }
+}
+
+class _OfficialBarangaySetupData {
+  final String divisionType;
+  final int divisionCount;
+  final int foundingYear;
+  final String website;
+  final String facebookUrl;
+  final double? latitude;
+  final double? longitude;
+  final String? logoFileName;
+  final Uint8List? logoBytes;
+
+  const _OfficialBarangaySetupData({
+    required this.divisionType,
+    required this.divisionCount,
+    required this.foundingYear,
+    required this.website,
+    required this.facebookUrl,
+    this.latitude,
+    this.longitude,
+    this.logoFileName,
+    this.logoBytes,
+  });
+}
+
+class _OfficialBarangaySetupApiResult {
+  final bool success;
+  final String message;
+  final _OfficialBarangaySetupData? setup;
+  final int? computedPopulation;
+
+  const _OfficialBarangaySetupApiResult({
+    required this.success,
+    required this.message,
+    this.setup,
+    this.computedPopulation,
+  });
+}
+
+class _OfficialBarangaySetupApi {
+  _OfficialBarangaySetupApi._();
+  static final instance = _OfficialBarangaySetupApi._();
+
+  Future<_OfficialBarangaySetupApiResult> fetch() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _OfficialBarangaySetupApiResult(
+        success: false,
+        message: 'Login required.',
+      );
+    }
+
+    for (final endpoint in _AuthApi.instance._endpointCandidates('official/barangay-setup')) {
+      try {
+        final response = await http.get(
+          endpoint,
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $_authToken',
+          },
+        ).timeout(const Duration(seconds: 8));
+        if (response.statusCode == 404) {
+          continue;
+        }
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        if (decoded is! Map<String, dynamic>) {
+          return const _OfficialBarangaySetupApiResult(
+            success: false,
+            message: 'Invalid barangay setup response.',
+          );
+        }
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          return _OfficialBarangaySetupApiResult(
+            success: false,
+            message: _extractApiMessage(decoded, 'Unable to load barangay setup.'),
+          );
+        }
+        return _OfficialBarangaySetupApiResult(
+          success: true,
+          message: _extractApiMessage(decoded, 'Barangay setup loaded.'),
+          setup: _mapSetup(decoded['setup']),
+          computedPopulation: _readInt(decoded['computed_population']),
+        );
+      } on TimeoutException {
+        return const _OfficialBarangaySetupApiResult(
+          success: false,
+          message: 'Barangay setup request timed out.',
+        );
+      } catch (_) {
+        return const _OfficialBarangaySetupApiResult(
+          success: false,
+          message: 'Unable to load barangay setup.',
+        );
+      }
+    }
+    return const _OfficialBarangaySetupApiResult(
+      success: false,
+      message: 'Barangay setup endpoint unavailable.',
+    );
+  }
+
+  Future<_OfficialBarangaySetupApiResult> save({
+    required String divisionType,
+    required int divisionCount,
+    required int foundingYear,
+    required String website,
+    required String facebookUrl,
+    required double? latitude,
+    required double? longitude,
+    required String? logoName,
+    required Uint8List? logoBytes,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _OfficialBarangaySetupApiResult(
+        success: false,
+        message: 'Login required.',
+      );
+    }
+
+    final payload = <String, dynamic>{
+      'division_type': divisionType,
+      'division_count': divisionCount,
+      'founding_year': foundingYear,
+      if (website.isNotEmpty) 'website': website,
+      if (facebookUrl.isNotEmpty) 'facebook_url': facebookUrl,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      if (logoName != null && logoName.trim().isNotEmpty) 'logo_file_name': logoName.trim(),
+      if (logoBytes != null) 'logo_image_base64': base64Encode(logoBytes),
+    };
+
+    for (final endpoint in _AuthApi.instance._endpointCandidates('official/barangay-setup')) {
+      try {
+        final response = await http.post(
+          endpoint,
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $_authToken',
+          },
+          body: jsonEncode(payload),
+        ).timeout(const Duration(seconds: 10));
+        if (response.statusCode == 404) {
+          continue;
+        }
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        if (decoded is! Map<String, dynamic>) {
+          return const _OfficialBarangaySetupApiResult(
+            success: false,
+            message: 'Invalid barangay setup response.',
+          );
+        }
+        return _OfficialBarangaySetupApiResult(
+          success: response.statusCode >= 200 && response.statusCode < 300,
+          message: _extractApiMessage(
+            decoded,
+            response.statusCode >= 200 && response.statusCode < 300
+                ? 'Barangay setup saved.'
+                : 'Unable to save barangay setup.',
+          ),
+          setup: _mapSetup(decoded['setup']),
+          computedPopulation: _readInt(decoded['computed_population']),
+        );
+      } on TimeoutException {
+        return const _OfficialBarangaySetupApiResult(
+          success: false,
+          message: 'Barangay setup save request timed out.',
+        );
+      } catch (_) {
+        return const _OfficialBarangaySetupApiResult(
+          success: false,
+          message: 'Unable to save barangay setup.',
+        );
+      }
+    }
+    return const _OfficialBarangaySetupApiResult(
+      success: false,
+      message: 'Barangay setup endpoint unavailable.',
+    );
+  }
+
+  _OfficialBarangaySetupData? _mapSetup(dynamic raw) {
+    if (raw is! Map<String, dynamic>) {
+      return null;
+    }
+    String readString(String key) {
+      final value = raw[key];
+      if (value is String) return value.trim();
+      if (value == null) return '';
+      return value.toString().trim();
+    }
+
+    int readInt(String key, int fallback) {
+      final value = raw[key];
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      if (value is String) return int.tryParse(value.trim()) ?? fallback;
+      return fallback;
+    }
+
+    double? readDouble(String key) {
+      final value = raw[key];
+      if (value is double) return value;
+      if (value is num) return value.toDouble();
+      if (value is String) return double.tryParse(value.trim());
+      return null;
+    }
+
+    final logoBase64 = readString('logo_image_base64');
+    Uint8List? logoBytes;
+    if (logoBase64.isNotEmpty) {
+      try {
+        final cleaned = logoBase64.startsWith('data:image/')
+            ? logoBase64.split(',').last
+            : logoBase64;
+        logoBytes = base64Decode(cleaned);
+      } catch (_) {
+        logoBytes = null;
+      }
+    }
+
+    final logoFileName = readString('logo_file_name');
+    return _OfficialBarangaySetupData(
+      divisionType: readString('division_type').isEmpty ? 'Zone' : readString('division_type'),
+      divisionCount: readInt('division_count', 1),
+      foundingYear: readInt('founding_year', DateTime.now().year),
+      website: readString('website'),
+      facebookUrl: readString('facebook_url'),
+      latitude: readDouble('latitude'),
+      longitude: readDouble('longitude'),
+      logoFileName: logoFileName.isEmpty ? null : logoFileName,
+      logoBytes: logoBytes,
+    );
+  }
+
+  int? _readInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value.trim());
+    return null;
+  }
+
+  String _extractApiMessage(Map<String, dynamic> body, String fallback) {
+    final message = body['message'];
+    if (message is String && message.trim().isNotEmpty) {
+      return message.trim();
+    }
+    return fallback;
   }
 }
 

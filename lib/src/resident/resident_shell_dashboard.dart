@@ -18,6 +18,12 @@ class _ResidentHomeShellState extends State<ResidentHomeShell> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    unawaited(_syncScopedBarangayBranding(force: true));
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -925,10 +931,22 @@ class ResidentDashboardPage extends StatelessWidget {
             ),
             border: Border.all(color: const Color(0x66FFFFFF)),
           ),
-          child: Image.asset(
-            'public/barangaymo.png',
-            fit: BoxFit.contain,
-            filterQuality: FilterQuality.high,
+          child: ValueListenableBuilder<Uint8List?>(
+            valueListenable: _scopedBarangayLogoBytes,
+            builder: (context, logoBytes, _) {
+              if (logoBytes != null) {
+                return Image.memory(
+                  logoBytes,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.high,
+                );
+              }
+              return Image.asset(
+                'public/barangaymo.png',
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+              );
+            },
           ),
         );
         return Container(

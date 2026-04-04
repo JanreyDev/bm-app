@@ -1472,6 +1472,8 @@ class _MiniFeature extends StatelessWidget {
 class _ActivationSetupStep extends StatelessWidget {
   final InputDecoration Function(String, {String? hint}) field;
   final TextEditingController population;
+  final bool showPopulationInput;
+  final String? populationReadonlyLabel;
   final TextEditingController divisionCount;
   final String divisionType;
   final ValueChanged<String?> onDivision;
@@ -1487,6 +1489,8 @@ class _ActivationSetupStep extends StatelessWidget {
   const _ActivationSetupStep({
     required this.field,
     required this.population,
+    this.showPopulationInput = true,
+    this.populationReadonlyLabel,
     required this.divisionCount,
     required this.divisionType,
     required this.onDivision,
@@ -1521,15 +1525,47 @@ class _ActivationSetupStep extends StatelessWidget {
             style: TextStyle(color: _actSubtext, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 12),
-          TextField(
-            controller: population,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: field(
-              'Population',
-              hint: 'Enter the total barangay population',
+          if (showPopulationInput)
+            TextField(
+              controller: population,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: field(
+                'Population',
+                hint: 'Enter the total barangay population',
+              ),
+            )
+          else
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF4F6FC),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _actBorder),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Population (Auto-computed)',
+                    style: TextStyle(
+                      color: _actSubtext,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    populationReadonlyLabel ?? 'Loading population...',
+                    style: const TextStyle(
+                      color: _actText,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
             initialValue: divisionType,

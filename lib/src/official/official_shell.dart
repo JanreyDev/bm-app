@@ -57,6 +57,12 @@ class _HomeShellState extends State<HomeShell> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    unawaited(_syncScopedBarangayBranding(force: true));
+  }
+
+  @override
   Widget build(BuildContext context) {
     final liveBarangay = _officialEditableProfile.value.barangay.trim();
     final barangayTitle = liveBarangay.isEmpty
@@ -1063,13 +1069,28 @@ class _OfficialHomePageState extends State<_OfficialHomePage> {
                     color: const Color(0xFFF6F8FF),
                   ),
                   padding: const EdgeInsets.all(9),
-                  child: Image.asset(
-                    'public/barangaymo.png',
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Icon(
-                      Icons.location_city,
-                      color: _officialHeaderStart,
-                    ),
+                  child: ValueListenableBuilder<Uint8List?>(
+                    valueListenable: _scopedBarangayLogoBytes,
+                    builder: (context, logoBytes, _) {
+                      if (logoBytes != null) {
+                        return Image.memory(
+                          logoBytes,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.location_city,
+                            color: _officialHeaderStart,
+                          ),
+                        );
+                      }
+                      return Image.asset(
+                        'public/barangaymo.png',
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.location_city,
+                          color: _officialHeaderStart,
+                        ),
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(width: 10),
