@@ -858,11 +858,6 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
       debugOtp = resend.otpDebugCode ?? debugOtp;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Code sent. Verify OTP to complete account creation.'),
-      ),
-    );
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -871,6 +866,7 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
           mobile: _mobileController.text,
           debugOtpCode: debugOtp,
           pin: _passwordController.text.trim(),
+          showCodeSentNotice: true,
         ),
       ),
     );
@@ -1234,6 +1230,7 @@ class AuthOtpVerificationPage extends StatefulWidget {
   final String mobile;
   final String? debugOtpCode;
   final String? pin;
+  final bool showCodeSentNotice;
 
   const AuthOtpVerificationPage({
     super.key,
@@ -1241,6 +1238,7 @@ class AuthOtpVerificationPage extends StatefulWidget {
     required this.mobile,
     this.debugOtpCode,
     this.pin,
+    this.showCodeSentNotice = false,
   });
 
   @override
@@ -1272,6 +1270,18 @@ class _AuthOtpVerificationPageState extends State<AuthOtpVerificationPage> {
   void initState() {
     super.initState();
     _debugOtpCode = widget.debugOtpCode;
+    if (widget.showCodeSentNotice) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Code sent. Verify OTP to complete account creation.'),
+          ),
+        );
+      });
+    }
   }
 
   @override
