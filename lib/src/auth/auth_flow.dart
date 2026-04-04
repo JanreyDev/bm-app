@@ -1617,9 +1617,24 @@ Future<void> _syncScopedBarangayBranding({bool force = false}) async {
             ? decoded['branding'] as Map<String, dynamic>
             : (decoded['setup'] is Map<String, dynamic>
                 ? decoded['setup'] as Map<String, dynamic>
-                : <String, dynamic>{});
+                : (decoded['data'] is Map<String, dynamic>
+                    ? (decoded['data'] as Map<String, dynamic>)
+                    : <String, dynamic>{}));
         if (source.isEmpty) {
           continue;
+        }
+        String readString(List<String> keys) {
+          for (final key in keys) {
+            final rawValue = source[key];
+            if (rawValue == null) {
+              continue;
+            }
+            final text = rawValue.toString().trim();
+            if (text.isNotEmpty) {
+              return text;
+            }
+          }
+          return '';
         }
         final raw = (source['logo_image_base64'] ?? '').toString().trim();
         Uint8List? logoBytes;
@@ -1635,6 +1650,35 @@ Future<void> _syncScopedBarangayBranding({bool force = false}) async {
         }
         _scopedBarangayLogoBytes.value = logoBytes;
         _scopedBarangayLogoRefresh.value = _scopedBarangayLogoRefresh.value + 1;
+
+        if (_currentOfficialMobile != null &&
+            _currentOfficialMobile!.trim().isNotEmpty) {
+          final nextBarangay = readString(const [
+            'barangay',
+            'barangay_name',
+          ]);
+          final nextCity = readString(const [
+            'city_municipality',
+            'city',
+            'municipality',
+          ]);
+          final nextProvince = readString(const [
+            'province',
+          ]);
+
+          if (nextBarangay.isNotEmpty) {
+            _officialBarangaySetup.barangay = nextBarangay;
+            _officialEditableProfile.value = _officialEditableProfile.value.copyWith(
+              barangay: nextBarangay,
+            );
+          }
+          if (nextCity.isNotEmpty) {
+            _officialBarangaySetup.city = nextCity;
+          }
+          if (nextProvince.isNotEmpty) {
+            _officialBarangaySetup.province = nextProvince;
+          }
+        }
 
         if (source['logo_file_name'] != null) {
           final logoName = source['logo_file_name'].toString().trim();
