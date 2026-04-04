@@ -792,48 +792,23 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
                 ),
               ),
             const SizedBox(height: 12),
-            const Text(
-              'Available Requests',
-              style: TextStyle(
-                fontSize: 20,
+            Text(
+              'Your Requests',
+              style: const TextStyle(
+                fontSize: 22,
                 fontWeight: FontWeight.w900,
                 color: Color(0xFF2F334A),
               ),
             ),
             const SizedBox(height: 2),
             Text(
-              '${_availableRequests.length} service request type(s) available',
+              'View the status and details of your previous submissions.',
               style: const TextStyle(
                 color: Color(0xFF6A7089),
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 10),
-            ..._availableRequests.map(
-              (entry) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _requestActionCard(
-                  context: context,
-                  title: entry.title,
-                  subtitle: entry.subtitle,
-                  icon: entry.icon,
-                  buttonLabel: entry.buttonLabel,
-                  color: entry.color,
-                  leadTime: entry.leadTime,
-                  onTap: () => _openRequestComposer(entry),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Request History (${rows.length})',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                color: Color(0xFF2F334A),
-              ),
-            ),
-            const SizedBox(height: 8),
             if (rows.isEmpty)
               Container(
                 padding: const EdgeInsets.all(14),
@@ -866,7 +841,10 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE4E6F3)),
+                    border: Border.all(
+                      color: _categoryColor(item.category).withValues(alpha: 0.3),
+                      width: 1.5,
+                    ),
                     boxShadow: const [
                       BoxShadow(
                         color: Color(0x12000000),
@@ -880,44 +858,66 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
                     children: [
                       Row(
                         children: [
-                          Icon(
-                            _statusIcon(item.status),
-                            color: _statusColor(item.status),
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: _categoryColor(item.category).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              _categoryIcon(item.category),
+                              color: _categoryColor(item.category),
+                              size: 20,
+                            ),
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 8),
                           Expanded(
-                            child: Text(
-                              item.title,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF2D3148),
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.title,
+                                  style: const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF2D3148),
+                                  ),
+                                ),
+                                Text(
+                                  item.category,
+                                  style: TextStyle(
+                                    color: _categoryColor(item.category),
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 11,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
+                              horizontal: 10,
+                              vertical: 5,
                             ),
                             decoration: BoxDecoration(
                               color: _statusColor(
                                 item.status,
-                              ).withValues(alpha: 0.13),
+                              ).withValues(alpha: 0.14),
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
                               item.status,
                               style: TextStyle(
                                 color: _statusColor(item.status),
-                                fontWeight: FontWeight.w800,
-                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 11,
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 8),
                       Text(
                         'ID: ${item.requestId} | ${item.date}',
                         style: const TextStyle(
@@ -934,38 +934,16 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _statusColor(
-                                item.status,
-                              ).withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              item.category,
-                              style: TextStyle(
-                                color: _statusColor(item.status),
-                                fontWeight: FontWeight.w800,
-                                fontSize: 12,
-                              ),
-                            ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: () => _openRequestDetails(context, item),
+                          icon: const Icon(
+                            Icons.visibility_rounded,
+                            size: 18,
                           ),
-                          const Spacer(),
-                          TextButton.icon(
-                            onPressed: () => _openRequestDetails(context, item),
-                            icon: const Icon(
-                              Icons.visibility_rounded,
-                              size: 18,
-                            ),
-                            label: const Text('Details'),
-                          ),
-                        ],
+                          label: const Text('Details'),
+                        ),
                       ),
                     ],
                   ),
@@ -990,91 +968,6 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
     );
   }
 
-  Widget _requestActionCard({
-    required BuildContext context,
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required String buttonLabel,
-    required Color color,
-    String leadTime = '2-3 days',
-    required VoidCallback onTap,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE4E7F4)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: color),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF2F334A),
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  leadTime,
-                  style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 11,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 5),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              color: Color(0xFF656B85),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              onPressed: onTap,
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: color.withValues(alpha: 0.4)),
-                foregroundColor: color,
-              ),
-              icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-              label: Text(buttonLabel),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Color _statusColor(String status) {
     switch (status) {
       case 'Approved':
@@ -1090,17 +983,35 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
   }
 
   IconData _statusIcon(String status) {
-    switch (status) {
-      case 'Approved':
-        return Icons.verified_rounded;
-      case 'Completed':
-        return Icons.download_done_rounded;
-      case 'Rejected':
-        return Icons.cancel_rounded;
-      case 'Pending':
-      default:
-        return Icons.schedule_rounded;
-    }
+    final value = status.trim().toLowerCase();
+    if (value == 'approved') return Icons.check_circle_rounded;
+    if (value == 'completed') return Icons.task_alt_rounded;
+    if (value == 'rejected') return Icons.cancel_rounded;
+    return Icons.pending_rounded;
+  }
+
+  Color _categoryColor(String category) {
+    final v = category.trim().toLowerCase();
+    if (v == 'clearance') return const Color(0xFF4A66CB);
+    if (v == 'assistance') return const Color(0xFFAE5A4E);
+    if (v == 'bpat') return const Color(0xFF3C5EA0);
+    if (v == 'council') return const Color(0xFF6A57BE);
+    if (v == 'health') return const Color(0xFF2E8A79);
+    if (v == 'community') return const Color(0xFF8A5A44);
+    if (v == 'business') return const Color(0xFFB1762B);
+    return const Color(0xFF576DD8);
+  }
+
+  IconData _categoryIcon(String category) {
+    final v = category.trim().toLowerCase();
+    if (v.contains('clearance')) return Icons.description_rounded;
+    if (v.contains('assistance')) return Icons.volunteer_activism;
+    if (v.contains('bpat')) return Icons.shield_rounded;
+    if (v.contains('council')) return Icons.groups_rounded;
+    if (v.contains('health')) return Icons.health_and_safety_rounded;
+    if (v.contains('community')) return Icons.forum_rounded;
+    if (v.contains('business')) return Icons.storefront_rounded;
+    return Icons.assignment_rounded;
   }
 
   IconData _entryIcon(_ResidentRequestEntry item) {
