@@ -1329,6 +1329,11 @@ class _AuthOtpVerificationPageState extends State<AuthOtpVerificationPage> {
       );
       return;
     } else {
+      // OTP verification is always for a new account registration.
+      // Clear any stale local activation record so the user lands on
+      // the activation flow — not the dashboard — even if this phone
+      // number was previously registered and activated.
+      await _LocalActivationStore.clear(widget.mobile);
       await _completeOfficialSignIn(
         context,
         mobile: widget.mobile,

@@ -113,7 +113,7 @@ class _SellerApi {
             final raw = body['registration'];
             _ResidentCommercialRegistrationData? registration;
             if (raw is Map<String, dynamic>) {
-              registration = _mapRegistration(raw);
+              registration = mapRegistration(raw);
             }
             return _MerchantRegistrationFetchResult(
               success: true,
@@ -213,7 +213,7 @@ class _SellerApi {
             final raw = body['registration'];
             _ResidentCommercialRegistrationData? registration;
             if (raw is Map<String, dynamic>) {
-              registration = _mapRegistration(raw);
+              registration = mapRegistration(raw);
             }
             return _MerchantRegistrationSubmitResult(
               success: true,
@@ -523,7 +523,7 @@ class _SellerApi {
     );
   }
 
-  _ResidentCommercialRegistrationData _mapRegistration(Map<String, dynamic> raw) {
+  _ResidentCommercialRegistrationData mapRegistration(Map<String, dynamic> raw) {
     String read(String key, {String fallback = ''}) {
       final value = raw[key];
       if (value == null) {

@@ -718,61 +718,66 @@ class _OfficialHomePageState extends State<_OfficialHomePage> {
     required String label,
     required String value,
     required String note,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _officialCardBorder),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x12000000),
-            blurRadius: 8,
-            offset: Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 15, color: _officialSubtext),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Color(0xFF5E647C),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _officialCardBorder),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x12000000),
+              blurRadius: 8,
+              offset: Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 15, color: _officialSubtext),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Color(0xFF5E647C),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value.replaceAll('\n', ' '),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _officialHeaderStart,
+                fontWeight: FontWeight.w900,
+                fontSize: 30,
               ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value.replaceAll('\n', ' '),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: _officialHeaderStart,
-              fontWeight: FontWeight.w900,
-              fontSize: 30,
             ),
-          ),
-          Text(
-            note,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: _officialSubtext,
-              fontWeight: FontWeight.w600,
-              fontSize: 11,
+            Text(
+              note,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _officialSubtext,
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1194,6 +1199,12 @@ class _OfficialHomePageState extends State<_OfficialHomePage> {
                 label: 'Market Products',
                 value: '${_snapshot.marketProductCount}',
                 note: '${_snapshot.verifiedMarketProductCount} verified listing(s)',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const OfficialMerchantVerificationPage(),
+                  ),
+                ),
               ),
             ],
           ),
@@ -1366,6 +1377,7 @@ class _SimplePage extends StatefulWidget {
 class _SimplePageState extends State<_SimplePage> {
   late DateTime _lastSynced;
   int _refreshTick = 0;
+  int _pendingMerchantVerifications = 0;
   late List<String> _rows;
   List<_SimpleTimelineItem> _officialTimeline = const <_SimpleTimelineItem>[];
   List<_SimpleTimelineItem> _marketTimeline = const <_SimpleTimelineItem>[];
@@ -1692,8 +1704,19 @@ class _SimplePageState extends State<_SimplePage> {
       ['metrics', 'pending_deliveries'],
     ]);
 
+    final registrationsResult =
+        await _OfficialMerchantApi.instance.fetchRegistrations(onlyPending: true);
+    if (!mounted) {
+      return next;
+    }
+    _pendingMerchantVerifications =
+        registrationsResult.success ? registrationsResult.registrations.length : 0;
+
+    // Reset next[0] to our permanent Merchant Management row
+    next[0] = 'Merchant Management: ${_pendingMerchantVerifications > 0 ? '$_pendingMerchantVerifications pending application(s)' : 'View verified & applicants'}';
+
     if (!productsResult.success && summary == null) {
-      next[0] = 'Marketplace Vendors: Data unavailable right now';
+      // next[0] is already set above
       next[1] = 'Today\'s Transactions: Data unavailable right now';
       next[2] = 'Top Category: Data unavailable right now';
       next[3] = 'Delivery Requests: Data unavailable right now';
@@ -1711,7 +1734,8 @@ class _SimplePageState extends State<_SimplePage> {
 
     final categoryCounts = <String, int>{};
     for (final item in products) {
-      final key = item.category.trim().isEmpty ? 'Uncategorized' : item.category.trim();
+      final key =
+          item.category.trim().isEmpty ? 'Uncategorized' : item.category.trim();
       categoryCounts[key] = (categoryCounts[key] ?? 0) + 1;
     }
     var topCategory = 'No categories yet';
@@ -1738,15 +1762,21 @@ class _SimplePageState extends State<_SimplePage> {
     final effectiveSoldUnits = summarySoldUnits ?? soldUnits;
     final effectiveTopCategory =
         summaryTopCategory.isNotEmpty ? summaryTopCategory : topCategory;
-    final effectivePendingDeliveries = summaryPendingDeliveries ?? deliveryPending;
+    final effectiveDeliveries = summaryPendingDeliveries ?? deliveryPending;
 
-    next[0] = 'Marketplace Vendors: $effectiveVendors registered stall(s)';
-    next[1] = 'Today\'s Transactions: $effectiveSoldUnits sold unit(s) logged';
-    next[2] = 'Top Category: $effectiveTopCategory';
-    next[3] = 'Delivery Requests: $effectivePendingDeliveries pending fulfillment(s)';
+    if (next.length < 5) {
+      while (next.length < 5) {
+        next.add('');
+      }
+    }
+
+    // next[0] is Merchant Management (Set above)
+    next[1] = 'Marketplace Vendors: $effectiveVendors registered stall(s)';
+    next[2] = 'Today\'s Transactions: $effectiveSoldUnits sold unit(s) logged';
+    next[3] = 'Top Category: $effectiveTopCategory';
+    next[4] = 'Delivery Requests: $effectiveDeliveries pending fulfillment(s)';
 
     _marketTimeline = backendTimeline;
-
     return next;
   }
 
@@ -2318,6 +2348,74 @@ class _SimplePageState extends State<_SimplePage> {
               ),
             ),
             const SizedBox(height: 12),
+            ...[
+              if (widget.title.toLowerCase() == 'market' &&
+                  _pendingMerchantVerifications > 0)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: InkWell(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const OfficialMerchantVerificationPage(),
+                      ),
+                    ),
+                    borderRadius: BorderRadius.circular(17),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF2ED),
+                        borderRadius: BorderRadius.circular(17),
+                        border: Border.all(color: const Color(0xFFFFD6C4)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFE0D1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.notification_important_rounded,
+                              color: Color(0xFFD35400),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Merchant Verifications',
+                                  style: TextStyle(
+                                    color: Color(0xFF943100),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                Text(
+                                  '$_pendingMerchantVerifications pending application(s) for review',
+                                  style: const TextStyle(
+                                    color: Color(0xFFBA5512),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: Color(0xFFBA5512),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
             ..._rows.asMap().entries.map((entry) {
               final text = entry.value;
               final parts = text.split(':');
@@ -2347,9 +2445,19 @@ class _SimplePageState extends State<_SimplePage> {
                     ),
                   );
                 },
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+                child: InkWell(
+                  onTap: key == 'Merchant Management'
+                      ? () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const OfficialMerchantVerificationPage(),
+                            ),
+                          )
+                      : null,
+                  borderRadius: BorderRadius.circular(17),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(17),
@@ -2392,76 +2500,92 @@ class _SimplePageState extends State<_SimplePage> {
                               ),
                             ),
                             const SizedBox(height: 1),
-                            Text(
-                              value,
-                              maxLines: isPureNumber ? 1 : 2,
-                              overflow: isPureNumber
-                                  ? TextOverflow.visible
-                                  : TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: _officialText,
-                                fontWeight: FontWeight.w900,
-                                fontSize: hasPair
-                                    ? (isPureNumber ? 34 : 17)
-                                    : 18,
-                                height: hasPair
-                                    ? (isPureNumber ? 1.04 : 1.2)
-                                    : 1.2,
-                              ),
-                            ),
+                            (value.contains('Loading...') ||
+                                    value.toLowerCase().contains('unavailable'))
+                                ? _skeletonRow(palette)
+                                : Text(
+                                    value,
+                                    maxLines: isPureNumber ? 1 : 2,
+                                    overflow: isPureNumber
+                                        ? TextOverflow.visible
+                                        : TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: _officialText,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: hasPair
+                                          ? (isPureNumber ? 34 : 17)
+                                          : 18,
+                                      height: hasPair
+                                          ? (isPureNumber ? 1.04 : 1.2)
+                                          : 1.2,
+                                    ),
+                                  ),
                             const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: meta.badge.bg,
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                        meta.badge.icon,
-                                          size: 14,
-                                        color: meta.badge.fg,
+                            (value.contains('Loading...') ||
+                                    value.toLowerCase().contains('unavailable'))
+                                ? Row(
+                                    children: [
+                                      _skeletonBadge(),
+                                      const Spacer(),
+                                      _skeletonMinibars(palette),
+                                    ],
+                                  )
+                                : Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
                                         ),
-                                      const SizedBox(width: 5),
-                                      Text(
-                                        meta.badge.label,
-                                        style: TextStyle(
-                                          color: meta.badge.fg,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 11,
+                                        decoration: BoxDecoration(
+                                          color: meta.badge.bg,
+                                          borderRadius: BorderRadius.circular(999),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              meta.badge.icon,
+                                              size: 14,
+                                              color: meta.badge.fg,
+                                            ),
+                                            const SizedBox(width: 5),
+                                            Text(
+                                              meta.badge.label,
+                                              style: TextStyle(
+                                                color: meta.badge.fg,
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
+                                      const Spacer(),
+                                      _miniBars('$key$value', palette.accent),
                                     ],
                                   ),
-                                ),
-                                const Spacer(),
-                                _miniBars('$key$value', palette.accent),
-                              ],
-                            ),
                             const SizedBox(height: 5),
-                            Text(
-                              meta.hint,
-                              style: const TextStyle(
-                                color: _officialSubtext,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 11,
-                              ),
-                            ),
+                            (value.contains('Loading...') ||
+                                    value.toLowerCase().contains('unavailable'))
+                                ? _skeletonHint()
+                                : Text(
+                                    meta.hint,
+                                    style: const TextStyle(
+                                      color: _officialSubtext,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 11,
+                                    ),
+                                  ),
                           ],
                         ),
                       ),
                     ],
                   ),
                 ),
-              );
-            }),
+              ),
+            );
+          }),
             const SizedBox(height: 4),
             Container(
               padding: const EdgeInsets.all(12),
@@ -2556,6 +2680,59 @@ class _SimplePageState extends State<_SimplePage> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _skeletonRow(_SimplePalette palette) {
+    return Container(
+      width: 140,
+      height: 22,
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: palette.softAccent,
+        borderRadius: BorderRadius.circular(6),
+      ),
+    );
+  }
+
+  Widget _skeletonHint() {
+    return Container(
+      width: 100,
+      height: 12,
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F0F0),
+        borderRadius: BorderRadius.circular(4),
+      ),
+    );
+  }
+
+  Widget _skeletonBadge() {
+    return Container(
+      width: 80,
+      height: 20,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F5F5),
+        borderRadius: BorderRadius.circular(999),
+      ),
+    );
+  }
+
+  Widget _skeletonMinibars(_SimplePalette palette) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(
+        7,
+        (i) => Container(
+          width: 4,
+          height: 8.0 + (i % 3) * 4,
+          margin: const EdgeInsets.only(right: 3),
+          decoration: BoxDecoration(
+            color: palette.softAccent,
+            borderRadius: BorderRadius.circular(999),
+          ),
         ),
       ),
     );

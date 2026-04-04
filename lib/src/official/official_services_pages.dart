@@ -1772,6 +1772,11 @@ const _brgyServices = [
       pageTitle: 'Community Requests',
     ),
   ),
+  _ServiceAction(
+    'Merchant',
+    Icons.store_rounded,
+    OfficialMerchantVerificationPage(),
+  ),
 ];
 
 const _skServices = [
@@ -2575,4 +2580,356 @@ class _SerbilisProgressRow extends StatelessWidget {
       ],
     );
   }
+}
+
+class OfficialMerchantVerificationPage extends StatefulWidget {
+  const OfficialMerchantVerificationPage({super.key});
+
+  @override
+  State<OfficialMerchantVerificationPage> createState() =>
+      _OfficialMerchantVerificationPageState();
+}
+
+class _OfficialMerchantVerificationPageState
+    extends State<OfficialMerchantVerificationPage> {
+  final _registrations = <_ResidentCommercialRegistrationData>[];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    final result = await _OfficialMerchantApi.instance.fetchRegistrations();
+    if (!mounted) return;
+    if (result.success) {
+      setState(() {
+        _registrations
+          ..clear()
+          ..addAll(result.registrations);
+        _loading = false;
+      });
+    } else {
+      setState(() => _loading = false);
+      _showFeature(context, result.message, tone: _ToastTone.warning);
+    }
+  }
+
+  Future<void> _verify(_ResidentCommercialRegistrationData item, bool verified) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(verified ? 'Approve Merchant' : 'Reject Merchant'),
+        content: Text(
+          '${verified ? "Approve" : "Reject"} registration for "${item.businessName}"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: verified ? _officialHeaderStart : Colors.red,
+            ),
+            child: Text(verified ? 'Approve' : 'Reject'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final id = int.tryParse(item.id) ?? 0;
+    if (id <= 0) return;
+
+    _showFeature(context, 'Updating status...', tone: _ToastTone.info);
+    final result =
+        await _OfficialMerchantApi.instance.updateVerification(id, verified);
+    if (!mounted) return;
+
+    _showFeature(
+      context,
+      result.message,
+      tone: result.success ? _ToastTone.success : _ToastTone.warning,
+    );
+    if (result.success) {
+      unawaited(_load());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Merchant Verifications'),
+        backgroundColor: _officialHeaderStart,
+        foregroundColor: Colors.white,
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFF7F8FC), _officialSurfaceBlend],
+          ),
+        ),
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : RefreshIndicator(
+                onRefresh: _load,
+                child: _registrations.isEmpty
+                    ? ListView(
+                        children: const [
+                          Padding(
+                            padding: EdgeInsets.all(40),
+                            child: Text(
+                              'No merchant registrations found.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: _officialSubtext,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: _registrations.length,
+                        itemBuilder: (ctx, index) {
+                          final item = _registrations[index];
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: BorderSide(color: _officialCardBorder),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          item.businessName,
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w900,
+                                            color: _officialText,
+                                          ),
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: item.merchantVerified
+                                              ? Colors.green.withOpacity(0.12)
+                                              : Colors.orange.withOpacity(0.12),
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: Text(
+                                          item.verificationStatus,
+                                          style: TextStyle(
+                                            color: item.merchantVerified
+                                                ? Colors.green[800]
+                                                : Colors.orange[800],
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _infoRow(Icons.person_outline, 'Owner', item.ownerName),
+                                  _infoRow(Icons.business_center_outlined, 'Type', item.businessType),
+                                  _infoRow(Icons.phone_android_outlined, 'Contact', item.contactNumber),
+                                  _infoRow(Icons.badge_outlined, 'Permit', item.businessPermitNumber),
+                                  _infoRow(Icons.location_on_outlined, 'Address', item.address),
+                                  _infoRow(Icons.handshake_outlined, 'Meetup', item.meetupSpot),
+                                  if (!item.merchantVerified) ...[
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: OutlinedButton(
+                                            onPressed: () => _verify(item, false),
+                                            style: OutlinedButton.styleFrom(
+                                              foregroundColor: Colors.red,
+                                              side: const BorderSide(color: Colors.red),
+                                            ),
+                                            child: const Text('REJECT'),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: FilledButton(
+                                            onPressed: () => _verify(item, true),
+                                            style: FilledButton.styleFrom(
+                                              backgroundColor: _officialHeaderStart,
+                                            ),
+                                            child: const Text('APPROVE'),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+      ),
+    );
+  }
+
+  Widget _infoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 14, color: _officialSubtext),
+          const SizedBox(width: 6),
+          Text(
+            '$label: ',
+            style: const TextStyle(
+              color: _officialSubtext,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: _officialText,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OfficialMerchantApi {
+  _OfficialMerchantApi._();
+  static final instance = _OfficialMerchantApi._();
+
+  Future<_OfficialMerchantListResult> fetchRegistrations({bool onlyPending = false}) async {
+    final query = onlyPending ? '?status=pending' : '';
+    for (final endpoint in _AuthApi.instance._endpointCandidates('official/merchant-registrations$query')) {
+      try {
+        final response = await http.get(
+          endpoint,
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $_authToken',
+          },
+        ).timeout(const Duration(seconds: 8));
+        
+        if (response.statusCode == 404) continue;
+        
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          return _OfficialMerchantListResult(
+            success: false,
+            message: _extractApiMessage(decoded, 'Unable to load registrations.'),
+          );
+        }
+
+        final raw = decoded['registrations'];
+        final list = <_ResidentCommercialRegistrationData>[];
+        if (raw is List) {
+          for (final r in raw) {
+            if (r is Map<String, dynamic>) {
+              list.add(_SellerApi.instance.mapRegistration(r));
+            }
+          }
+        }
+        return _OfficialMerchantListResult(
+          success: true,
+          message: 'Registrations loaded.',
+          registrations: list,
+        );
+      } catch (e) {
+        debugPrint('[OfficialMerchantApi] Error: $e');
+      }
+    }
+    return const _OfficialMerchantListResult(success: false, message: 'Server unavailable.');
+  }
+
+  Future<_OfficialMerchantActionResult> updateVerification(int id, bool verified) async {
+    for (final endpoint in _AuthApi.instance._endpointCandidates('official/merchant-registrations/$id/verify')) {
+      try {
+        final response = await http.patch(
+          endpoint,
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $_authToken',
+          },
+          body: jsonEncode({'verified': verified}),
+        ).timeout(const Duration(seconds: 8));
+
+        if (response.statusCode == 404) continue;
+
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          return _OfficialMerchantActionResult(
+            success: false,
+            message: _extractApiMessage(decoded, 'Unable to update status.'),
+          );
+        }
+
+        return _OfficialMerchantActionResult(
+          success: true,
+          message: verified ? 'Merchant approved.' : 'Merchant rejected.',
+        );
+      } catch (e) {
+        debugPrint('[OfficialMerchantApi] Error: $e');
+      }
+    }
+    return const _OfficialMerchantActionResult(success: false, message: 'Server unavailable.');
+  }
+
+  String _extractApiMessage(dynamic decoded, String fallback) {
+    if (decoded is Map<String, dynamic>) {
+      final m = decoded['message'];
+      if (m is String && m.isNotEmpty) return m;
+    }
+    return fallback;
+  }
+}
+
+class _OfficialMerchantListResult {
+  final bool success;
+  final String message;
+  final List<_ResidentCommercialRegistrationData> registrations;
+  const _OfficialMerchantListResult({
+    required this.success,
+    required this.message,
+    this.registrations = const [],
+  });
+}
+
+class _OfficialMerchantActionResult {
+  final bool success;
+  final String message;
+  const _OfficialMerchantActionResult({required this.success, required this.message});
 }

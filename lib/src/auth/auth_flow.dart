@@ -589,32 +589,32 @@ final Map<String, _BarangayDirectoryEntry> _olongapoBarangayIndex = {
 };
 
 class _OfficialBarangaySetupDraft {
-  String barangay = 'West Tapinac';
-  String city = 'City of Olongapo';
-  String province = 'Zambales';
-  String region = 'Region 3';
-  String landmark = 'WEST TAPINAC BARANGAY HALL';
-  String website = 'https://www.westtapinac-olongapo.gov.ph';
-  String facebook = 'https://facebook.com/westtapinacofficial';
-  String divisionType = 'Zone';
-  int divisionCount = 10;
-  int population = 22365;
-  int foundingYear = 1961;
-  double latitude = 14.832231;
-  double longitude = 120.279943;
+  String barangay = '';
+  String city = '';
+  String province = '';
+  String region = '';
+  String landmark = '';
+  String website = '';
+  String facebook = '';
+  String divisionType = '';
+  int divisionCount = 0;
+  int population = 0;
+  int foundingYear = 0;
+  double latitude = 0;
+  double longitude = 0;
   Uint8List? logoBytes;
   String? logoFileName;
-  int psaPopulationBaseYear = 2025;
-  String secretaryFirstName = 'Brigette';
+  int psaPopulationBaseYear = 0;
+  String secretaryFirstName = '';
   String secretaryMiddleName = '';
-  String secretaryLastName = 'Barrera';
-  String secretarySuffix = 'None';
-  String secretaryMobile = '09123456701';
-  String secretaryEmail = 'olongapoasinan@gmail.com';
-  String secretaryIdType = 'Digital National ID';
+  String secretaryLastName = '';
+  String secretarySuffix = '';
+  String secretaryMobile = '';
+  String secretaryEmail = '';
+  String secretaryIdType = '';
   Uint8List? secretaryIdBytes;
   String? secretaryIdFileName;
-  String punongSignatureText = 'E. NAZARENO';
+  String punongSignatureText = '';
   List<List<Offset>> punongSignaturePaths = <List<Offset>>[];
 }
 
@@ -1447,6 +1447,11 @@ class _LocalActivationStore {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_keyFor(mobile)) ?? false;
   }
+
+  static Future<void> clear(String mobile) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyFor(mobile));
+  }
 }
 
 class _FirstRoleAccessStore {
@@ -2029,7 +2034,6 @@ Future<void> _completeResidentSignIn(
   }
   await _ResidentMpinStore.rememberMobile(mobile);
   await _FirstRoleAccessStore.markRegistered(UserRole.resident);
-  await _syncScopedBarangayBranding(force: true);
   _recordSecurityLog(
     UserRole.resident,
     mobile: normalizedMobile,
@@ -2051,6 +2055,7 @@ Future<void> _completeResidentSignIn(
     MaterialPageRoute(builder: (_) => const ResidentHomeShell()),
     (route) => false,
   );
+  unawaited(_syncScopedBarangayBranding(force: true));
 }
 
 Future<void> _completeOfficialSignIn(
@@ -2069,25 +2074,27 @@ Future<void> _completeOfficialSignIn(
   final localCompleted = await _LocalActivationStore.isCompleted(normalized);
   _currentOfficialMobile = normalized;
   _officialActivationCompleted = activationCompleted || localCompleted;
+  
+  debugPrint('[Auth] Official sign-in data: user=$user');
+  
   String readUser(String key) => ((user ?? const <String, dynamic>{})[key] as String? ?? '').trim();
   final profileName = readUser('name');
   final profileBarangay = readUser('barangay');
   final profileCity = readUser('city_municipality');
   final profileProvince = readUser('province');
+
+  debugPrint('[Auth] Parsed profile: name=$profileName, bgy=$profileBarangay, city=$profileCity, prov=$profileProvince');
+
   _officialEditableProfile.value = _officialEditableProfile.value.copyWith(
     name: profileName.isNotEmpty ? profileName : null,
     phone: normalized,
-    barangay: profileBarangay.isNotEmpty ? profileBarangay : _officialBarangaySetup.barangay,
+    barangay: profileBarangay.isNotEmpty ? profileBarangay : null,
   );
-  if (profileBarangay.isNotEmpty) {
-    _officialBarangaySetup.barangay = profileBarangay;
-  }
-  if (profileCity.isNotEmpty) {
-    _officialBarangaySetup.city = profileCity;
-  }
-  if (profileProvince.isNotEmpty) {
-    _officialBarangaySetup.province = profileProvince;
-  }
+  
+  // Always update setup even if empty to clear hardcoded defaults
+  _officialBarangaySetup.barangay = profileBarangay;
+  _officialBarangaySetup.city = profileCity;
+  _officialBarangaySetup.province = profileProvince;
   await _OfficialAuthCacheStore.save(
     token: token,
     mobile: normalized,
@@ -2102,7 +2109,6 @@ Future<void> _completeOfficialSignIn(
   }
   await _OfficialMpinStore.rememberMobile(normalized);
   await _FirstRoleAccessStore.markRegistered(UserRole.official);
-  await _syncScopedBarangayBranding(force: true);
   _recordSecurityLog(
     UserRole.official,
     mobile: normalized,
@@ -2124,6 +2130,7 @@ Future<void> _completeOfficialSignIn(
     MaterialPageRoute(builder: (_) => _officialHomeForSession()),
     (route) => false,
   );
+  unawaited(_syncScopedBarangayBranding(force: true));
 }
 
 Widget _loginPageForRole(UserRole role, {String? prefilledMobile}) {
