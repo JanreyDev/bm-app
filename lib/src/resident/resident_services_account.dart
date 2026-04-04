@@ -2083,7 +2083,6 @@ class ResidentServicesPage extends StatelessWidget {
   ];
 
   static const _allServices = [
-    _ServiceAction('Requests', Icons.assignment, ResidentRequestsPage()),
     _ServiceAction('Assistance', Icons.volunteer_activism, AssistancePage()),
     _ServiceAction(
       'BPAT',

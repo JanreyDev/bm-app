@@ -1638,7 +1638,6 @@ class _ServiceAction {
 }
 
 const _brgyServices = [
-  _ServiceAction('Requests', Icons.assignment_rounded, OfficialRequestsInboxPage()),
   _ServiceAction(
     'Assistance',
     Icons.volunteer_activism,
