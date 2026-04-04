@@ -1384,6 +1384,28 @@ void _cancelScheduledDeletion(UserRole role) {
   );
 }
 
+Future<void> _clearSessionAfterAccountDeletion(UserRole role) async {
+  if (role == UserRole.resident) {
+    final mobile = _currentResidentProfile?.mobile ?? '';
+    if (mobile.isNotEmpty) {
+      await _ResidentAuthCacheStore.clear(mobile);
+      await _ResidentMpinStore.clear(mobile);
+    }
+    _currentResidentProfile = null;
+  } else {
+    final mobile = _currentOfficialMobile ?? _officialEditableProfile.value.phone;
+    if (mobile.isNotEmpty) {
+      await _OfficialAuthCacheStore.clear(mobile);
+      await _OfficialMpinStore.clear(mobile);
+    }
+    _currentOfficialMobile = null;
+    _officialActivationCompleted = false;
+  }
+
+  _authToken = null;
+  _deletionRequestForRole(role).value = null;
+}
+
 String _normalizeMobileForKey(String input) {
   return input.replaceAll(RegExp(r'\D'), '');
 }
@@ -1510,6 +1532,21 @@ class _ResidentMpinStore {
   static Future<String?> lastMobile() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_lastMobileKey);
+  }
+
+  static Future<void> clear(String mobile) async {
+    final normalized = _normalizeMobileForKey(mobile);
+    if (normalized.isEmpty) {
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    for (final variant in _mobileKeyVariants(mobile)) {
+      await prefs.remove(_keyFor(variant));
+    }
+    final last = prefs.getString(_lastMobileKey);
+    if (last != null && _mobileKeyVariants(mobile).contains(last)) {
+      await prefs.remove(_lastMobileKey);
+    }
   }
 }
 
@@ -1682,6 +1719,21 @@ class _OfficialMpinStore {
   static Future<String?> lastMobile() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_lastMobileKey);
+  }
+
+  static Future<void> clear(String mobile) async {
+    final normalized = _normalizeMobileForKey(mobile);
+    if (normalized.isEmpty) {
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    for (final variant in _mobileKeyVariants(mobile)) {
+      await prefs.remove(_keyFor(variant));
+    }
+    final last = prefs.getString(_lastMobileKey);
+    if (last != null && _mobileKeyVariants(mobile).contains(last)) {
+      await prefs.remove(_lastMobileKey);
+    }
   }
 }
 
@@ -2570,6 +2622,87 @@ class _AuthApi {
         }
       }
     }
+  }
+
+  Future<_AuthApiResult> deleteAccount({
+    required String currentPin,
+    required String confirmText,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _AuthApiResult(
+        success: false,
+        message: 'Missing login session. Please log in again.',
+      );
+    }
+
+    final payload = jsonEncode({
+      'current_pin': currentPin.trim(),
+      'confirm_text': confirmText.trim().toUpperCase(),
+    });
+
+    final paths = <String>[
+      'account',
+      'account/delete',
+    ];
+
+    for (final path in paths) {
+      for (final endpoint in _endpointCandidates(path)) {
+        try {
+          http.Response response = await http
+              .delete(
+                endpoint,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $_authToken',
+                },
+                body: payload,
+              )
+              .timeout(_requestTimeout);
+          if (response.statusCode == 404) {
+            response = await http
+                .post(
+                  endpoint,
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'Authorization': 'Bearer $_authToken',
+                  },
+                  body: payload,
+                )
+                .timeout(_requestTimeout);
+          }
+          final body = _decodeResponseBody(response.body);
+          if (response.statusCode == 404) {
+            continue;
+          }
+          return _AuthApiResult(
+            success: response.statusCode >= 200 && response.statusCode < 300,
+            message: _extractMessage(
+              body,
+              fallback: response.statusCode >= 200 && response.statusCode < 300
+                  ? 'Account deleted permanently.'
+                  : 'Unable to delete account.',
+            ),
+          );
+        } on TimeoutException {
+          return const _AuthApiResult(
+            success: false,
+            message: 'Delete account request timed out.',
+          );
+        } catch (_) {
+          return const _AuthApiResult(
+            success: false,
+            message: 'Unable to delete account right now.',
+          );
+        }
+      }
+    }
+
+    return const _AuthApiResult(
+      success: false,
+      message: 'Delete account endpoint unavailable on configured API.',
+    );
   }
 
   bool _extractActivationCompleted(dynamic user) {

@@ -569,6 +569,22 @@ class _ProfileEditorPageState extends State<_ProfileEditorPage> {
               style: TextStyle(fontWeight: FontWeight.w800),
             ),
           ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => _SecurePinSettingsPage(role: widget.role),
+              ),
+            ),
+            icon: const Icon(Icons.lock_outline_rounded),
+            label: const Text('Change PIN'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: primary,
+              side: BorderSide(color: primary.withValues(alpha: 0.35)),
+              padding: const EdgeInsets.symmetric(vertical: 13),
+            ),
+          ),
         ],
       ),
     );
@@ -587,43 +603,83 @@ class _AccountDeletionWorkflowPage extends StatefulWidget {
 class _AccountDeletionWorkflowPageState
     extends State<_AccountDeletionWorkflowPage> {
   final _pinController = TextEditingController();
+  final _confirmController = TextEditingController();
   bool _confirmed = false;
+  bool _deleting = false;
 
   @override
   void dispose() {
     _pinController.dispose();
+    _confirmController.dispose();
     super.dispose();
   }
 
-  Future<void> _scheduleDeletion() async {
-    final mobile = widget.role == UserRole.resident
-        ? (_currentResidentProfile?.mobile ?? '')
-        : (_currentOfficialMobile ?? _officialEditableProfile.value.phone);
+  Future<void> _deleteAccount() async {
+    if (_confirmController.text.trim().toUpperCase() != 'DELETE') {
+      _showFeature(context, 'Type DELETE to continue.');
+      return;
+    }
     if (!_confirmed) {
       _showFeature(context, 'Confirm the deletion notice first.');
       return;
     }
-    final valid = widget.role == UserRole.resident
-        ? await _ResidentMpinStore.verifyPin(mobile, _pinController.text.trim())
-        : await _OfficialMpinStore.verifyPin(mobile, _pinController.text.trim());
-    if (!valid) {
-      _showFeature(context, 'Current PIN is incorrect.');
+    if (_pinController.text.trim().length != 6) {
+      _showFeature(context, 'Enter your current 6-digit PIN.');
       return;
     }
-    _scheduleAccountDeletion(widget.role, mobile);
-    _recordSecurityLog(
-      widget.role,
-      mobile: mobile,
-      action: 'Scheduled account deletion',
+
+    final finalConfirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Final Confirmation'),
+        content: const Text(
+          'This will permanently delete your account and linked records. Continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFD74637),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (finalConfirm != true || !mounted) {
+      return;
+    }
+
+    setState(() => _deleting = true);
+    final result = await _AuthApi.instance.deleteAccount(
+      currentPin: _pinController.text.trim(),
+      confirmText: _confirmController.text.trim(),
     );
     if (!mounted) return;
-    setState(() {});
-    _showFeature(context, 'Deletion request scheduled with a 30-day grace period.');
+    setState(() => _deleting = false);
+
+    if (!result.success) {
+      _showFeature(context, result.message, tone: _ToastTone.warning);
+      return;
+    }
+
+    await _clearSessionAfterAccountDeletion(widget.role);
+    if (!mounted) return;
+    _showFeature(context, result.message, tone: _ToastTone.success);
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const RoleGatewayScreen()),
+      (_) => false,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final request = _deletionRequestForRole(widget.role).value;
     final primary = _systemPrimaryForRole(widget.role);
     return Scaffold(
       appBar: AppBar(
@@ -642,9 +698,7 @@ class _AccountDeletionWorkflowPageState
               border: Border.all(color: const Color(0xFFF1D2D2)),
             ),
             child: Text(
-              request == null
-                  ? 'Deleting an account now starts a 30-day grace period. You can still cancel the request before ${_systemDateLabel(DateTime.now().add(const Duration(days: 30)))}.'
-                  : 'Deletion requested on ${_systemDateLabel(request.requestedAt)}. This account is scheduled for deletion on ${_systemDateLabel(request.deleteOn)}.',
+              'Deleting your account is permanent. Your profile, requests, and saved records will no longer be accessible.',
               style: const TextStyle(
                 color: Color(0xFF7A4A4A),
                 fontWeight: FontWeight.w600,
@@ -652,51 +706,45 @@ class _AccountDeletionWorkflowPageState
             ),
           ),
           const SizedBox(height: 14),
-          if (request != null) ...[
-            FilledButton.icon(
-              onPressed: () {
-                _cancelScheduledDeletion(widget.role);
-                setState(() {});
-                _showFeature(context, 'Deletion request cancelled.');
-              },
-              style: FilledButton.styleFrom(
-                backgroundColor: primary,
-                foregroundColor: Colors.white,
-              ),
-              icon: const Icon(Icons.restore_from_trash_outlined),
-              label: const Text('Cancel Deletion Request'),
+          TextField(
+            controller: _confirmController,
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(
+              labelText: 'Type DELETE to confirm',
+              hintText: 'DELETE',
+              border: OutlineInputBorder(),
             ),
-          ] else ...[
-            TextField(
-              controller: _pinController,
-              obscureText: true,
-              keyboardType: TextInputType.number,
-              maxLength: 6,
-              decoration: const InputDecoration(
-                labelText: 'Enter current 6-digit PIN',
-                border: OutlineInputBorder(),
-              ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _pinController,
+            obscureText: true,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            decoration: const InputDecoration(
+              labelText: 'Enter current 6-digit PIN',
+              border: OutlineInputBorder(),
             ),
-            const SizedBox(height: 8),
-            CheckboxListTile(
-              value: _confirmed,
-              onChanged: (v) => setState(() => _confirmed = v ?? false),
-              contentPadding: EdgeInsets.zero,
-              title: const Text(
-                'I understand my account enters a 30-day grace period before permanent deletion.',
-              ),
+          ),
+          const SizedBox(height: 8),
+          CheckboxListTile(
+            value: _confirmed,
+            onChanged: (v) => setState(() => _confirmed = v ?? false),
+            contentPadding: EdgeInsets.zero,
+            title: const Text(
+              'I understand this action is permanent and cannot be undone.',
             ),
-            const SizedBox(height: 8),
-            FilledButton.icon(
-              onPressed: _scheduleDeletion,
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFD74637),
-                foregroundColor: Colors.white,
-              ),
-              icon: const Icon(Icons.delete_outline),
-              label: const Text('Schedule Deletion'),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: _deleting ? null : _deleteAccount,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFD74637),
+              foregroundColor: Colors.white,
             ),
-          ],
+            icon: const Icon(Icons.delete_outline),
+            label: Text(_deleting ? 'Deleting...' : 'Delete Account Permanently'),
+          ),
         ],
       ),
     );

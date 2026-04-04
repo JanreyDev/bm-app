@@ -229,87 +229,6 @@ class _OfficialSettingsPageState extends State<OfficialSettingsPage> {
                           ),
                         ),
                         _settingsRow(
-                          icon: Icons.location_city_outlined,
-                          title: 'Barangay Setup',
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const OfficialBarangaySetupPage(),
-                            ),
-                          ),
-                        ),
-                        _settingsRow(
-                          icon: Icons.local_phone_outlined,
-                          title: 'Emergency Contacts',
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const OfficialEmergencyContactsPage(),
-                            ),
-                          ),
-                        ),
-                        _settingsRow(
-                          icon: Icons.lock_outline_rounded,
-                          title: 'Secure Settings',
-                          highlight: true,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const _SecurePinSettingsPage(
-                                role: UserRole.official,
-                              ),
-                            ),
-                          ),
-                        ),
-                        _settingsRow(
-                          icon: Icons.security_outlined,
-                          title: 'Security Log',
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const _SecurityLogPage(
-                                role: UserRole.official,
-                              ),
-                            ),
-                          ),
-                        ),
-                        _settingsRow(
-                          icon: Icons.history_outlined,
-                          title: 'Transaction History',
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const _TransactionHistoryPage(
-                                role: UserRole.official,
-                              ),
-                            ),
-                          ),
-                        ),
-                        _settingsRow(
-                          icon: Icons.support_agent_outlined,
-                          title: 'Help Desk',
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const _HelpDeskPage(
-                                role: UserRole.official,
-                              ),
-                            ),
-                          ),
-                        ),
-                        _settingsRow(
-                          icon: Icons.quiz_outlined,
-                          title: 'FAQs',
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const _FaqCenterPage(
-                                role: UserRole.official,
-                              ),
-                            ),
-                          ),
-                        ),
-                        _settingsRow(
                           icon: Icons.info_outline,
                           title: 'About',
                           onTap: () => Navigator.push(
@@ -328,29 +247,6 @@ class _OfficialSettingsPageState extends State<OfficialSettingsPage> {
                             context,
                             MaterialPageRoute(
                               builder: (_) => const OfficialSharePage(),
-                            ),
-                          ),
-                        ),
-                        _settingsRow(
-                          icon: Icons.logout_rounded,
-                          title: 'Log Out',
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const OfficialLogoutPage(),
-                            ),
-                          ),
-                        ),
-                        _settingsRow(
-                          icon: Icons.delete_outline,
-                          title: 'Delete Account',
-                          highlight: true,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const _AccountDeletionWorkflowPage(
-                                role: UserRole.official,
-                              ),
                             ),
                           ),
                         ),
@@ -1886,9 +1782,632 @@ class OfficialNotificationsPage extends StatefulWidget {
 }
 
 class _OfficialNotificationsPageState extends State<OfficialNotificationsPage> {
+  bool _loading = true;
+  bool _markingAll = false;
+  String _statusMessage = '';
+  List<_AppNotificationItem> _items = const <_AppNotificationItem>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotifications();
+  }
+
+  Future<void> _loadNotifications({bool showToast = false}) async {
+    setState(() {
+      _loading = true;
+    });
+    final result = await _OfficialNotificationsApi.instance.fetch();
+    if (!mounted) {
+      return;
+    }
+    if (result.success) {
+      _items = result.items;
+      _officialNotificationCenter.value = List<_AppNotificationItem>.from(_items);
+      _officialNotificationBadge.value = _items.where((item) => !item.read).length;
+      _statusMessage = result.message;
+    } else {
+      _statusMessage = result.message;
+    }
+    setState(() {
+      _loading = false;
+    });
+    if (showToast) {
+      _showFeature(
+        context,
+        _statusMessage,
+        tone: result.success ? _ToastTone.success : _ToastTone.warning,
+      );
+    }
+  }
+
+  Future<void> _markReadAndOpen(_AppNotificationItem item) async {
+    if (!item.read) {
+      final markResult = await _OfficialNotificationsApi.instance.markRead(item.id);
+      if (markResult.success) {
+        item.read = true;
+        _officialNotificationBadge.value = _items.where((entry) => !entry.read).length;
+        _officialNotificationCenter.value = List<_AppNotificationItem>.from(_items);
+      }
+      if (mounted && !markResult.success) {
+        _showFeature(context, markResult.message, tone: _ToastTone.warning);
+      }
+    }
+    if (!mounted) {
+      return;
+    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _OfficialNotificationDetailsPage(item: item),
+      ),
+    );
+  }
+
+  Future<void> _markAllRead() async {
+    setState(() {
+      _markingAll = true;
+    });
+    final result = await _OfficialNotificationsApi.instance.markAllRead();
+    if (!mounted) {
+      return;
+    }
+    if (result.success) {
+      for (final item in _items) {
+        item.read = true;
+      }
+      _officialNotificationBadge.value = 0;
+      _officialNotificationCenter.value = List<_AppNotificationItem>.from(_items);
+      _showFeature(context, result.message, tone: _ToastTone.success);
+    } else {
+      _showFeature(context, result.message, tone: _ToastTone.warning);
+    }
+    setState(() {
+      _markingAll = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return const _AdvancedNotificationCenterPage(role: UserRole.official);
+    return Scaffold(
+      backgroundColor: const Color(0xFFF6F7FB),
+      appBar: AppBar(
+        title: const Text('Official Notifications'),
+        backgroundColor: _officialHeaderStart,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            onPressed: _loading ? null : () => _loadNotifications(showToast: true),
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+          TextButton(
+            onPressed: (_markingAll || _loading || _items.isEmpty) ? null : _markAllRead,
+            child: Text(
+              _markingAll ? '...' : 'Mark all',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: () => _loadNotifications(showToast: false),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _officialCardBorder),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.notifications_active_outlined, color: _officialHeaderStart),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _statusMessage.isEmpty
+                          ? 'Notification center is connected to backend.'
+                          : _statusMessage,
+                      style: const TextStyle(
+                        color: _officialText,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFEDED),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '${_items.where((item) => !item.read).length} unread',
+                      style: const TextStyle(
+                        color: _officialHeaderStart,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.only(top: 80),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_items.isEmpty)
+              const _AppEmptyState(
+                icon: Icons.notifications_none_rounded,
+                title: 'No notifications yet',
+                subtitle: 'No backend notifications available for your barangay scope.',
+              )
+            else
+              ..._items.map((item) {
+                final accent = _notificationPriorityColor(item.priority);
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: item.read ? Colors.white : const Color(0xFFFFF4F4),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: item.read ? _officialCardBorder : accent.withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: ListTile(
+                    onTap: () => _markReadAndOpen(item),
+                    leading: CircleAvatar(
+                      backgroundColor: accent.withValues(alpha: 0.13),
+                      child: Icon(item.icon, color: accent),
+                    ),
+                    title: Text(
+                      item.title,
+                      style: const TextStyle(
+                        color: _officialText,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${item.category} - ${item.body}',
+                      style: const TextStyle(color: _officialSubtext),
+                    ),
+                    trailing: Text(
+                      _systemTimeAgo(item.createdAt),
+                      style: const TextStyle(
+                        color: _officialSubtext,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OfficialNotificationDetailsPage extends StatelessWidget {
+  final _AppNotificationItem item;
+  const _OfficialNotificationDetailsPage({required this.item});
+
+  Widget _detailTile({
+    required String label,
+    required String value,
+    IconData? icon,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _officialCardBorder),
+      ),
+      child: Row(
+        children: [
+          if (icon != null) ...[
+            Icon(icon, color: _officialHeaderStart, size: 18),
+            const SizedBox(width: 8),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: _officialSubtext,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: _officialText,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = _notificationPriorityColor(item.priority);
+    return Scaffold(
+      backgroundColor: const Color(0xFFF6F7FB),
+      appBar: AppBar(
+        title: const Text('Notification Details'),
+        backgroundColor: _officialHeaderStart,
+        foregroundColor: Colors.white,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _officialCardBorder),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  backgroundColor: accent.withValues(alpha: 0.12),
+                  child: Icon(item.icon, color: accent),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.title,
+                        style: const TextStyle(
+                          color: _officialText,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 18,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        item.body,
+                        style: const TextStyle(
+                          color: _officialSubtext,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          _detailTile(
+            label: 'Category',
+            value: item.category,
+            icon: Icons.category_outlined,
+          ),
+          _detailTile(
+            label: 'Priority',
+            value: item.priority.toUpperCase(),
+            icon: Icons.priority_high_rounded,
+          ),
+          _detailTile(
+            label: 'Created',
+            value: _formatDateTime(item.createdAt),
+            icon: Icons.access_time_rounded,
+          ),
+          if ((item.recordId ?? '').trim().isNotEmpty)
+            _detailTile(
+              label: 'Record ID',
+              value: (item.recordId ?? '').trim(),
+              icon: Icons.badge_outlined,
+            ),
+          if ((item.deepLink ?? '').trim().isNotEmpty)
+            _detailTile(
+              label: 'Deep Link',
+              value: (item.deepLink ?? '').trim(),
+              icon: Icons.link_rounded,
+            ),
+          _detailTile(
+            label: 'Delivery',
+            value: item.deliveryChannel,
+            icon: Icons.send_rounded,
+          ),
+          _detailTile(
+            label: 'Status',
+            value: item.read ? 'Read' : 'Unread',
+            icon: item.read ? Icons.done_all_rounded : Icons.mark_email_unread_rounded,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDateTime(DateTime value) {
+    final local = value.toLocal();
+    final month = _monthLabel(local.month);
+    final day = local.day.toString().padLeft(2, '0');
+    final year = local.year;
+    final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
+    final minute = local.minute.toString().padLeft(2, '0');
+    final amPm = local.hour >= 12 ? 'PM' : 'AM';
+    return '$month $day, $year $hour:$minute $amPm';
+  }
+
+  String _monthLabel(int month) {
+    const months = <String>[
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    if (month < 1 || month > 12) {
+      return 'N/A';
+    }
+    return months[month - 1];
+  }
+}
+
+class _OfficialNotificationsFetchResult {
+  final bool success;
+  final String message;
+  final List<_AppNotificationItem> items;
+
+  const _OfficialNotificationsFetchResult({
+    required this.success,
+    required this.message,
+    this.items = const <_AppNotificationItem>[],
+  });
+}
+
+class _OfficialNotificationsActionResult {
+  final bool success;
+  final String message;
+
+  const _OfficialNotificationsActionResult({
+    required this.success,
+    required this.message,
+  });
+}
+
+class _OfficialNotificationsApi {
+  _OfficialNotificationsApi._();
+  static final instance = _OfficialNotificationsApi._();
+
+  Future<_OfficialNotificationsFetchResult> fetch() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _OfficialNotificationsFetchResult(
+        success: false,
+        message: 'Login required.',
+      );
+    }
+    const paths = <String>[
+      'official/notifications',
+      'notifications',
+    ];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http.get(
+            endpoint,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $_authToken',
+            },
+          ).timeout(const Duration(seconds: 8));
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            return _OfficialNotificationsFetchResult(
+              success: false,
+              message: _extractApiMessage(response.body, 'Unable to load notifications.'),
+            );
+          }
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          if (decoded is! Map<String, dynamic>) {
+            return const _OfficialNotificationsFetchResult(
+              success: false,
+              message: 'Invalid notifications response.',
+            );
+          }
+          final rawNotifications = decoded['notifications'];
+          final items = <_AppNotificationItem>[];
+          if (rawNotifications is List) {
+            for (final raw in rawNotifications) {
+              if (raw is! Map<String, dynamic>) {
+                continue;
+              }
+              items.add(_mapNotification(raw));
+            }
+          }
+          return _OfficialNotificationsFetchResult(
+            success: true,
+            message: _extractApiMessage(response.body, 'Notifications synced.'),
+            items: items,
+          );
+        } on TimeoutException {
+          return const _OfficialNotificationsFetchResult(
+            success: false,
+            message: 'Notifications request timed out.',
+          );
+        } catch (_) {
+          return const _OfficialNotificationsFetchResult(
+            success: false,
+            message: 'Unable to load notifications.',
+          );
+        }
+      }
+    }
+    return const _OfficialNotificationsFetchResult(
+      success: false,
+      message: 'Notifications endpoint unavailable.',
+    );
+  }
+
+  Future<_OfficialNotificationsActionResult> markRead(String notificationId) {
+    return _patchAction(
+      paths: <String>[
+        'official/notifications/$notificationId/read',
+        'notifications/$notificationId/read',
+      ],
+      fallback: 'Unable to mark notification as read.',
+    );
+  }
+
+  Future<_OfficialNotificationsActionResult> markAllRead() {
+    return _patchAction(
+      paths: const <String>[
+        'official/notifications/read-all',
+        'notifications/read-all',
+      ],
+      fallback: 'Unable to mark notifications as read.',
+    );
+  }
+
+  Future<_OfficialNotificationsActionResult> _patchAction({
+    required List<String> paths,
+    required String fallback,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _OfficialNotificationsActionResult(
+        success: false,
+        message: 'Login required.',
+      );
+    }
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http.patch(
+            endpoint,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $_authToken',
+            },
+          ).timeout(const Duration(seconds: 8));
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            return _OfficialNotificationsActionResult(
+              success: true,
+              message: _extractApiMessage(response.body, 'Notification updated.'),
+            );
+          }
+          return _OfficialNotificationsActionResult(
+            success: false,
+            message: _extractApiMessage(response.body, fallback),
+          );
+        } on TimeoutException {
+          return const _OfficialNotificationsActionResult(
+            success: false,
+            message: 'Notification update timed out.',
+          );
+        } catch (_) {
+          return const _OfficialNotificationsActionResult(
+            success: false,
+            message: 'Unable to update notification.',
+          );
+        }
+      }
+    }
+    return const _OfficialNotificationsActionResult(
+      success: false,
+      message: 'Notifications endpoint unavailable.',
+    );
+  }
+
+  _AppNotificationItem _mapNotification(Map<String, dynamic> item) {
+    String readString(String key, [String fallback = '']) {
+      final value = item[key];
+      if (value is String) return value.trim();
+      if (value != null) return value.toString().trim();
+      return fallback;
+    }
+
+    bool readBool(String key, [bool fallback = false]) {
+      final value = item[key];
+      if (value is bool) return value;
+      if (value is num) return value != 0;
+      if (value is String) {
+        final lowered = value.trim().toLowerCase();
+        return lowered == '1' || lowered == 'true' || lowered == 'yes';
+      }
+      return fallback;
+    }
+
+    DateTime readDate(String key) {
+      final raw = readString(key);
+      return DateTime.tryParse(raw)?.toLocal() ?? DateTime.now();
+    }
+
+    final category = readString('category', 'System');
+    final recordType = readString('record_type');
+    final icon = switch (category.toLowerCase()) {
+      'services' => Icons.assignment_outlined,
+      'marketplace' => Icons.storefront_outlined,
+      'community' => Icons.campaign_outlined,
+      _ => switch (recordType.toLowerCase()) {
+          'service_request' => Icons.assignment_outlined,
+          'merchant_registration' => Icons.storefront_outlined,
+          'community_post' => Icons.campaign_outlined,
+          _ => Icons.notifications_active_outlined,
+        },
+    };
+
+    return _AppNotificationItem(
+      id: readString('id'),
+      title: readString('title', 'Notification'),
+      body: readString('body'),
+      category: category,
+      createdAt: readDate('created_at'),
+      icon: icon,
+      priority: readString('priority', 'normal'),
+      recordId: readString('record_id'),
+      deepLink: readString('deep_link'),
+      deliveryChannel: 'API',
+      read: readBool('is_read'),
+    );
+  }
+
+  String _extractApiMessage(String body, String fallback) {
+    try {
+      final decoded = _AuthApi.instance._decodeDynamicJson(body);
+      if (decoded is Map<String, dynamic>) {
+        final message = decoded['message'];
+        if (message is String && message.trim().isNotEmpty) {
+          return message.trim();
+        }
+      }
+    } catch (_) {}
+    return fallback;
   }
 }
 

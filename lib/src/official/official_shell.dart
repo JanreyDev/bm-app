@@ -201,6 +201,8 @@ class _HomeShellState extends State<HomeShell> {
                 ),
               ),
               _m(context, 'Barangay Activation'),
+              _m(context, 'Barangay Setup'),
+              _m(context, 'Transaction History'),
               _m(context, 'Settings'),
               _m(context, 'RBI Records'),
               _m(context, 'FAQs'),
@@ -301,8 +303,12 @@ class _HomeShellState extends State<HomeShell> {
         return Icons.location_city;
       case 'Barangay Activation':
         return Icons.verified_user_outlined;
+      case 'Barangay Setup':
+        return Icons.location_city_outlined;
       case 'RBI Records':
         return Icons.badge_outlined;
+      case 'Transaction History':
+        return Icons.history_outlined;
       case 'FAQs':
         return Icons.quiz_outlined;
       case 'Notifications':
@@ -381,6 +387,14 @@ class _HomeShellState extends State<HomeShell> {
                   ),
                 );
                 return;
+              case 'Barangay Setup':
+                Navigator.push(
+                  c,
+                  MaterialPageRoute(
+                    builder: (_) => const OfficialBarangaySetupPage(),
+                  ),
+                );
+                return;
               case 'Settings':
                 Navigator.push(
                   c,
@@ -394,6 +408,16 @@ class _HomeShellState extends State<HomeShell> {
                   c,
                   MaterialPageRoute(
                     builder: (_) => const OfficialRbiRecordsPage(),
+                  ),
+                );
+                return;
+              case 'Transaction History':
+                Navigator.push(
+                  c,
+                  MaterialPageRoute(
+                    builder: (_) => const _TransactionHistoryPage(
+                      role: UserRole.official,
+                    ),
                   ),
                 );
                 return;
