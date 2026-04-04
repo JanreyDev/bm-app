@@ -3522,10 +3522,10 @@ class _CommunityAnnouncementsTabState extends State<_CommunityAnnouncementsTab> 
   Widget build(BuildContext context) {
     final pinned = widget.announcements.where((entry) => entry.pinned).toList();
     if (widget.announcements.isEmpty) {
-      return const ListView(
-        padding: EdgeInsets.only(bottom: 18),
+      return ListView(
+        padding: const EdgeInsets.only(bottom: 18),
         children: [
-          _AppEmptyState(
+          const _AppEmptyState(
             icon: Icons.campaign_outlined,
             title: 'No announcements yet',
             subtitle: 'Official announcements will appear here after publishing.',

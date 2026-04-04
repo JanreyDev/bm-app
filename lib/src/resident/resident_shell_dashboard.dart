@@ -1471,6 +1471,7 @@ class _DashboardCommunityFeedPreviewState
     }
     final result = await _CommunityApi.instance.createPost(
       message: createdPost.message,
+      postType: createdPost.postType,
       imageBytes: createdPost.photoBytes,
     );
     if (!mounted) {
@@ -1649,6 +1650,7 @@ class _DashboardCommunityFeedPreviewState
       final result = await _CommunityApi.instance.updatePost(
         postId: post.id,
         message: editedMessage,
+        postType: post.postType,
         imageBytes: post.photoBytes,
       );
       if (!mounted) {
@@ -2030,7 +2032,7 @@ class _DashboardMarketplacePreviewState extends State<_DashboardMarketplacePrevi
           Builder(
             builder: (context) {
               final textScale = MediaQuery.textScalerOf(context).scale(1);
-              final itemHeight = textScale > 1.05 ? 360.0 : 340.0;
+              final itemHeight = textScale > 1.05 ? 312.0 : 292.0;
               return GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
