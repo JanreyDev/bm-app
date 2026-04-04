@@ -1491,6 +1491,7 @@ class _SimplePageState extends State<_SimplePage> {
   }
 
   Future<List<String>> _resolveProfileRows() async {
+    await _ensureOfficialSession();
     final next = _profileRowsFromContext();
     final events = await _fetchOfficialRecentActivityFromBackend();
     if (events.isNotEmpty) {
@@ -1502,6 +1503,7 @@ class _SimplePageState extends State<_SimplePage> {
   }
 
   Future<List<String>> _resolveOfficialRows() async {
+    await _ensureOfficialSession();
     final next = [..._rows];
     final summary = await _fetchOfficialSummaryFromBackend();
     final backendTimeline = await _fetchOfficialRecentActivityFromBackend();
@@ -1634,6 +1636,7 @@ class _SimplePageState extends State<_SimplePage> {
   }
 
   Future<List<String>> _resolveMarketRows() async {
+    await _ensureOfficialSession();
     final next = [..._rows];
     if (next.length < 4) {
       while (next.length < 4) {
@@ -1745,6 +1748,17 @@ class _SimplePageState extends State<_SimplePage> {
     _marketTimeline = backendTimeline;
 
     return next;
+  }
+
+  Future<void> _ensureOfficialSession() async {
+    if (_authToken != null && _authToken!.trim().isNotEmpty) {
+      return;
+    }
+    final mobile = (_currentOfficialMobile ?? _officialEditableProfile.value.phone).trim();
+    if (mobile.isEmpty) {
+      return;
+    }
+    await _OfficialAuthCacheStore.restore(mobile);
   }
 
   Future<Map<String, dynamic>?> _fetchOfficialSummaryFromBackend() async {
