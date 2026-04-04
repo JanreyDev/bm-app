@@ -776,6 +776,7 @@ class _JobsApi {
     required String mobileNumber,
     required String coverLetter,
     required String attachmentName,
+    String attachmentBase64 = '',
   }) async {
     if (_authToken == null || _authToken!.isEmpty) {
       return const _ApplicationSendResult(
@@ -793,6 +794,8 @@ class _JobsApi {
       'mobile_number': mobileNumber.trim(),
       'cover_letter': coverLetter.trim(),
       'attachment_name': attachmentName.trim(),
+      if (attachmentBase64.trim().isNotEmpty)
+        'attachment_base64': attachmentBase64.trim(),
     });
 
     var sawTimeout = false;
@@ -1204,6 +1207,7 @@ class _JobsApi {
       coverLetter: read('cover_letter', fallback: read('message')),
       attachmentName: read('attachment_name'),
       attachmentPath: read('attachment_path'),
+      attachmentBase64: read('attachment_base64'),
       submittedAt: submittedAt,
       status: read('status', fallback: 'Submitted'),
     );
@@ -2457,13 +2461,21 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
                           : isApplied
                           ? const Color(0xFF7B86B8)
                           : const Color(0xFF3946BD),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      textStyle: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     child: Text(
                       isOwner
-                          ? 'View Submissions ($submissionCount)'
+                          ? 'Submissions ($submissionCount)'
                           : isApplied
                           ? 'Applied'
                           : 'Apply',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
                     ),
                   ),
                 ),
@@ -3471,6 +3483,7 @@ class _ResidentJobApplicationPageState extends State<ResidentJobApplicationPage>
   static const String _initialCoverLetter = '';
   XFile? _attachment;
   bool _submitting = false;
+  static const int _maxAttachmentBase64Chars = 1800000;
 
   bool get _hasDraft =>
       _nameController.text.trim() != _initialName ||
@@ -3498,7 +3511,12 @@ class _ResidentJobApplicationPageState extends State<ResidentJobApplicationPage>
 
   Future<void> _pickAttachment() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery);
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1400,
+      maxHeight: 1400,
+      imageQuality: 72,
+    );
     if (picked == null || !mounted) {
       return;
     }
@@ -3542,6 +3560,17 @@ class _ResidentJobApplicationPageState extends State<ResidentJobApplicationPage>
     final mobile = _mobileController.text.trim();
     final cover = _coverLetterController.text.trim();
     final attachmentName = _attachment?.name ?? 'No attachment';
+    String attachmentBase64 = '';
+    if (_attachment != null) {
+      attachmentBase64 = base64Encode(await _attachment!.readAsBytes());
+      if (attachmentBase64.length > _maxAttachmentBase64Chars) {
+        _showFeature(
+          context,
+          'Attachment is too large. Please upload a smaller image.',
+        );
+        return;
+      }
+    }
     final attachmentPath = _attachment == null
         ? ''
         : await _persistAttachment(_attachment!);
@@ -3559,6 +3588,7 @@ class _ResidentJobApplicationPageState extends State<ResidentJobApplicationPage>
       mobileNumber: mobile,
       coverLetter: cover,
       attachmentName: attachmentName,
+      attachmentBase64: attachmentBase64,
     );
     if (!mounted) {
       return;
@@ -3575,6 +3605,7 @@ class _ResidentJobApplicationPageState extends State<ResidentJobApplicationPage>
             coverLetter: cover,
             attachmentName: attachmentName,
             attachmentPath: attachmentPath,
+            attachmentBase64: attachmentBase64,
           );
         }
       });
@@ -3593,6 +3624,7 @@ class _ResidentJobApplicationPageState extends State<ResidentJobApplicationPage>
       coverLetter: cover,
       attachmentName: attachmentName,
       attachmentPath: attachmentPath,
+      attachmentBase64: attachmentBase64,
     );
     if (!mounted) {
       return;
@@ -3807,9 +3839,28 @@ class _ResidentApplicantReviewPageState extends State<ResidentApplicantReviewPag
     return null;
   }
 
+  Uint8List? _decodeAttachmentPayload() {
+    final raw = widget.submission.attachmentBase64.trim();
+    if (raw.isEmpty) {
+      return null;
+    }
+    final dataPart = raw.contains(',')
+        ? raw.substring(raw.indexOf(',') + 1).trim()
+        : raw;
+    if (dataPart.isEmpty) {
+      return null;
+    }
+    try {
+      return base64Decode(dataPart);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _downloadAttachment() async {
     final sourceFile = await _resolveAttachmentSourceFile();
-    if (sourceFile == null) {
+    final payloadBytes = sourceFile == null ? _decodeAttachmentPayload() : null;
+    if (sourceFile == null && payloadBytes == null) {
       _showFeature(
         context,
         'Attachment file is not available on this device for this submission.',
@@ -3827,17 +3878,21 @@ class _ResidentApplicantReviewPageState extends State<ResidentApplicantReviewPag
       }
       final fileName = _safeFileName(
         widget.submission.attachmentName.isEmpty
-            ? sourceFile.uri.pathSegments.last
+            ? (sourceFile?.uri.pathSegments.last ?? 'submission_attachment.bin')
             : widget.submission.attachmentName,
       );
       final destinationPath = '${downloadsDir.path}/$fileName';
-      await sourceFile.copy(destinationPath);
+      if (sourceFile != null) {
+        await sourceFile.copy(destinationPath);
+      } else {
+        await File(destinationPath).writeAsBytes(payloadBytes!, flush: true);
+      }
       if (!mounted) {
         return;
       }
       _showFeature(
         context,
-        'Attachment downloaded to: $destinationPath',
+        'Attachment downloaded successfully.',
         tone: _ToastTone.success,
       );
     } catch (_) {

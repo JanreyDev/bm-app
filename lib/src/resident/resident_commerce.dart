@@ -55,6 +55,7 @@ class _ResidentJobApplicationData {
   final String coverLetter;
   final String attachmentName;
   final String attachmentPath;
+  final String attachmentBase64;
   final DateTime submittedAt;
   final String status;
 
@@ -69,6 +70,7 @@ class _ResidentJobApplicationData {
     required this.coverLetter,
     required this.attachmentName,
     this.attachmentPath = '',
+    this.attachmentBase64 = '',
     required this.submittedAt,
     this.status = 'Submitted',
   });
@@ -569,6 +571,7 @@ class _ResidentJobsHub {
       'cover_letter': application.coverLetter,
       'attachment_name': application.attachmentName,
       'attachment_path': application.attachmentPath,
+      'attachment_base64': application.attachmentBase64,
       'submitted_at': application.submittedAt.toIso8601String(),
       'status': application.status,
     };
@@ -606,6 +609,7 @@ class _ResidentJobsHub {
       coverLetter: read('cover_letter'),
       attachmentName: read('attachment_name'),
       attachmentPath: read('attachment_path'),
+      attachmentBase64: read('attachment_base64'),
       submittedAt: submittedAt,
       status: read('status').isEmpty ? 'Submitted' : read('status'),
     );
@@ -1034,6 +1038,7 @@ class _ResidentJobsHub {
     required String coverLetter,
     required String attachmentName,
     String attachmentPath = '',
+    String attachmentBase64 = '',
   }) {
     final application = _ResidentJobApplicationData(
       id: 'app-${DateTime.now().microsecondsSinceEpoch}',
@@ -1046,6 +1051,7 @@ class _ResidentJobsHub {
       coverLetter: coverLetter,
       attachmentName: attachmentName,
       attachmentPath: attachmentPath,
+      attachmentBase64: attachmentBase64,
       submittedAt: DateTime.now(),
     );
     final matchKey = job.id.trim().isNotEmpty

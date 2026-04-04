@@ -1234,13 +1234,6 @@ class _ResidentCommunityChatPageState extends State<ResidentCommunityChatPage> {
   String _syncNotice = '';
   List<_ResidentChatMessage> _backendMessages = const <_ResidentChatMessage>[];
 
-  static const _registeredBarangays = [
-    'West Tapinac',
-    'Old Cabalan',
-    'Banicain',
-    'East Tapinac',
-    'Kalaklan',
-  ];
   static const _channels = ['General', 'Announcements', 'Health', 'Events'];
   static const _onlineNow = {
     'West Tapinac': 134,
@@ -1523,18 +1516,6 @@ class _ResidentCommunityChatPageState extends State<ResidentCommunityChatPage> {
     });
   }
 
-  void _switchBarangay(String barangay) {
-    if (_barangay == barangay) return;
-    setState(() {
-      _barangay = barangay;
-    });
-    unawaited(_loadMessagesFromApi());
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
-      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final messages = _filteredMessages;
@@ -1635,38 +1616,14 @@ class _ResidentCommunityChatPageState extends State<ResidentCommunityChatPage> {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Connected Registered Barangays',
+                      'This chat is scoped to your registered barangay only.',
                       style: TextStyle(
                         color: Color(0xFF555D78),
                         fontWeight: FontWeight.w700,
                         fontSize: 12,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: _registeredBarangays.map((entry) {
-                          final active = entry == _barangay;
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: ChoiceChip(
-                              label: Text(entry),
-                              selected: active,
-                              onSelected: (_) => _switchBarangay(entry),
-                              selectedColor: const Color(0xFFFFE9E2),
-                              labelStyle: TextStyle(
-                                color: active
-                                    ? const Color(0xFFB11E1E)
-                                    : const Color(0xFF4B5371),
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
