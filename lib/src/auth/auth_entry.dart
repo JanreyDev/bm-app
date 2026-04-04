@@ -835,45 +835,44 @@ class _AuthRegisterPageState extends State<AuthRegisterPage> {
       ).showSnackBar(SnackBar(content: Text(result.message)));
       return;
     }
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(result.message)));
-
-    if (result.otpRequired) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => AuthOtpVerificationPage(
-            role: widget.role,
-            mobile: _mobileController.text,
-            debugOtpCode: result.otpDebugCode,
-            pin: _passwordController.text.trim(),
-          ),
-        ),
-      );
-      return;
-    }
-
-    _authToken = result.token;
-    if (_isResident) {
-      await _completeResidentSignIn(
-        context,
+    // OTP gate: account access must always pass code verification first.
+    String? debugOtp = result.otpDebugCode;
+    if (!result.otpRequired) {
+      final resend = await _AuthApi.instance.resendOtp(
+        role: widget.role,
         mobile: _mobileController.text,
-        token: result.token ?? '',
-        user: result.user,
-        pin: _passwordController.text.trim(),
       );
-      return;
+      if (!mounted) {
+        return;
+      }
+      if (!resend.success && resend.otpDebugCode == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Verification code is required before account activation. ${resend.message}',
+            ),
+          ),
+        );
+        return;
+      }
+      debugOtp = resend.otpDebugCode ?? debugOtp;
     }
 
-    await _completeOfficialSignIn(
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Code sent. Verify OTP to complete account creation.'),
+      ),
+    );
+    Navigator.pushReplacement(
       context,
-      mobile: _mobileController.text,
-      token: result.token ?? '',
-      activationCompleted: result.activationCompleted,
-      user: result.user,
-      pin: _passwordController.text.trim(),
+      MaterialPageRoute(
+        builder: (_) => AuthOtpVerificationPage(
+          role: widget.role,
+          mobile: _mobileController.text,
+          debugOtpCode: debugOtp,
+          pin: _passwordController.text.trim(),
+        ),
+      ),
     );
   }
 
