@@ -613,95 +613,207 @@ class _OfficialFeedbackQuickSheet extends StatelessWidget {
   }
 }
 
-class OfficialGovAgenciesPage extends StatelessWidget {
+class OfficialGovAgenciesPage extends StatefulWidget {
   const OfficialGovAgenciesPage({super.key});
 
-  static const _agencies = [
-    _OfficialAgencyInfo(
-      label: 'DFA',
-      displayName: 'Department of Foreign Affairs',
-      website: 'https://dfa.gov.ph',
-      accent: Color(0xFF154A99),
-      icon: Icons.public_rounded,
-    ),
-    _OfficialAgencyInfo(
-      label: 'DILG',
-      displayName: 'Department of the Interior and Local Government',
-      website: 'https://dilg.gov.ph',
-      accent: Color(0xFFC68B0D),
-      icon: Icons.account_balance_rounded,
-    ),
-    _OfficialAgencyInfo(
-      label: 'DOLE',
-      displayName: 'Department of Labor and Employment',
-      website: 'https://www.dole.gov.ph',
-      accent: Color(0xFF2659B8),
-      icon: Icons.work_outline_rounded,
-    ),
-    _OfficialAgencyInfo(
-      label: 'DPWH',
-      displayName: 'Department of Public Works and Highways',
-      website: 'https://www.dpwh.gov.ph',
-      accent: Color(0xFF324D93),
-      icon: Icons.foundation_rounded,
-    ),
-    _OfficialAgencyInfo(
-      label: 'DSWD',
-      displayName: 'Department of Social Welfare and Development',
-      website: 'https://www.dswd.gov.ph',
-      accent: Color(0xFF6B6E77),
-      icon: Icons.volunteer_activism_rounded,
-    ),
-    _OfficialAgencyInfo(
-      label: 'LTO',
-      displayName: 'Land Transportation Office',
-      website: 'https://lto.gov.ph',
-      accent: Color(0xFF1F4FA2),
-      icon: Icons.directions_car_filled_rounded,
-    ),
-    _OfficialAgencyInfo(
-      label: 'OP',
-      displayName: 'Office of the President',
-      website: 'https://op-proper.gov.ph',
-      accent: Color(0xFF4F7FB1),
-      icon: Icons.flag_circle_rounded,
-    ),
-    _OfficialAgencyInfo(
-      label: 'OLG',
-      displayName: 'City Government of Olongapo',
-      website: 'https://www.olongapocity.gov.ph',
-      accent: Color(0xFF5B8872),
-      icon: Icons.location_city_rounded,
-    ),
-    _OfficialAgencyInfo(
-      label: 'PNP',
-      displayName: 'Philippine National Police',
-      website: 'https://pnp.gov.ph',
-      accent: Color(0xFFB43434),
-      icon: Icons.local_police_rounded,
-    ),
-    _OfficialAgencyInfo(
-      label: 'SEN',
-      displayName: 'Senate of the Philippines',
-      website: 'https://legacy.senate.gov.ph',
-      accent: Color(0xFFC39B2C),
-      icon: Icons.how_to_vote_rounded,
-    ),
-    _OfficialAgencyInfo(
-      label: 'CSC',
-      displayName: 'Civil Service Commission',
-      website: 'https://csc.gov.ph',
-      accent: Color(0xFF4A59A8),
-      icon: Icons.badge_rounded,
-    ),
-    _OfficialAgencyInfo(
-      label: 'TESDA',
-      displayName: 'Technical Education and Skills Development Authority',
-      website: 'https://www.tesda.gov.ph',
-      accent: Color(0xFF3E7C86),
-      icon: Icons.school_rounded,
-    ),
-  ];
+  @override
+  State<OfficialGovAgenciesPage> createState() => _OfficialGovAgenciesPageState();
+}
+
+class _OfficialGovAgenciesPageState extends State<OfficialGovAgenciesPage> {
+  bool _loading = true;
+  bool _saving = false;
+  String _message = '';
+  List<_OfficialAgencyInfo> _agencies = const <_OfficialAgencyInfo>[];
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadAgencies());
+  }
+
+  Future<void> _loadAgencies() async {
+    setState(() => _loading = true);
+    final result = await _OfficialGovAgenciesApi.instance.fetchAgencies();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _loading = false;
+      _message = result.message;
+      _agencies = result.agencies;
+    });
+  }
+
+  Future<void> _addOrEditAgency({_OfficialAgencyInfo? existing}) async {
+    final labelCtrl = TextEditingController(text: existing?.label ?? '');
+    final nameCtrl = TextEditingController(text: existing?.displayName ?? '');
+    final websiteCtrl = TextEditingController(text: existing?.website ?? '');
+    final sortCtrl = TextEditingController(
+      text: existing?.sortOrder.toString() ?? '0',
+    );
+    final isEdit = existing != null;
+    final submit = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (dialogContext) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            8,
+            16,
+            16 + MediaQuery.of(dialogContext).viewInsets.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isEdit ? 'Edit Agency' : 'Add Agency',
+                style: const TextStyle(
+                  color: _officialText,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 20,
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: labelCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Code (e.g. PNP)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Display name',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: websiteCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Website URL',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: sortCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Sort order',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _officialHeaderStart,
+                  ),
+                  child: Text(isEdit ? 'Save Changes' : 'Add Agency'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (submit != true || !mounted) {
+      return;
+    }
+
+    final label = labelCtrl.text.trim();
+    final name = nameCtrl.text.trim();
+    final website = websiteCtrl.text.trim();
+    final sortOrder = int.tryParse(sortCtrl.text.trim()) ?? 0;
+    if (label.isEmpty || name.isEmpty || website.isEmpty) {
+      _showFeature(
+        context,
+        'Please complete code, display name, and website.',
+        tone: _ToastTone.warning,
+      );
+      return;
+    }
+
+    setState(() => _saving = true);
+    final result = isEdit
+        ? await _OfficialGovAgenciesApi.instance.updateAgency(
+            agencyId: existing.id,
+            label: label,
+            displayName: name,
+            website: website,
+            sortOrder: sortOrder,
+          )
+        : await _OfficialGovAgenciesApi.instance.createAgency(
+            label: label,
+            displayName: name,
+            website: website,
+            sortOrder: sortOrder,
+          );
+    if (!mounted) {
+      return;
+    }
+    setState(() => _saving = false);
+    _showFeature(
+      context,
+      result.message,
+      tone: result.success ? _ToastTone.success : _ToastTone.warning,
+    );
+    if (result.success) {
+      await _loadAgencies();
+    }
+  }
+
+  Future<void> _deleteAgency(_OfficialAgencyInfo agency) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete Agency'),
+          content: Text('Delete ${agency.displayName}?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFFD70000)),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    setState(() => _saving = true);
+    final result = await _OfficialGovAgenciesApi.instance.deleteAgency(
+      agencyId: agency.id,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() => _saving = false);
+    _showFeature(
+      context,
+      result.message,
+      tone: result.success ? _ToastTone.success : _ToastTone.warning,
+    );
+    if (result.success) {
+      await _loadAgencies();
+    }
+  }
 
   Future<void> _showLeaveDialog(
     BuildContext context,
@@ -801,6 +913,38 @@ class OfficialGovAgenciesPage extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(18),
       onTap: () => _showLeaveDialog(context, agency),
+      onLongPress: () async {
+        final action = await showModalBottomSheet<String>(
+          context: context,
+          showDragHandle: true,
+          builder: (dialogContext) {
+            return SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.edit_rounded),
+                    title: const Text('Edit'),
+                    onTap: () => Navigator.pop(dialogContext, 'edit'),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.delete_outline_rounded, color: Color(0xFFD70000)),
+                    title: const Text('Delete'),
+                    onTap: () => Navigator.pop(dialogContext, 'delete'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+        if (!mounted) return;
+        if (action == 'edit') {
+          await _addOrEditAgency(existing: agency);
+        } else if (action == 'delete') {
+          await _deleteAgency(agency);
+        }
+      },
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -880,6 +1024,10 @@ class OfficialGovAgenciesPage extends StatelessWidget {
         toolbarHeight: 82,
         actions: [
           IconButton(
+            onPressed: _saving ? null : () => _addOrEditAgency(),
+            icon: const Icon(Icons.add_rounded),
+          ),
+          IconButton(
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(
@@ -890,133 +1038,530 @@ class OfficialGovAgenciesPage extends StatelessWidget {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 18),
-        children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(26),
-              border: Border.all(color: const Color(0xFFE8E8E8)),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x12000000),
-                  blurRadius: 10,
-                  offset: Offset(0, 4),
+      body: RefreshIndicator(
+        onRefresh: _loadAgencies,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 18),
+          children: [
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 10),
+                child: LinearProgressIndicator(minHeight: 3),
+              ),
+            if (_saving)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 10),
+                child: LinearProgressIndicator(minHeight: 3),
+              ),
+            if (_message.trim().isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF2E8),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFFD7BA)),
                 ),
-              ],
-            ),
-            child: Column(
-              children: [
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _agencies.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    mainAxisSpacing: 14,
-                    crossAxisSpacing: 10,
-                    childAspectRatio: 0.8,
+                child: Text(
+                  _message,
+                  style: const TextStyle(
+                    color: Color(0xFF8B4A0D),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
                   ),
-                  itemBuilder: (_, index) =>
-                      _agencyTile(context, _agencies[index]),
                 ),
-                const SizedBox(height: 12),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFFB80F0F), Color(0xFFD73232)],
-                    ),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x22B11212),
-                        blurRadius: 10,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
+              ),
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(color: const Color(0xFFE8E8E8)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x12000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 4),
                   ),
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'REGISTRY OF BARANGAY',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 12,
-                              ),
-                            ),
-                            Text(
-                              'INHABITANTS (RBI)',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 12,
-                              ),
-                            ),
-                            SizedBox(height: 6),
-                            Text(
-                              'Avail services by registering your barangay.',
-                              style: TextStyle(
-                                color: Color(0xFFFFE5E5),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
+                ],
+              ),
+              child: Column(
+                children: [
+                  if (_agencies.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text(
+                        'No agencies available for this barangay yet.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Color(0xFF666B82),
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                      Container(
-                        width: 76,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.14),
+                    )
+                  else
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _agencies.length,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        mainAxisSpacing: 14,
+                        crossAxisSpacing: 10,
+                        childAspectRatio: 0.8,
+                      ),
+                      itemBuilder: (_, index) =>
+                          _agencyTile(context, _agencies[index]),
+                    ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFFB80F0F), Color(0xFFD73232)],
+                      ),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x22B11212),
+                          blurRadius: 10,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'REGISTRY OF BARANGAY',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              Text(
+                                'INHABITANTS (RBI)',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              SizedBox(height: 6),
+                              Text(
+                                'Avail services by registering your barangay.',
+                                style: TextStyle(
+                                  color: Color(0xFFFFE5E5),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        child: const Icon(
-                          Icons.badge_rounded,
-                          color: Colors.white,
-                          size: 34,
+                        Container(
+                          width: 76,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.14),
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.badge_rounded,
+                            color: Colors.white,
+                            size: 34,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
 class _OfficialAgencyInfo {
+  final int id;
   final String label;
   final String displayName;
   final String website;
+  final int sortOrder;
   final Color accent;
   final IconData icon;
 
   const _OfficialAgencyInfo({
+    this.id = 0,
     required this.label,
     required this.displayName,
     required this.website,
+    this.sortOrder = 0,
     required this.accent,
     required this.icon,
   });
+}
+
+class _OfficialGovAgenciesApiResult {
+  final bool success;
+  final String message;
+  final List<_OfficialAgencyInfo> agencies;
+
+  const _OfficialGovAgenciesApiResult({
+    required this.success,
+    required this.message,
+    this.agencies = const <_OfficialAgencyInfo>[],
+  });
+}
+
+class _OfficialGovAgencyActionResult {
+  final bool success;
+  final String message;
+  final _OfficialAgencyInfo? agency;
+
+  const _OfficialGovAgencyActionResult({
+    required this.success,
+    required this.message,
+    this.agency,
+  });
+}
+
+class _OfficialGovAgenciesApi {
+  _OfficialGovAgenciesApi._();
+  static final instance = _OfficialGovAgenciesApi._();
+
+  Map<String, String> _scopePayload() {
+    final profile = _officialEditableProfile.value;
+    final province = _officialBarangaySetup.province.trim();
+    final city = _officialBarangaySetup.city.trim();
+    final barangay = profile.barangay.trim().isNotEmpty
+        ? profile.barangay.trim()
+        : _officialBarangaySetup.barangay.trim();
+    final payload = <String, String>{};
+    if (province.isNotEmpty) payload['province'] = province;
+    if (city.isNotEmpty) payload['city_municipality'] = city;
+    if (barangay.isNotEmpty) payload['barangay'] = barangay;
+    return payload;
+  }
+
+  Future<_OfficialGovAgenciesApiResult> fetchAgencies() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _OfficialGovAgenciesApiResult(
+        success: false,
+        message: 'Please log in again to load agencies.',
+      );
+    }
+
+    final paths = <String>['official/gov-agencies', 'official/agencies'];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http.get(
+            endpoint,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $_authToken',
+            },
+          ).timeout(const Duration(seconds: 8));
+          if (response.statusCode == 404) {
+            continue;
+          }
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          final body = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            return _OfficialGovAgenciesApiResult(
+              success: false,
+              message: _extractApiMessage(
+                body,
+                fallback: 'Unable to load agencies.',
+              ),
+            );
+          }
+          final rows = <_OfficialAgencyInfo>[];
+          final raw = body['agencies'] ?? body['data'];
+          if (raw is List) {
+            for (final item in raw) {
+              if (item is! Map<String, dynamic>) continue;
+              final mapped = _mapAgency(item);
+              if (mapped != null) rows.add(mapped);
+            }
+          }
+          return _OfficialGovAgenciesApiResult(
+            success: true,
+            message: _extractApiMessage(body, fallback: 'Agencies loaded.'),
+            agencies: rows..sort((a, b) => a.sortOrder.compareTo(b.sortOrder)),
+          );
+        } on TimeoutException {
+          return const _OfficialGovAgenciesApiResult(
+            success: false,
+            message: 'Loading agencies timed out.',
+          );
+        } catch (_) {
+          return const _OfficialGovAgenciesApiResult(
+            success: false,
+            message: 'Cannot connect to server to load agencies.',
+          );
+        }
+      }
+    }
+    return const _OfficialGovAgenciesApiResult(
+      success: false,
+      message: 'Agencies endpoint is not available yet.',
+    );
+  }
+
+  Future<_OfficialGovAgencyActionResult> createAgency({
+    required String label,
+    required String displayName,
+    required String website,
+    required int sortOrder,
+  }) async {
+    final payload = jsonEncode({
+      'label': label.trim(),
+      'display_name': displayName.trim(),
+      'website': website.trim(),
+      'sort_order': sortOrder,
+      ..._scopePayload(),
+    });
+    return _mutateAgency(
+      method: 'POST',
+      path: 'official/gov-agencies',
+      payload: payload,
+      fallback: 'Unable to add agency.',
+    );
+  }
+
+  Future<_OfficialGovAgencyActionResult> updateAgency({
+    required int agencyId,
+    required String label,
+    required String displayName,
+    required String website,
+    required int sortOrder,
+  }) async {
+    final payload = jsonEncode({
+      'label': label.trim(),
+      'display_name': displayName.trim(),
+      'website': website.trim(),
+      'sort_order': sortOrder,
+      ..._scopePayload(),
+    });
+    return _mutateAgency(
+      method: 'PATCH',
+      path: 'official/gov-agencies/$agencyId',
+      payload: payload,
+      fallback: 'Unable to update agency.',
+    );
+  }
+
+  Future<_OfficialGovAgencyActionResult> deleteAgency({
+    required int agencyId,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _OfficialGovAgencyActionResult(
+        success: false,
+        message: 'Please log in again to manage agencies.',
+      );
+    }
+    final path = 'official/gov-agencies/$agencyId';
+    for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+      try {
+        final response = await http.delete(
+          endpoint,
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $_authToken',
+          },
+        ).timeout(const Duration(seconds: 8));
+        if (response.statusCode == 404) {
+          continue;
+        }
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        final body = decoded is Map<String, dynamic>
+            ? decoded
+            : const <String, dynamic>{};
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          return _OfficialGovAgencyActionResult(
+            success: false,
+            message: _extractApiMessage(body, fallback: 'Unable to delete agency.'),
+          );
+        }
+        return _OfficialGovAgencyActionResult(
+          success: true,
+          message: _extractApiMessage(body, fallback: 'Agency deleted.'),
+        );
+      } on TimeoutException {
+        return const _OfficialGovAgencyActionResult(
+          success: false,
+          message: 'Delete agency request timed out.',
+        );
+      } catch (_) {
+        return const _OfficialGovAgencyActionResult(
+          success: false,
+          message: 'Cannot connect to server to delete agency.',
+        );
+      }
+    }
+    return const _OfficialGovAgencyActionResult(
+      success: false,
+      message: 'Agencies endpoint is not available yet.',
+    );
+  }
+
+  Future<_OfficialGovAgencyActionResult> _mutateAgency({
+    required String method,
+    required String path,
+    required String payload,
+    required String fallback,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _OfficialGovAgencyActionResult(
+        success: false,
+        message: 'Please log in again to manage agencies.',
+      );
+    }
+    for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+      try {
+        final uri = endpoint;
+        final headers = {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_authToken',
+        };
+        final Future<http.Response> requestFuture = method == 'POST'
+            ? http.post(uri, headers: headers, body: payload)
+            : http.patch(uri, headers: headers, body: payload);
+        final response = await requestFuture.timeout(const Duration(seconds: 8));
+        if (response.statusCode == 404) {
+          continue;
+        }
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        final body = decoded is Map<String, dynamic>
+            ? decoded
+            : const <String, dynamic>{};
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          return _OfficialGovAgencyActionResult(
+            success: false,
+            message: _extractApiMessage(body, fallback: fallback),
+          );
+        }
+        final raw = body['agency'] ?? body['data'];
+        final mapped = raw is Map<String, dynamic> ? _mapAgency(raw) : null;
+        return _OfficialGovAgencyActionResult(
+          success: true,
+          message: _extractApiMessage(
+            body,
+            fallback: method == 'POST' ? 'Agency added.' : 'Agency updated.',
+          ),
+          agency: mapped,
+        );
+      } on TimeoutException {
+        return const _OfficialGovAgencyActionResult(
+          success: false,
+          message: 'Agency request timed out.',
+        );
+      } catch (_) {
+        return const _OfficialGovAgencyActionResult(
+          success: false,
+          message: 'Cannot connect to server to manage agencies.',
+        );
+      }
+    }
+    return const _OfficialGovAgencyActionResult(
+      success: false,
+      message: 'Agencies endpoint is not available yet.',
+    );
+  }
+
+  _OfficialAgencyInfo? _mapAgency(Map<String, dynamic> raw) {
+    String read(String key, {String fallback = ''}) {
+      final value = raw[key];
+      if (value == null) return fallback;
+      final text = value.toString().trim();
+      return text.isEmpty ? fallback : text;
+    }
+
+    final label = read('label', fallback: read('code'));
+    final name = read('display_name', fallback: label);
+    final website = read('website');
+    if (label.isEmpty || website.isEmpty) {
+      return null;
+    }
+    return _OfficialAgencyInfo(
+      id: int.tryParse(read('id')) ?? 0,
+      label: label,
+      displayName: name,
+      website: website,
+      sortOrder: int.tryParse(read('sort_order')) ?? 0,
+      accent: _officialAgencyAccent(label),
+      icon: _officialAgencyIcon(label, name),
+    );
+  }
+
+  String _extractApiMessage(
+    Map<String, dynamic> body, {
+    required String fallback,
+  }) {
+    final message = body['message'];
+    if (message is String && message.trim().isNotEmpty) {
+      return message.trim();
+    }
+    return fallback;
+  }
+}
+
+Color _officialAgencyAccent(String label) {
+  final key = label.trim().toLowerCase();
+  if (key.contains('pnp') || key.contains('police')) return const Color(0xFFB43434);
+  if (key.contains('dilg')) return const Color(0xFFC68B0D);
+  if (key.contains('dfa')) return const Color(0xFF154A99);
+  if (key.contains('dole')) return const Color(0xFF2659B8);
+  if (key.contains('dpwh')) return const Color(0xFF324D93);
+  if (key.contains('dswd')) return const Color(0xFF6B6E77);
+  if (key.contains('lto')) return const Color(0xFF1F4FA2);
+  if (key.contains('tesda')) return const Color(0xFF3E7C86);
+  if (key.contains('sen')) return const Color(0xFFC39B2C);
+  return const Color(0xFF4A59A8);
+}
+
+IconData _officialAgencyIcon(String label, String displayName) {
+  final bucket = '$label $displayName'.toLowerCase();
+  if (bucket.contains('police') || bucket.contains('pnp')) {
+    return Icons.local_police_rounded;
+  }
+  if (bucket.contains('transport') || bucket.contains('lto')) {
+    return Icons.directions_car_filled_rounded;
+  }
+  if (bucket.contains('school') || bucket.contains('education') || bucket.contains('tesda')) {
+    return Icons.school_rounded;
+  }
+  if (bucket.contains('labor') || bucket.contains('work') || bucket.contains('dole')) {
+    return Icons.work_outline_rounded;
+  }
+  if (bucket.contains('foreign') || bucket.contains('dfa')) {
+    return Icons.public_rounded;
+  }
+  if (bucket.contains('city') || bucket.contains('municipal')) {
+    return Icons.location_city_rounded;
+  }
+  if (bucket.contains('president') || bucket.contains('office of the president')) {
+    return Icons.flag_circle_rounded;
+  }
+  return Icons.account_balance_rounded;
 }
 
 class _ServiceAction {

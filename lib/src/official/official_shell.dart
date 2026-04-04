@@ -1334,6 +1334,12 @@ class _SimplePageState extends State<_SimplePage> {
     'Top Category: Loading...',
     'Delivery Requests: Loading...',
   ];
+  static const List<String> _profileLoadingRows = <String>[
+    'Account Name: Loading...',
+    'Office: Loading...',
+    'Role: Loading...',
+    'Status: Loading...',
+  ];
 
   @override
   void initState() {
@@ -1344,37 +1350,9 @@ class _SimplePageState extends State<_SimplePage> {
     } else if (title == 'market') {
       _rows = [..._marketLoadingRows];
     } else if (title == 'profile') {
-      _rows = _profileRowsFromContext();
+      _rows = [..._profileLoadingRows];
     } else {
       _rows = [...widget.rows];
-    }
-    if (title == 'official') {
-      _officialTimeline = <_SimpleTimelineItem>[
-        _SimpleTimelineItem(
-          title: 'Loading recent activity',
-          note: 'Syncing official activity feed...',
-          time: DateTime(2000, 1, 1),
-          icon: Icons.sync_rounded,
-        ),
-      ];
-    } else if (title == 'profile') {
-      _profileTimeline = <_SimpleTimelineItem>[
-        _SimpleTimelineItem(
-          title: 'Loading profile activity',
-          note: 'Syncing account activity...',
-          time: DateTime(2000, 1, 1),
-          icon: Icons.sync_rounded,
-        ),
-      ];
-    } else if (title == 'market') {
-      _marketTimeline = <_SimpleTimelineItem>[
-        _SimpleTimelineItem(
-          title: 'Loading market activity',
-          note: 'Syncing marketplace feed...',
-          time: DateTime(2000, 1, 1),
-          icon: Icons.sync_rounded,
-        ),
-      ];
     }
     _lastSynced = DateTime.now();
     _primeOfficialAgendaCard();
@@ -1453,29 +1431,7 @@ class _SimplePageState extends State<_SimplePage> {
       _profileTimeline = events.take(3).toList();
       return next;
     }
-    final profile = _officialEditableProfile.value;
-    _profileTimeline = <_SimpleTimelineItem>[
-      _SimpleTimelineItem(
-        title: 'Security audit passed',
-        note: 'No suspicious sign-in attempts detected.',
-        time: _lastSynced.subtract(const Duration(minutes: 5)),
-        icon: Icons.shield_rounded,
-      ),
-      _SimpleTimelineItem(
-        title: 'Office profile updated',
-        note: '${profile.barangay.trim().isEmpty ? 'Barangay' : profile.barangay.trim()} profile details synchronized.',
-        time: _lastSynced.subtract(const Duration(minutes: 29)),
-        icon: Icons.contact_phone_rounded,
-      ),
-      _SimpleTimelineItem(
-        title: 'Role permissions verified',
-        note: _officialActivationCompleted
-            ? 'Records and services module remains active.'
-            : 'Finish activation to unlock complete permissions.',
-        time: _lastSynced.subtract(const Duration(minutes: 53)),
-        icon: Icons.verified_user_rounded,
-      ),
-    ];
+    _profileTimeline = const <_SimpleTimelineItem>[];
     return next;
   }
 
@@ -1562,18 +1518,11 @@ class _SimplePageState extends State<_SimplePage> {
         );
       }
     }
-    if (timelineEvents.isEmpty) {
-      _officialTimeline = <_SimpleTimelineItem>[
-        _SimpleTimelineItem(
-          title: 'No recent activity yet',
-          note: 'Recent requests and posts will appear here.',
-          time: DateTime(2000, 1, 1),
-          icon: Icons.inbox_outlined,
-        ),
-      ];
-    } else {
+    if (timelineEvents.isNotEmpty) {
       timelineEvents.sort((a, b) => b.time.compareTo(a.time));
       _officialTimeline = timelineEvents.take(3).toList();
+    } else {
+      _officialTimeline = const <_SimpleTimelineItem>[];
     }
 
     final summaryCommunityPosts = _readSummaryInt(summary, [
@@ -1635,16 +1584,7 @@ class _SimplePageState extends State<_SimplePage> {
       next[1] = 'Today\'s Transactions: Data unavailable right now';
       next[2] = 'Top Category: Data unavailable right now';
       next[3] = 'Delivery Requests: Data unavailable right now';
-      _marketTimeline = backendTimeline.isEmpty
-          ? <_SimpleTimelineItem>[
-              _SimpleTimelineItem(
-                title: 'No market activity yet',
-                note: 'Recent market actions will appear here.',
-                time: DateTime(2000, 1, 1),
-                icon: Icons.inbox_outlined,
-              ),
-            ]
-          : backendTimeline;
+      _marketTimeline = backendTimeline;
       return next;
     }
 
@@ -1683,32 +1623,7 @@ class _SimplePageState extends State<_SimplePage> {
     next[2] = 'Top Category: $topCategory';
     next[3] = 'Delivery Requests: $deliveryPending pending fulfillment(s)';
 
-    if (backendTimeline.isNotEmpty) {
-      _marketTimeline = backendTimeline;
-    } else {
-      final fallbackTimeline = products.take(3).toList();
-      if (fallbackTimeline.isEmpty) {
-        _marketTimeline = <_SimpleTimelineItem>[
-          _SimpleTimelineItem(
-            title: 'No market activity yet',
-            note: 'Recent market actions will appear here.',
-            time: DateTime(2000, 1, 1),
-            icon: Icons.inbox_outlined,
-          ),
-        ];
-      } else {
-        _marketTimeline = [
-          for (var i = 0; i < fallbackTimeline.length; i++)
-            _SimpleTimelineItem(
-              title: 'Market product listed',
-              note:
-                  '${fallbackTimeline[i].title} (Stock ${fallbackTimeline[i].stock})',
-              time: DateTime.now().subtract(Duration(minutes: i * 8)),
-              icon: Icons.storefront_rounded,
-            ),
-        ];
-      }
-    }
+    _marketTimeline = backendTimeline;
 
     return next;
   }
@@ -2442,60 +2357,69 @@ class _SimplePageState extends State<_SimplePage> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  ...timeline.map((item) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: palette.softAccent,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Icon(
-                              item.icon,
-                              size: 17,
-                              color: palette.accent,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item.title,
-                                  style: const TextStyle(
-                                    color: _officialText,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                Text(
-                                  item.note,
-                                  style: const TextStyle(
-                                    color: _officialSubtext,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Text(
-                            _timeAgo(item.time),
-                            style: const TextStyle(
-                              color: _officialSubtext,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
+                  if (timeline.isEmpty)
+                    const Text(
+                      'No recent activity from backend yet.',
+                      style: TextStyle(
+                        color: _officialSubtext,
+                        fontWeight: FontWeight.w700,
                       ),
-                    );
-                  }),
+                    )
+                  else
+                    ...timeline.map((item) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: palette.softAccent,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                item.icon,
+                                size: 17,
+                                color: palette.accent,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item.title,
+                                    style: const TextStyle(
+                                      color: _officialText,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  Text(
+                                    item.note,
+                                    style: const TextStyle(
+                                      color: _officialSubtext,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              _timeAgo(item.time),
+                              style: const TextStyle(
+                                color: _officialSubtext,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
                 ],
               ),
             ),
