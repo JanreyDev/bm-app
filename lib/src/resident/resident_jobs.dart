@@ -2826,14 +2826,22 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
                       backgroundColor: hasInvited
                           ? const Color(0xFF9D96BB)
                           : const Color(0xFF7E46D7),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      textStyle: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
                     label: Text(
                       isTalentOwner
-                          ? 'View Invitations ($invitationCount)'
+                          ? 'Invitations ($invitationCount)'
                           : hasInvited
                           ? 'Invited'
                           : 'Invite',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
                     ),
                   ),
                 ),

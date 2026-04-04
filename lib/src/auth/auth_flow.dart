@@ -2180,8 +2180,65 @@ class _AuthApi {
     final configuredBaseUrl = _validatedBaseUrl(_configuredApiBaseUrl);
     if (configuredBaseUrl != null) {
       add(configuredBaseUrl);
-      if (out.isNotEmpty) {
-        return out;
+      final configuredUri = Uri.tryParse(configuredBaseUrl);
+      if (configuredUri != null) {
+        final basePath = configuredUri.path.trim();
+        final hasApiPath = basePath.isNotEmpty &&
+            basePath != '/' &&
+            basePath.toLowerCase().endsWith('/api');
+        final pathSegments = hasApiPath ? '/api' : '';
+
+        final explicitPort = configuredUri.hasPort;
+        final nonDefaultPort = explicitPort &&
+            !((configuredUri.scheme == 'http' && configuredUri.port == 80) ||
+                (configuredUri.scheme == 'https' && configuredUri.port == 443));
+
+        String compose({
+          required String scheme,
+          required bool includePort,
+          required bool includeApiPath,
+        }) {
+          final host = configuredUri.host;
+          final portPart = includePort && explicitPort ? ':${configuredUri.port}' : '';
+          final pathPart = includeApiPath ? pathSegments : '';
+          return '$scheme://$host$portPart$pathPart';
+        }
+
+        // Keep configured URL first, then broaden candidates for physical-device reliability.
+        add(compose(
+          scheme: configuredUri.scheme,
+          includePort: true,
+          includeApiPath: hasApiPath,
+        ));
+        add(compose(
+          scheme: configuredUri.scheme,
+          includePort: true,
+          includeApiPath: false,
+        ));
+        if (nonDefaultPort) {
+          add(compose(
+            scheme: configuredUri.scheme,
+            includePort: false,
+            includeApiPath: hasApiPath,
+          ));
+          add(compose(
+            scheme: configuredUri.scheme,
+            includePort: false,
+            includeApiPath: false,
+          ));
+        }
+        if (configuredUri.scheme == 'http') {
+          add(compose(
+            scheme: 'https',
+            includePort: false,
+            includeApiPath: hasApiPath,
+          ));
+          add(compose(
+            scheme: 'https',
+            includePort: false,
+            includeApiPath: false,
+          ));
+        }
       }
     }
 
