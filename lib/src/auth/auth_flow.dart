@@ -2523,7 +2523,9 @@ class _AuthApi {
       );
     }
 
-    if (response.statusCode == 201 || response.statusCode == 200) {
+    if (response.statusCode == 202 ||
+        response.statusCode == 201 ||
+        response.statusCode == 200) {
       final user = _extractUserValue(body);
       return _AuthApiResult(
         success: true,
