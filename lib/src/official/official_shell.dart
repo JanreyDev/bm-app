@@ -1641,11 +1641,55 @@ class _SimplePageState extends State<_SimplePage> {
       }
     }
 
+    final summary = await _fetchOfficialSummaryFromBackend();
     final productsResult = await _SellerApi.instance.fetchMarketProducts();
     final backendTimeline =
         await _fetchOfficialRecentActivityFromBackend(onlyType: 'market');
 
-    if (!productsResult.success) {
+    final summaryVendorCount = _readSummaryInt(summary, [
+      ['marketplace_vendors'],
+      ['vendor_count'],
+      ['market_vendor_count'],
+      ['summary', 'marketplace_vendors'],
+      ['summary', 'vendor_count'],
+      ['marketplace', 'vendors'],
+      ['metrics', 'marketplace_vendors'],
+    ]);
+    final summaryMarketProducts = _readSummaryInt(summary, [
+      ['market_product_count'],
+      ['market_products'],
+      ['summary', 'market_products'],
+      ['summary', 'market_products_total'],
+      ['marketplace', 'products'],
+      ['metrics', 'market_products'],
+    ]);
+    final summarySoldUnits = _readSummaryInt(summary, [
+      ['sold_units'],
+      ['market_sold_units'],
+      ['summary', 'sold_units'],
+      ['summary', 'market_sold_units'],
+      ['marketplace', 'sold_units'],
+      ['metrics', 'sold_units'],
+    ]);
+    final summaryTopCategory = ((summary?['top_category'] as String?) ??
+            (summary?['summary'] is Map<String, dynamic>
+                ? ((summary?['summary'] as Map<String, dynamic>)['top_category'] as String?)
+                : null) ??
+            (summary?['marketplace'] is Map<String, dynamic>
+                ? ((summary?['marketplace'] as Map<String, dynamic>)['top_category'] as String?)
+                : null) ??
+            '')
+        .trim();
+    final summaryPendingDeliveries = _readSummaryInt(summary, [
+      ['pending_deliveries'],
+      ['delivery_pending'],
+      ['summary', 'pending_deliveries'],
+      ['summary', 'delivery_pending'],
+      ['marketplace', 'pending_deliveries'],
+      ['metrics', 'pending_deliveries'],
+    ]);
+
+    if (!productsResult.success && summary == null) {
       next[0] = 'Marketplace Vendors: Data unavailable right now';
       next[1] = 'Today\'s Transactions: Data unavailable right now';
       next[2] = 'Top Category: Data unavailable right now';
@@ -1684,10 +1728,19 @@ class _SimplePageState extends State<_SimplePage> {
           eta.contains('ship');
     }).length;
 
-    next[0] = 'Marketplace Vendors: $vendorCount registered stall(s)';
-    next[1] = 'Today\'s Transactions: $soldUnits sold unit(s) logged';
-    next[2] = 'Top Category: $topCategory';
-    next[3] = 'Delivery Requests: $deliveryPending pending fulfillment(s)';
+    final effectiveVendors = summaryVendorCount ??
+        (summaryMarketProducts != null && summaryMarketProducts > 0
+            ? summaryMarketProducts
+            : vendorCount);
+    final effectiveSoldUnits = summarySoldUnits ?? soldUnits;
+    final effectiveTopCategory =
+        summaryTopCategory.isNotEmpty ? summaryTopCategory : topCategory;
+    final effectivePendingDeliveries = summaryPendingDeliveries ?? deliveryPending;
+
+    next[0] = 'Marketplace Vendors: $effectiveVendors registered stall(s)';
+    next[1] = 'Today\'s Transactions: $effectiveSoldUnits sold unit(s) logged';
+    next[2] = 'Top Category: $effectiveTopCategory';
+    next[3] = 'Delivery Requests: $effectivePendingDeliveries pending fulfillment(s)';
 
     _marketTimeline = backendTimeline;
 
