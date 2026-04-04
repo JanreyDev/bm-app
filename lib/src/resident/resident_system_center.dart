@@ -876,6 +876,8 @@ class _TransactionHistoryPage extends StatefulWidget {
 class _TransactionHistoryPageState extends State<_TransactionHistoryPage> {
   final _searchController = TextEditingController();
   bool _loading = true;
+  List<_SystemTransactionEntry> _officialRemoteEntries =
+      const <_SystemTransactionEntry>[];
 
   @override
   void initState() {
@@ -893,8 +895,16 @@ class _TransactionHistoryPageState extends State<_TransactionHistoryPage> {
     setState(() => _loading = true);
     if (widget.role == UserRole.resident) {
       await _ResidentCartHub.ensureLoaded();
+      await Future<void>.delayed(const Duration(milliseconds: 320));
+    } else {
+      final result = await _OfficialTransactionsApi.instance.fetch();
+      if (!mounted) return;
+      if (result.success) {
+        _officialRemoteEntries = result.entries;
+      } else {
+        _showFeature(context, result.message, tone: _ToastTone.warning);
+      }
     }
-    await Future<void>.delayed(const Duration(milliseconds: 520));
     if (mounted) {
       setState(() => _loading = false);
     }
@@ -923,10 +933,10 @@ class _TransactionHistoryPageState extends State<_TransactionHistoryPage> {
   }
 
   List<_SystemTransactionEntry> _entries() {
-    final seeded = _transactionHistoryFeed.value
-        .where((entry) => entry.role == widget.role)
-        .toList();
     if (widget.role == UserRole.resident) {
+      final seeded = _transactionHistoryFeed.value
+          .where((entry) => entry.role == widget.role)
+          .toList();
       final docs = _SerbilisDocumentStore.documents.value.map(
         (entry) => _SystemTransactionEntry(
           role: UserRole.resident,
@@ -952,7 +962,8 @@ class _TransactionHistoryPageState extends State<_TransactionHistoryPage> {
       return [...seeded, ...docs, ...orders]
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     }
-    return seeded..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return [..._officialRemoteEntries]
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
   @override
@@ -1053,6 +1064,152 @@ class _TransactionHistoryPageState extends State<_TransactionHistoryPage> {
               ),
             ),
     );
+  }
+}
+
+class _OfficialTransactionsFetchResult {
+  final bool success;
+  final String message;
+  final List<_SystemTransactionEntry> entries;
+
+  const _OfficialTransactionsFetchResult({
+    required this.success,
+    required this.message,
+    this.entries = const <_SystemTransactionEntry>[],
+  });
+}
+
+class _OfficialTransactionsApi {
+  _OfficialTransactionsApi._();
+  static final instance = _OfficialTransactionsApi._();
+
+  Future<_OfficialTransactionsFetchResult> fetch() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _OfficialTransactionsFetchResult(
+        success: false,
+        message: 'Login required.',
+      );
+    }
+
+    const paths = <String>[
+      'official/transactions',
+      'transactions',
+    ];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http.get(
+            endpoint,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $_authToken',
+            },
+          ).timeout(const Duration(seconds: 8));
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            return _OfficialTransactionsFetchResult(
+              success: false,
+              message: _extractApiMessage(
+                response.body,
+                'Unable to load transaction history.',
+              ),
+            );
+          }
+
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          if (decoded is! Map<String, dynamic>) {
+            return const _OfficialTransactionsFetchResult(
+              success: false,
+              message: 'Invalid transaction history response.',
+            );
+          }
+
+          final rawItems = decoded['transactions'] ?? decoded['data'];
+          final entries = <_SystemTransactionEntry>[];
+          if (rawItems is List) {
+            for (final raw in rawItems) {
+              if (raw is! Map<String, dynamic>) {
+                continue;
+              }
+              entries.add(_mapTransaction(raw));
+            }
+          }
+
+          entries.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return _OfficialTransactionsFetchResult(
+            success: true,
+            message: _extractApiMessage(
+              response.body,
+              'Official transaction history synced.',
+            ),
+            entries: entries,
+          );
+        } on TimeoutException {
+          return const _OfficialTransactionsFetchResult(
+            success: false,
+            message: 'Transaction history request timed out.',
+          );
+        } catch (_) {
+          return const _OfficialTransactionsFetchResult(
+            success: false,
+            message: 'Unable to load transaction history.',
+          );
+        }
+      }
+    }
+
+    return const _OfficialTransactionsFetchResult(
+      success: false,
+      message: 'Transaction history endpoint unavailable.',
+    );
+  }
+
+  _SystemTransactionEntry _mapTransaction(Map<String, dynamic> item) {
+    String readString(String key, [String fallback = '']) {
+      final value = item[key];
+      if (value is String) return value.trim();
+      if (value != null) return value.toString().trim();
+      return fallback;
+    }
+
+    double readDouble(String key) {
+      final value = item[key];
+      if (value is num) return value.toDouble();
+      if (value is String) {
+        return double.tryParse(value.trim()) ?? 0;
+      }
+      return 0;
+    }
+
+    DateTime readDate(String key) {
+      final raw = readString(key);
+      return DateTime.tryParse(raw)?.toLocal() ?? DateTime.now();
+    }
+
+    return _SystemTransactionEntry(
+      role: UserRole.official,
+      title: readString('title', 'Transaction'),
+      type: readString('type', 'Activity'),
+      reference: readString('reference', readString('id')),
+      status: readString('status', 'Completed'),
+      amount: readDouble('amount'),
+      createdAt: readDate('created_at'),
+    );
+  }
+
+  String _extractApiMessage(String body, String fallback) {
+    try {
+      final decoded = _AuthApi.instance._decodeDynamicJson(body);
+      if (decoded is Map<String, dynamic>) {
+        final message = decoded['message'];
+        if (message is String && message.trim().isNotEmpty) {
+          return message.trim();
+        }
+      }
+    } catch (_) {}
+    return fallback;
   }
 }
 
