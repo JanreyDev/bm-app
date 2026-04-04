@@ -116,6 +116,7 @@ class _CommunityHub {
       <_CommunityCalendarEvent>[];
   static final List<_VolunteerOpportunity> _volunteerPrograms =
       <_VolunteerOpportunity>[];
+  static final Map<int, bool> _volunteerJoinedByPost = <int, bool>{};
 
   static void ensureSeeded() {
     if (_seeded) {
@@ -127,6 +128,7 @@ class _CommunityHub {
         author: 'Barangay West Tapinac',
         message:
             'Clean-up drive this Saturday at 7:00 AM. Bring gloves, water, and meet at the covered court. Volunteers will receive meal packs after the activity.',
+        postType: 'announcement',
         postedAt: DateTime.now().subtract(const Duration(minutes: 26)),
         hasPhoto: true,
         photoAsset: 'public/item-laptop.jpg',
@@ -140,6 +142,7 @@ class _CommunityHub {
         author: 'Maria Santos',
         message:
             'Verified residents from Purok 3 are collecting school supplies for Sunday\'s literacy drive. Drop-off point is the barangay hall lobby until 5:00 PM.',
+        postType: 'volunteer',
         postedAt: DateTime.now().subtract(const Duration(hours: 2, minutes: 15)),
         likes: 21,
         comments: 4,
@@ -150,6 +153,7 @@ class _CommunityHub {
         author: 'Youth Council',
         message:
             'Basketball league registration is now open. Submit your team roster before Friday, 5:00 PM at the SK office.',
+        postType: 'event',
         postedAt: DateTime.now().subtract(const Duration(hours: 5, minutes: 8)),
         hasPhoto: true,
         photoAsset: 'public/market-basket.jpg',
@@ -163,6 +167,7 @@ class _CommunityHub {
         author: 'Carlo Reyes',
         message:
             'Streetlights near Zone 4 have been fixed. Thanks to everyone who reported it quickly through the app.',
+        postType: 'social',
         postedAt: DateTime.now().subtract(const Duration(days: 1, hours: 1)),
         likes: 32,
         comments: 3,
@@ -301,7 +306,35 @@ class _CommunityHub {
 
   static List<_CommunityAnnouncement> get announcements {
     ensureSeeded();
-    final sorted = [..._announcements]
+    final accentPalette = <({Color accent, Color soft})>[
+      (accent: const Color(0xFFCB1010), soft: const Color(0xFFFFE3E3)),
+      (accent: const Color(0xFF335CF3), soft: const Color(0xFFE8EEFF)),
+      (accent: const Color(0xFFE96A24), soft: const Color(0xFFFFE7D7)),
+      (accent: const Color(0xFF2D7D46), soft: const Color(0xFFE4F7EA)),
+    ];
+    final mapped = posts
+        .where((entry) =>
+            entry.postType == 'announcement' || (entry.isOfficial && entry.postType == 'social'))
+        .map((post) {
+          final palette = accentPalette[post.id % accentPalette.length];
+          final summary = post.message.trim();
+          final title = _communityPostHeadline(summary);
+          return _CommunityAnnouncement(
+            id: post.id,
+            title: title,
+            summary: summary,
+            audienceLabel: post.isOfficial ? 'All residents' : 'Community',
+            postedAt: post.postedAt,
+            pinned: post.isOfficial,
+            hasVideo: post.hasPhoto,
+            videoTitle: title,
+            durationLabel: post.hasPhoto ? '00:45' : '00:00',
+            accent: palette.accent,
+            accentSoft: palette.soft,
+          );
+        })
+        .toList();
+    final sorted = [...mapped]
       ..sort((a, b) {
         if (a.pinned != b.pinned) {
           return a.pinned ? -1 : 1;
@@ -316,13 +349,51 @@ class _CommunityHub {
 
   static List<_CommunityCalendarEvent> get events {
     ensureSeeded();
-    final sorted = [..._events]..sort((a, b) => a.startAt.compareTo(b.startAt));
+    final mapped = posts
+        .where((entry) => entry.postType == 'event')
+        .map((post) => _CommunityCalendarEvent(
+              id: post.id,
+              title: _communityPostHeadline(post.message),
+              type: 'Event',
+              description: post.message,
+              startAt: post.postedAt,
+              venue: (post.neighborhood ?? '').trim().isEmpty
+                  ? 'Barangay Hall'
+                  : post.neighborhood!,
+              isOfficial: post.isOfficial,
+              isHoliday: false,
+            ))
+        .toList();
+    final sorted = [...mapped]..sort((a, b) => a.startAt.compareTo(b.startAt));
     return sorted;
   }
 
   static List<_VolunteerOpportunity> get volunteerPrograms {
     ensureSeeded();
-    return [..._volunteerPrograms];
+    return posts
+        .where((entry) => entry.postType == 'volunteer')
+        .map((post) {
+          final target = math.max(5, post.likes + post.comments + 5);
+          final joinedBase = math.min(target, math.max(0, post.likes + post.comments));
+          final joinedByMe = _volunteerJoinedByPost[post.id] ?? false;
+          final joined = joinedByMe ? math.min(target, joinedBase + 1) : joinedBase;
+          return _VolunteerOpportunity(
+            id: post.id,
+            title: _communityPostHeadline(post.message),
+            category: 'Community',
+            description: post.message,
+            scheduleAt: post.postedAt,
+            venue: (post.neighborhood ?? '').trim().isEmpty
+                ? 'Barangay Hall'
+                : post.neighborhood!,
+            coordinator: post.author,
+            benefit: 'Barangay volunteer credits',
+            targetVolunteers: target,
+            joinedVolunteers: joined,
+            joinedByMe: joinedByMe,
+          );
+        })
+        .toList();
   }
 
   static List<_CommunityCalendarEvent> eventsForDay(DateTime day) {
@@ -378,10 +449,24 @@ class _CommunityHub {
   }
 
   static void toggleVolunteer(_VolunteerOpportunity opportunity) {
-    opportunity.toggleJoined();
-    _emit(opportunity.joinedByMe
+    final current = _volunteerJoinedByPost[opportunity.id] ?? false;
+    final next = !current;
+    _volunteerJoinedByPost[opportunity.id] = next;
+    _emit(next
         ? 'Volunteer queue updated: you joined ${opportunity.title}.'
         : 'Volunteer queue updated: you left ${opportunity.title}.');
+  }
+
+  static String _communityPostHeadline(String message) {
+    final text = message.trim();
+    if (text.isEmpty) {
+      return 'Community update';
+    }
+    final firstLine = text.split('\n').first.trim();
+    if (firstLine.length <= 48) {
+      return firstLine;
+    }
+    return '${firstLine.substring(0, 48).trim()}...';
   }
 
   static void simulateRemotePulse() {
@@ -579,6 +664,7 @@ class _CommunityApi {
 
   Future<_CommunityPostCreateResult> createPost({
     required String message,
+    required String postType,
     Uint8List? imageBytes,
   }) async {
     if (_authToken == null || _authToken!.isEmpty) {
@@ -599,6 +685,7 @@ class _CommunityApi {
     }
     final payload = <String, dynamic>{
       'message': message,
+      'post_type': postType,
       if (imagePayload != null && imagePayload.isNotEmpty)
         'image_base64': imagePayload,
     };
@@ -678,6 +765,7 @@ class _CommunityApi {
   Future<_CommunityPostCreateResult> updatePost({
     required int postId,
     required String message,
+    required String postType,
     Uint8List? imageBytes,
   }) async {
     if (_authToken == null || _authToken!.isEmpty) {
@@ -708,6 +796,7 @@ class _CommunityApi {
               },
               body: jsonEncode({
                 'message': message,
+                'post_type': postType,
                 if (imagePayload != null && imagePayload.isNotEmpty)
                   'image_base64': imagePayload,
               }),
@@ -1103,6 +1192,7 @@ class _CommunityApi {
         ? DateTime.tryParse(postedRaw)?.toLocal()
         : null;
     final message = ((raw['message'] as String?) ?? '').trim();
+    final postType = ((raw['post_type'] as String?) ?? 'social').trim().toLowerCase();
     final author = ((raw['author'] as String?) ?? '').trim();
     final barangay = ((raw['barangay'] as String?) ?? '').trim();
     final official = parseBool(raw['is_official']);
@@ -1147,6 +1237,7 @@ class _CommunityApi {
           ? (official ? 'Barangay Update' : 'Verified Resident')
           : author,
       message: message,
+      postType: postType.isEmpty ? 'social' : postType,
       postedAt: postedAt ?? DateTime.now(),
       hasPhoto: decodedImage != null,
       photoBytes: decodedImage,
@@ -1491,6 +1582,7 @@ class _CommunityPageState extends State<CommunityPage>
     }
     final result = await _CommunityApi.instance.createPost(
       message: createdPost.message,
+      postType: createdPost.postType,
       imageBytes: createdPost.photoBytes,
     );
     if (!mounted) {
@@ -1662,6 +1754,7 @@ class _CommunityPageState extends State<CommunityPage>
     final result = await _CommunityApi.instance.updatePost(
       postId: post.id,
       message: editedMessage,
+      postType: post.postType,
       imageBytes: post.photoBytes,
     );
     if (!mounted) {
@@ -2192,6 +2285,7 @@ class _CommunityComposerSheetState extends State<_CommunityComposerSheet> {
   final _messageController = TextEditingController();
   Uint8List? _selectedImageBytes;
   String? _selectedImageName;
+  String _selectedPostType = 'social';
   bool _submitting = false;
 
   String get _authorLabel => widget.officialView
@@ -2244,6 +2338,7 @@ class _CommunityComposerSheetState extends State<_CommunityComposerSheet> {
     final post = _CommunityPost(
       author: _authorLabel,
       message: message,
+      postType: _selectedPostType,
       postedAt: DateTime.now(),
       hasPhoto: _selectedImageBytes != null,
       photoBytes: _selectedImageBytes,
@@ -2337,6 +2432,17 @@ class _CommunityComposerSheetState extends State<_CommunityComposerSheet> {
               ),
             ),
             const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _postTypeChip('social', 'Social'),
+                _postTypeChip('announcement', 'Announcement'),
+                _postTypeChip('event', 'Event'),
+                _postTypeChip('volunteer', 'Volunteer'),
+              ],
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: _messageController,
               maxLines: 7,
@@ -2418,6 +2524,24 @@ class _CommunityComposerSheetState extends State<_CommunityComposerSheet> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: body,
+    );
+  }
+
+  Widget _postTypeChip(String value, String label) {
+    final selected = _selectedPostType == value;
+    return ChoiceChip(
+      selected: selected,
+      label: Text(label),
+      onSelected: (_) => setState(() => _selectedPostType = value),
+      selectedColor: const Color(0xFFFFE3E3),
+      labelStyle: TextStyle(
+        color: selected ? const Color(0xFFCB1010) : const Color(0xFF5F667F),
+        fontWeight: FontWeight.w800,
+      ),
+      side: BorderSide(
+        color: selected ? const Color(0xFFCB1010) : const Color(0xFFDADFEB),
+      ),
+      backgroundColor: Colors.white,
     );
   }
 }
@@ -2846,6 +2970,7 @@ class _CommunityPost {
   final int id;
   final String author;
   final String message;
+  final String postType;
   final DateTime postedAt;
   final bool hasPhoto;
   final Uint8List? photoBytes;
@@ -2872,6 +2997,7 @@ class _CommunityPost {
     int? id,
     required this.author,
     required this.message,
+    this.postType = 'social',
     required this.postedAt,
     this.hasPhoto = false,
     this.photoBytes,
@@ -3395,137 +3521,151 @@ class _CommunityAnnouncementsTabState extends State<_CommunityAnnouncementsTab> 
   @override
   Widget build(BuildContext context) {
     final pinned = widget.announcements.where((entry) => entry.pinned).toList();
+    if (widget.announcements.isEmpty) {
+      return const ListView(
+        padding: EdgeInsets.only(bottom: 18),
+        children: [
+          _AppEmptyState(
+            icon: Icons.campaign_outlined,
+            title: 'No announcements yet',
+            subtitle: 'Official announcements will appear here after publishing.',
+          ),
+        ],
+      );
+    }
     return ListView(
       padding: const EdgeInsets.only(bottom: 18),
       children: [
-        SizedBox(
-          height: 220,
-          child: PageView.builder(
-            controller: _pageController,
-            itemCount: pinned.length,
-            onPageChanged: (value) => setState(() => _pageIndex = value),
-            itemBuilder: (context, index) {
-              final item = pinned[index];
-              return Padding(
-                padding: EdgeInsets.only(right: index == pinned.length - 1 ? 0 : 10),
-                child: Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(26),
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [item.accent, item.accent.withValues(alpha: 0.86)],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: item.accent.withValues(alpha: 0.24),
-                        blurRadius: 16,
-                        offset: const Offset(0, 8),
+        if (pinned.isNotEmpty) ...[
+          SizedBox(
+            height: 220,
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: pinned.length,
+              onPageChanged: (value) => setState(() => _pageIndex = value),
+              itemBuilder: (context, index) {
+                final item = pinned[index];
+                return Padding(
+                  padding: EdgeInsets.only(right: index == pinned.length - 1 ? 0 : 10),
+                  child: Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(26),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [item.accent, item.accent.withValues(alpha: 0.86)],
                       ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.18),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: const Text(
-                              'Pinned Announcement',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
+                      boxShadow: [
+                        BoxShadow(
+                          color: item.accent.withValues(alpha: 0.24),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: const Text(
+                                'Pinned Announcement',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                ),
                               ),
                             ),
-                          ),
-                          const Spacer(),
-                          if (item.hasVideo)
-                            const Icon(
-                              Icons.play_circle_fill_rounded,
-                              color: Colors.white,
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        item.title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w900,
-                          height: 1.05,
+                            const Spacer(),
+                            if (item.hasVideo)
+                              const Icon(
+                                Icons.play_circle_fill_rounded,
+                                color: Colors.white,
+                              ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        item.summary,
-                        style: const TextStyle(
-                          color: Color(0xFFFFE9E9),
-                          fontWeight: FontWeight.w600,
-                          height: 1.35,
+                        const SizedBox(height: 14),
+                        Text(
+                          item.title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w900,
+                            height: 1.05,
+                          ),
                         ),
-                      ),
-                      const Spacer(),
-                      Row(
-                        children: [
-                          FilledButton.icon(
-                            onPressed:
-                                item.hasVideo ? () => widget.onWatchClip(item) : null,
-                            style: FilledButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: item.accent,
-                            ),
-                            icon: const Icon(Icons.ondemand_video_rounded),
-                            label: Text(item.hasVideo ? 'Watch Clip' : 'No Video'),
+                        const SizedBox(height: 8),
+                        Text(
+                          item.summary,
+                          style: const TextStyle(
+                            color: Color(0xFFFFE9E9),
+                            fontWeight: FontWeight.w600,
+                            height: 1.35,
                           ),
-                          const SizedBox(width: 8),
-                          OutlinedButton.icon(
-                            onPressed: () => widget.onShareFacebook(item),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              side: const BorderSide(color: Colors.white70),
+                        ),
+                        const Spacer(),
+                        Row(
+                          children: [
+                            FilledButton.icon(
+                              onPressed:
+                                  item.hasVideo ? () => widget.onWatchClip(item) : null,
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: item.accent,
+                              ),
+                              icon: const Icon(Icons.ondemand_video_rounded),
+                              label: Text(item.hasVideo ? 'Watch Clip' : 'No Video'),
                             ),
-                            icon: const Icon(Icons.facebook_rounded),
-                            label: const Text('Cross-post'),
-                          ),
-                        ],
-                      ),
-                    ],
+                            const SizedBox(width: 8),
+                            OutlinedButton.icon(
+                              onPressed: () => widget.onShareFacebook(item),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                side: const BorderSide(color: Colors.white70),
+                              ),
+                              icon: const Icon(Icons.facebook_rounded),
+                              label: const Text('Cross-post'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List<Widget>.generate(
-            pinned.length,
-            (index) => AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              width: index == _pageIndex ? 22 : 8,
-              height: 8,
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              decoration: BoxDecoration(
-                color: index == _pageIndex
-                    ? const Color(0xFFCB1010)
-                    : const Color(0xFFD7DBE8),
-                borderRadius: BorderRadius.circular(999),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List<Widget>.generate(
+              pinned.length,
+              (index) => AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                width: index == _pageIndex ? 22 : 8,
+                height: 8,
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                decoration: BoxDecoration(
+                  color: index == _pageIndex
+                      ? const Color(0xFFCB1010)
+                      : const Color(0xFFD7DBE8),
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
             ),
           ),
-        ),
-        const SizedBox(height: 12),
+          const SizedBox(height: 12),
+        ],
         ...widget.announcements.map((item) {
           return Container(
             margin: const EdgeInsets.only(bottom: 10),
