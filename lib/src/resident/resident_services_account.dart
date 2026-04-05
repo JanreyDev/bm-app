@@ -5065,6 +5065,27 @@ class _CartLineItem {
     'iconFontPackage': icon.fontPackage,
   };
 
+  static IconData _iconFromPayload(Map<String, dynamic> json, String title) {
+    final codePoint = (json['iconCodePoint'] as num?)?.toInt();
+    if (codePoint == Icons.laptop_mac.codePoint) {
+      return Icons.laptop_mac;
+    }
+    if (codePoint == Icons.print.codePoint) {
+      return Icons.print;
+    }
+    if (codePoint == Icons.storefront.codePoint) {
+      return Icons.storefront;
+    }
+    final lower = title.toLowerCase();
+    if (lower.contains('laptop') || lower.contains('computer')) {
+      return Icons.laptop_mac;
+    }
+    if (lower.contains('print') || lower.contains('printer')) {
+      return Icons.print;
+    }
+    return Icons.storefront;
+  }
+
   factory _CartLineItem.fromJson(Map<String, dynamic> json) {
     final title = json['title'] as String? ?? 'Marketplace Item';
     final seller = json['seller'] as String? ?? 'Barangay Seller';
@@ -5085,12 +5106,7 @@ class _CartLineItem {
       seller: seller,
       price: price,
       qty: (json['qty'] as num?)?.toInt() ?? 1,
-      icon: IconData(
-        (json['iconCodePoint'] as num?)?.toInt() ?? Icons.storefront.codePoint,
-        fontFamily:
-            json['iconFontFamily'] as String? ?? Icons.storefront.fontFamily,
-        fontPackage: json['iconFontPackage'] as String?,
-      ),
+      icon: _iconFromPayload(json, title),
       imageAsset: json['imageAsset'] as String?,
       fulfillment:
           json['fulfillment'] as String? ?? 'Pickup at Brgy Hall',

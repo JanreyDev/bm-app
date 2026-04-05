@@ -116,15 +116,14 @@ class SerbilisServicesPage extends StatelessWidget {
         const SizedBox(height: 12),
         LayoutBuilder(
           builder: (context, constraints) {
-            final crossAxisCount = constraints.maxWidth < 360 ? 2 : 3;
             return GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: crossAxisCount,
+                crossAxisCount: 3,
                 crossAxisSpacing: 8,
                 mainAxisSpacing: 8,
-                childAspectRatio: 0.92,
+                childAspectRatio: 0.84,
               ),
               itemCount: data.length,
               itemBuilder: (_, index) {
@@ -148,31 +147,31 @@ class SerbilisServicesPage extends StatelessWidget {
                         ),
                       ],
                     ),
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(8),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Container(
-                          width: 46,
-                          height: 46,
+                          width: 40,
+                          height: 40,
                           decoration: BoxDecoration(
                             color: const Color(0xFFFFEFEA),
                             borderRadius: BorderRadius.circular(13),
                           ),
                           child: Icon(
                             item.icon,
-                            size: 24,
+                            size: 21,
                             color: _officialHeaderStart,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Text(
                           item.name,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
                           style: const TextStyle(
-                            fontSize: 13,
+                            fontSize: 12,
                             color: _officialText,
                             fontWeight: FontWeight.w700,
                           ),

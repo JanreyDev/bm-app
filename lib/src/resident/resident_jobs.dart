@@ -2798,17 +2798,19 @@ class _ResidentJobsPageState extends State<ResidentJobsPage> {
             const SizedBox(height: 10),
             Row(
               children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: openSmsComposer,
-                    icon: const Icon(
-                      Icons.chat_bubble_outline_rounded,
-                      size: 16,
+                if (!isTalentOwner) ...[
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: openSmsComposer,
+                      icon: const Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        size: 16,
+                      ),
+                      label: const Text('Message'),
                     ),
-                    label: const Text('Message'),
                   ),
-                ),
-                const SizedBox(width: 8),
+                  const SizedBox(width: 8),
+                ],
                 Expanded(
                   child: FilledButton.icon(
                     onPressed: isTalentOwner
@@ -3865,6 +3867,35 @@ class _ResidentApplicantReviewPageState extends State<ResidentApplicantReviewPag
     }
   }
 
+  Future<Directory> _resolveDownloadDirectory() async {
+    if (Platform.isAndroid) {
+      final external = await getExternalStorageDirectory();
+      if (external != null) {
+        final dir = Directory('${external.path}/Downloads/BarangayMo');
+        if (!await dir.exists()) {
+          await dir.create(recursive: true);
+        }
+        return dir;
+      }
+    }
+
+    final downloads = await getDownloadsDirectory();
+    if (downloads != null) {
+      final dir = Directory('${downloads.path}/BarangayMo');
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      return dir;
+    }
+
+    final docs = await getApplicationDocumentsDirectory();
+    final dir = Directory('${docs.path}/BarangayMo/Downloads');
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    return dir;
+  }
+
   Future<void> _downloadAttachment() async {
     final sourceFile = await _resolveAttachmentSourceFile();
     final payloadBytes = sourceFile == null ? _decodeAttachmentPayload() : null;
@@ -3878,12 +3909,7 @@ class _ResidentApplicantReviewPageState extends State<ResidentApplicantReviewPag
 
     setState(() => _downloading = true);
     try {
-      Directory? targetRoot = await getDownloadsDirectory();
-      targetRoot ??= await getApplicationDocumentsDirectory();
-      final downloadsDir = Directory('${targetRoot.path}/BarangayMo/Downloads');
-      if (!await downloadsDir.exists()) {
-        await downloadsDir.create(recursive: true);
-      }
+      final downloadsDir = await _resolveDownloadDirectory();
       final fileName = _safeFileName(
         widget.submission.attachmentName.isEmpty
             ? (sourceFile?.uri.pathSegments.last ?? 'submission_attachment.bin')
@@ -3900,7 +3926,7 @@ class _ResidentApplicantReviewPageState extends State<ResidentApplicantReviewPag
       }
       _showFeature(
         context,
-        'Attachment downloaded successfully.',
+        'Attachment downloaded to: $destinationPath',
         tone: _ToastTone.success,
       );
     } catch (_) {
