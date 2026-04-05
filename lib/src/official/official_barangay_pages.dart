@@ -1001,6 +1001,7 @@ class _OfficialBarangayProfilePageState
     return Container(
       key: ValueKey('${member.name}-${member.role}-$index'),
       margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -1013,75 +1014,102 @@ class _OfficialBarangayProfilePageState
           ),
         ],
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
-        leading: const CircleAvatar(
-          radius: 22,
-          backgroundColor: _profileSoft,
-          child: Icon(Icons.person, color: _profileIcon, size: 24),
-        ),
-        title: Text(
-          member.name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: _officialText,
-            fontWeight: FontWeight.w800,
-            fontSize: 15,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const CircleAvatar(
+            radius: 22,
+            backgroundColor: _profileSoft,
+            child: Icon(Icons.person, color: _profileIcon, size: 24),
           ),
-        ),
-        subtitle: Text(
-          '${member.role}\n${member.committee}',
-          style: const TextStyle(
-            color: _officialSubtext,
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-          ),
-          maxLines: 2,
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: _profileSoft,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                _directoryBadgeFor(index, member),
-                style: const TextStyle(
-                  color: _profileIcon,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 10,
-                ),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Row(
-              mainAxisSize: MainAxisSize.min,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                IconButton(
-                  onPressed: _isReadOnlyAfterActivation
-                      ? null
-                      : () => _editCouncilMember(index: index),
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                  color: _profileIcon,
+                Text(
+                  member.name.trim().isEmpty ? 'UNNAMED MEMBER' : member.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _officialText,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
                 ),
-                if (canReorder)
-                  ReorderableDragStartListener(
-                    index: index,
-                    child: const Icon(
-                      Icons.drag_handle_rounded,
-                      color: _profileIcon,
-                    ),
-                  )
-                else
-                  const Icon(Icons.lock_outline_rounded, color: _profileIcon),
+                const SizedBox(height: 1),
+                Text(
+                  member.role,
+                  style: const TextStyle(
+                    color: _officialSubtext,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  member.committee,
+                  style: const TextStyle(
+                    color: Color(0xFF6E748F),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
               ],
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _profileSoft,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  _directoryBadgeFor(index, member),
+                  style: const TextStyle(
+                    color: _profileIcon,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 10,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    onPressed: _isReadOnlyAfterActivation
+                        ? null
+                        : () => _editCouncilMember(index: index),
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    color: _profileIcon,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                  const SizedBox(width: 6),
+                  if (canReorder)
+                    ReorderableDragStartListener(
+                      index: index,
+                      child: const Icon(
+                        Icons.drag_handle_rounded,
+                        color: _profileIcon,
+                      ),
+                    )
+                  else
+                    const Icon(
+                      Icons.lock_outline_rounded,
+                      color: _profileIcon,
+                      size: 18,
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -1670,11 +1670,23 @@ class EmergencyResponderDashboardPage extends StatefulWidget {
 
 class _EmergencyResponderDashboardPageState
     extends State<EmergencyResponderDashboardPage> {
+  Timer? _pollingTimer;
+
   @override
   void initState() {
     super.initState();
     unawaited(_syncEmergencyOpsData(force: true));
     unawaited(_syncEmergencySharedLocationFeed(force: true));
+    _pollingTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      unawaited(_syncEmergencyOpsData(force: true));
+      unawaited(_syncEmergencySharedLocationFeed(force: true));
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -1736,12 +1748,17 @@ class _EmergencyResponderDashboardPageState
                   final initialCenter = sharedFeed.isNotEmpty
                       ? sharedFeed.first.point
                       : (sharedLocation?.point ?? _defaultEmergencyPoint());
-                  return ListView(
-                    padding: const EdgeInsets.all(12),
-                    children: [
-                  SizedBox(
-                    height: 240,
-                    child: ClipRRect(
+                  return RefreshIndicator(
+                    onRefresh: () async {
+                      await _syncEmergencyOpsData(force: true);
+                      await _syncEmergencySharedLocationFeed(force: true);
+                    },
+                    child: ListView(
+                      padding: const EdgeInsets.all(12),
+                      children: [
+                    SizedBox(
+                      height: 240,
+                      child: ClipRRect(
                       borderRadius: BorderRadius.circular(20),
                       child: FlutterMap(
                         options: MapOptions(
@@ -1856,6 +1873,7 @@ class _EmergencyResponderDashboardPageState
                     ),
                   ),
                     ],
+                    ),
                   );
                 },
               );
@@ -2597,7 +2615,6 @@ class _AidProgramTrackerEntry {
     required this.createdAt,
   });
 }
-
 class _AssistanceRequestPageState extends State<AssistanceRequestPage> {
   static final ValueNotifier<List<_AidProgramTrackerEntry>> _tracker =
       ValueNotifier<List<_AidProgramTrackerEntry>>([
@@ -2617,9 +2634,13 @@ class _AssistanceRequestPageState extends State<AssistanceRequestPage> {
         ),
       ]);
 
-  final _fullNameController = TextEditingController(text: 'Shamira Balandra');
-  final _mobileController = TextEditingController(text: '09073170635');
-  final _notesController = TextEditingController();
+  late final _fullNameController = TextEditingController(
+    text: _currentResidentProfile?.displayName ?? '',
+  );
+  late final _mobileController = TextEditingController(
+    text: _currentResidentProfile?.mobile ?? '',
+  );
+  late final _notesController = TextEditingController(text: widget.assistanceType);
   final _hospitalController = TextEditingController();
   final _billAmountController = TextEditingController();
   final _deceasedNameController = TextEditingController();

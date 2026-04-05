@@ -1278,3 +1278,183 @@ class _ResidentJobsHub {
     return submissionsForJob(job).length;
   }
 }
+
+
+class _ResidentChatMessage {
+  final String senderId;
+  final String senderName;
+  final String text;
+  final DateTime timestamp;
+
+  const _ResidentChatMessage({
+    required this.senderId,
+    required this.senderName,
+    required this.text,
+    required this.timestamp,
+  });
+
+  Map<String, dynamic> toJson() => {
+    " senderId\: senderId,
+ \senderName\: senderName,
+ \text\: text,
+ \timestamp\: timestamp.toIso8601String(),
+ };
+
+ factory _ResidentChatMessage.fromJson(Map<String, dynamic> json) {
+ return _ResidentChatMessage(
+ senderId: json[\senderId\] as String? ?? \\,
+ senderName: json[\senderName\] as String? ?? \\,
+ text: json[\text\] as String? ?? \\,
+ timestamp: DateTime.tryParse(json[\timestamp\] as String? ?? \\) ?? DateTime.now(),
+ );
+ }
+}
+
+class _ResidentChatThread {
+ final String id;
+ final String buyerId;
+ final String buyerName;
+ final String sellerName;
+ final String productTitle;
+ final List<_ResidentChatMessage> messages;
+ final DateTime lastMessageAt;
+
+ const _ResidentChatThread({
+ required this.id,
+ required this.buyerId,
+ required this.buyerName,
+ required this.sellerName,
+ required this.productTitle,
+ required this.messages,
+ required this.lastMessageAt,
+ });
+
+ _ResidentChatThread copyWith({
+ List<_ResidentChatMessage>? messages,
+ DateTime? lastMessageAt,
+ }) {
+ return _ResidentChatThread(
+ id: id,
+ buyerId: buyerId,
+ buyerName: buyerName,
+ sellerName: sellerName,
+ productTitle: productTitle,
+ messages: messages ?? this.messages,
+ lastMessageAt: lastMessageAt ?? this.lastMessageAt,
+ );
+ }
+
+ Map<String, dynamic> toJson() => {
+ \id\: id,
+ \buyerId\: buyerId,
+ \buyerName\: buyerName,
+ \sellerName\: sellerName,
+ \productTitle\: productTitle,
+ \messages\: messages.map((m) => m.toJson()).toList(),
+ \lastMessageAt\: lastMessageAt.toIso8601String(),
+ };
+
+ factory _ResidentChatThread.fromJson(Map<String, dynamic> json) {
+ return _ResidentChatThread(
+ id: json[\id\] as String? ?? \\,
+ buyerId: json[\buyerId\] as String? ?? \\,
+ buyerName: json[\buyerName\] as String? ?? \\,
+ sellerName: json[\sellerName\] as String? ?? \\,
+ productTitle: json[\productTitle\] as String? ?? \\,
+ messages: (json[\messages\] as List<dynamic>? ?? [])
+ .map((m) => _ResidentChatMessage.fromJson(m as Map<String, dynamic>))
+ .toList(),
+ lastMessageAt: DateTime.tryParse(json[\lastMessageAt\] as String? ?? \\) ?? DateTime.now(),
+ );
+ }
+}
+
+class _ResidentChatHub {
+ static final ValueNotifier<int> refresh = ValueNotifier<int>(0);
+ static const String _storageKey = \resident_chats_v1\;
+ static final List<_ResidentChatThread> threads = [];
+ static bool _loaded = false;
+
+ static void _emit() => refresh.value++;
+
+ static Future<void> ensureLoaded() async {
+ if (_loaded) return;
+ final prefs = await SharedPreferences.getInstance();
+ final raw = prefs.getString(_storageKey);
+ if (raw != null && raw.isNotEmpty) {
+ try {
+ final decoded = jsonDecode(raw);
+ if (decoded is List) {
+ threads.clear();
+ for (final item in decoded) {
+ threads.add(_ResidentChatThread.fromJson(item as Map<String, dynamic>));
+ }
+ }
+ } catch (_) {}
+ }
+ _loaded = true;
+ _emit();
+ }
+
+ static Future<void> _persist() async {
+ final prefs = await SharedPreferences.getInstance();
+ await prefs.setString(_storageKey, jsonEncode(threads.map((t) => t.toJson()).toList()));
+ }
+
+ static _ResidentChatThread getOrCreateThread({
+ required String buyerId,
+ required String buyerName,
+ required String sellerName,
+ required String productTitle,
+ }) {
+ final existing = threads.firstWhereOrNull(
+ (t) => t.buyerId == buyerId && t.sellerName == sellerName && t.productTitle == productTitle,
+ );
+ if (existing != null) return existing;
+
+ final newThread = _ResidentChatThread(
+ id: \CHAT-\,
+ buyerId: buyerId,
+ buyerName: buyerName,
+ sellerName: sellerName,
+ productTitle: productTitle,
+ messages: [],
+ lastMessageAt: DateTime.now(),
+ );
+ threads.insert(0, newThread);
+ unawaited(_persist());
+ _emit();
+ return newThread;
+ }
+
+ static List<_ResidentChatThread> getThreadsForSeller(String sellerName) { return threads.where((t) => t.sellerName == sellerName).toList(); }
+
+  static void sendMessage({
+ required String threadId,
+ required String senderId,
+ required String senderName,
+ required String text,
+ }) {
+ final index = threads.indexWhere((t) => t.id == threadId);
+ if (index < 0) return;
+
+ final message = _ResidentChatMessage(
+ senderId: senderId,
+ senderName: senderName,
+ text: text,
+ timestamp: DateTime.now(),
+ );
+
+ final updated = threads[index].copyWith(
+ messages: [...threads[index].messages, message],
+ lastMessageAt: DateTime.now(),
+ );
+
+ threads.removeAt(index);
+ threads.insert(0, updated);
+ unawaited(_persist());
+ _emit();
+ }
+}
+
+\nclass _ResidentChatMessage {\n  final String senderId;\n  final String senderName;\n  final String text;\n  final DateTime timestamp;\n\n  const _ResidentChatMessage({\n    required this.senderId,\n    required this.senderName,\n    required this.text,\n    required this.timestamp,\n  });\n\n  Map<String, dynamic> toJson() => {\n    "senderId": senderId,\n    "senderName": senderName,\n    "text": text,\n    "timestamp": timestamp.toIso8601String(),\n  };\n\n  factory _ResidentChatMessage.fromJson(Map<String, dynamic> json) {\n    return _ResidentChatMessage(\n      senderId: json["senderId"] as String? ?? "",\n      senderName: json["senderName"] as String? ?? "",\n      text: json["text"] as String? ?? "",\n      timestamp: DateTime.tryParse(json["timestamp"] as String? ?? "") ?? DateTime.now(),\n    );\n  }\n}\n\nclass _ResidentChatThread {\n  final String id;\n  final String buyerId;\n  final String buyerName;\n  final String sellerName;\n  final String productTitle;\n  final List<_ResidentChatMessage> messages;\n  final DateTime lastMessageAt;\n\n  const _ResidentChatThread({\n    required this.id,\n    required this.buyerId,\n    required this.buyerName,\n    required this.sellerName,\n    required this.productTitle,\n    required this.messages,\n    required this.lastMessageAt,\n  });\n\n  _ResidentChatThread copyWith({\n    List<_ResidentChatMessage>? messages,\n    DateTime? lastMessageAt,\n  }) {\n    return _ResidentChatThread(\n      id: id,\n      buyerId: buyerId,\n      buyerName: buyerName,\n      sellerName: sellerName,\n      productTitle: productTitle,\n      messages: messages ?? this.messages,\n      lastMessageAt: lastMessageAt ?? this.lastMessageAt,\n    );\n  }\n\n  Map<String, dynamic> toJson() => {\n    "id": id,\n    "buyerId": buyerId,\n    "buyerName": buyerName,\n    "sellerName": sellerName,\n    "productTitle": productTitle,\n    "messages": messages.map((m) => m.toJson()).toList(),\n    "lastMessageAt": lastMessageAt.toIso8601String(),\n  };\n\n  factory _ResidentChatThread.fromJson(Map<String, dynamic> json) {\n    return _ResidentChatThread(\n      id: json["id"] as String? ?? "",\n      buyerId: json["buyerId"] as String? ?? "",\n      buyerName: json["buyerName"] as String? ?? "",\n      sellerName: json["sellerName"] as String? ?? "",\n      productTitle: json["productTitle"] as String? ?? "",\n      messages: (json["messages"] as List<dynamic>? ?? [])\n          .map((m) => _ResidentChatMessage.fromJson(m as Map<String, dynamic>))\n          .toList(),\n      lastMessageAt: DateTime.tryParse(json["lastMessageAt"] as String? ?? "") ?? DateTime.now(),\n    );\n  }\n}\n\nclass _ResidentChatHub {\n  static final ValueNotifier<int> refresh = ValueNotifier<int>(0);\n  static const String _storageKey = "resident_chats_v1";\n  static final List<_ResidentChatThread> threads = [];\n  static bool _loaded = false;\n\n  static void _emit() => refresh.value++;\n\n  static Future<void> ensureLoaded() async {\n    if (_loaded) return;\n    final prefs = await SharedPreferences.getInstance();\n    final raw = prefs.getString(_storageKey);\n    if (raw != null && raw.isNotEmpty) {\n      try {\n        final decoded = jsonDecode(raw);\n        if (decoded is List) {\n          threads.clear();\n          for (final item in decoded) {\n            threads.add(_ResidentChatThread.fromJson(item as Map<String, dynamic>));\n          }\n        }\n      } catch (_) {}\n    }\n    _loaded = true;\n    _emit();\n  }\n\n  static Future<void> _persist() async {\n    final prefs = await SharedPreferences.getInstance();\n    await prefs.setString(_storageKey, jsonEncode(threads.map((t) => t.toJson()).toList()));\n  }\n\n  static List<_ResidentChatThread> getThreadsForSeller(String sellerName) {\n    return threads.where((t) => t.sellerName == sellerName).toList();\n  }\n\n  static _ResidentChatThread getOrCreateThread({\n    required String buyerId,\n    required String buyerName,\n    required String sellerName,\n    required String productTitle,\n  }) {\n    final existing = threads.firstWhereOrNull(\n      (t) => t.buyerId == buyerId && t.sellerName == sellerName && t.productTitle == productTitle,\n    );\n    if (existing != null) return existing;\n\n    final newThread = _ResidentChatThread(\n      id: "CHAT-${DateTime.now().millisecondsSinceEpoch}",\n      buyerId: buyerId,\n      buyerName: buyerName,\n      sellerName: sellerName,\n      productTitle: productTitle,\n      messages: [],\n      lastMessageAt: DateTime.now(),\n    );\n    threads.insert(0, newThread);\n    unawaited(_persist());\n    _emit();\n    return newThread;\n  }\n\n  static void sendMessage({\n    required String threadId,\n    required String senderId,\n    required String senderName,\n    required String text,\n  }) {\n    final index = threads.indexWhere((t) => t.id == threadId);\n    if (index < 0) return;\n\n    final message = _ResidentChatMessage(\n      senderId: senderId,\n      senderName: senderName,\n      text: text,\n      timestamp: DateTime.now(),\n    );\n\n    final updated = threads[index].copyWith(\n      messages: [...threads[index].messages, message],\n      lastMessageAt: DateTime.now(),\n    );\n\n    threads.removeAt(index);\n    threads.insert(0, updated);\n    unawaited(_persist());\n    _emit();\n  }\n}

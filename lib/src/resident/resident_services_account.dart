@@ -321,7 +321,6 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
   String _query = '';
   String _selectedStatus = 'All';
   bool _loading = true;
-  final List<_ResidentRequestEntry> _history = [];
 
   static const _statusFilters = [
     'All',
@@ -440,8 +439,18 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
   @override
   void initState() {
     super.initState();
-    _history.addAll(_seedHistory);
+    _ResidentRequestStore.refresh.addListener(_onRefresh);
     unawaited(_loadRequestsFromApi());
+  }
+
+  @override
+  void dispose() {
+    _ResidentRequestStore.refresh.removeListener(_onRefresh);
+    super.dispose();
+  }
+
+  void _onRefresh() {
+    if (mounted) setState(() {});
   }
 
   String _formatRequestDate(DateTime value) {
@@ -463,23 +472,8 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
   }
 
   Future<void> _loadRequestsFromApi() async {
-    final result = await _ServiceRequestApi.instance.fetchRequests();
-    if (!mounted) {
-      return;
-    }
-    if (result.success) {
-      _history
-        ..clear()
-        ..addAll(result.entries);
-    }
-    setState(() => _loading = false);
-    if (!result.success) {
-      _showFeature(
-        context,
-        'Using local request history for now: ${result.message}',
-        tone: _ToastTone.warning,
-      );
-    }
+    await _ResidentRequestStore.ensureLoaded();
+    if (mounted) setState(() => _loading = false);
   }
 
   Future<void> _openRequestComposer(_ResidentRequestActionEntry entry) async {
@@ -577,8 +571,7 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
                                   Navigator.pop(sheetContext);
                                 }
                                 if (result.success && result.entry != null) {
-                                  _history.insert(0, result.entry!);
-                                  setState(() {});
+                                  _ResidentRequestStore.addRequest(result.entry!);
                                   _showFeature(
                                     parentContext,
                                     result.message,
@@ -595,8 +588,7 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
                                   purpose: purpose,
                                   date: _formatRequestDate(DateTime.now()),
                                 );
-                                _history.insert(0, local);
-                                setState(() {});
+                                _ResidentRequestStore.addRequest(local);
                                 _showFeature(
                                   parentContext,
                                   'Saved locally: ${result.message}',
@@ -629,7 +621,8 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
   @override
   Widget build(BuildContext context) {
     final q = _query.trim().toLowerCase();
-    final rows = _history.where((item) {
+    final history = _ResidentRequestStore.history;
+    final rows = history.where((item) {
       final matchesStatus =
           _selectedStatus == 'All' || item.status == _selectedStatus;
       final bag =
@@ -769,8 +762,10 @@ class _ResidentRequestsPageState extends State<ResidentRequestsPage> {
                     final label = _statusFilters[i];
                     final active = label == _selectedStatus;
                     final count = label == 'All'
-                        ? _history.length
-                        : _history.where((item) => item.status == label).length;
+                        ? _ResidentRequestStore.history.length
+                        : _ResidentRequestStore.history
+                            .where((item) => item.status == label)
+                            .length;
                     return ChoiceChip(
                       label: Text('$label ($count)'),
                       selected: active,
@@ -1962,6 +1957,16 @@ class ResidentServicesPage extends StatelessWidget {
       ),
     ),
     _ServiceAction(
+      'Community',
+      Icons.forum,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Community',
+        serviceTitle: 'Community Service Request',
+        icon: Icons.forum,
+        accentColor: Color(0xFF8A5A44),
+      ),
+    ),
+    _ServiceAction(
       'Council',
       Icons.groups,
       ResidentServiceCategoryRequestPage(
@@ -1979,16 +1984,6 @@ class ResidentServicesPage extends StatelessWidget {
         serviceTitle: 'Health Service Request',
         icon: Icons.health_and_safety,
         accentColor: Color(0xFF2E8A79),
-      ),
-    ),
-    _ServiceAction(
-      'Community',
-      Icons.forum,
-      ResidentServiceCategoryRequestPage(
-        serviceCategory: 'Community',
-        serviceTitle: 'Community Service Request',
-        icon: Icons.forum,
-        accentColor: Color(0xFF8A5A44),
       ),
     ),
   ];
@@ -2016,6 +2011,16 @@ class ResidentServicesPage extends StatelessWidget {
       ),
     ),
     _ServiceAction(
+      'Community',
+      Icons.forum,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Community',
+        serviceTitle: 'Community Service Request',
+        icon: Icons.forum,
+        accentColor: Color(0xFF8A5A44),
+      ),
+    ),
+    _ServiceAction(
       'Council',
       Icons.groups,
       ResidentServiceCategoryRequestPage(
@@ -2036,33 +2041,13 @@ class ResidentServicesPage extends StatelessWidget {
       ),
     ),
     _ServiceAction(
-      'Special Docs',
-      Icons.stars,
+      'Education',
+      Icons.menu_book,
       ResidentServiceCategoryRequestPage(
-        serviceCategory: 'Special Docs',
-        serviceTitle: 'Special Docs Request',
-        icon: Icons.stars,
-        accentColor: Color(0xFF5F6AD6),
-      ),
-    ),
-    _ServiceAction(
-      'Responder',
-      Icons.local_shipping,
-      ResidentServiceCategoryRequestPage(
-        serviceCategory: 'Responder',
-        serviceTitle: 'Responder Service Request',
-        icon: Icons.local_shipping,
-        accentColor: Color(0xFF4E6DBA),
-      ),
-    ),
-    _ServiceAction(
-      'Provincial Gov',
-      Icons.apartment,
-      ResidentServiceCategoryRequestPage(
-        serviceCategory: 'Provincial Gov',
-        serviceTitle: 'Provincial Gov Request',
-        icon: Icons.apartment,
-        accentColor: Color(0xFF4D78BE),
+        serviceCategory: 'Education',
+        serviceTitle: 'Education Request',
+        icon: Icons.menu_book,
+        accentColor: Color(0xFF536FBE),
       ),
     ),
     _ServiceAction(
@@ -2076,13 +2061,53 @@ class ResidentServicesPage extends StatelessWidget {
       ),
     ),
     _ServiceAction(
-      'Community',
-      Icons.forum,
+      'Officials',
+      Icons.groups_2,
       ResidentServiceCategoryRequestPage(
-        serviceCategory: 'Community',
-        serviceTitle: 'Community Service Request',
-        icon: Icons.forum,
-        accentColor: Color(0xFF8A5A44),
+        serviceCategory: 'Officials',
+        serviceTitle: 'Officials Request',
+        icon: Icons.groups_2,
+        accentColor: Color(0xFF5D67AF),
+      ),
+    ),
+    _ServiceAction(
+      'Other Barangay',
+      Icons.travel_explore,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Other Barangay',
+        serviceTitle: 'Other Barangay Request',
+        icon: Icons.travel_explore,
+        accentColor: Color(0xFF5362B9),
+      ),
+    ),
+    _ServiceAction(
+      'Police',
+      Icons.local_police,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Police',
+        serviceTitle: 'Police Request',
+        icon: Icons.local_police,
+        accentColor: Color(0xFF4E64B4),
+      ),
+    ),
+    _ServiceAction(
+      'Programs',
+      Icons.assignment,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Programs',
+        serviceTitle: 'Programs Request',
+        icon: Icons.assignment,
+        accentColor: Color(0xFF4F6EC5),
+      ),
+    ),
+    _ServiceAction(
+      'Provincial Gov',
+      Icons.apartment,
+      ResidentServiceCategoryRequestPage(
+        serviceCategory: 'Provincial Gov',
+        serviceTitle: 'Provincial Gov Request',
+        icon: Icons.apartment,
+        accentColor: Color(0xFF4D78BE),
       ),
     ),
     _ServiceAction(
@@ -2106,33 +2131,23 @@ class ResidentServicesPage extends StatelessWidget {
       ),
     ),
     _ServiceAction(
-      'Education',
-      Icons.menu_book,
+      'Responder',
+      Icons.local_shipping,
       ResidentServiceCategoryRequestPage(
-        serviceCategory: 'Education',
-        serviceTitle: 'Education Request',
-        icon: Icons.menu_book,
-        accentColor: Color(0xFF536FBE),
+        serviceCategory: 'Responder',
+        serviceTitle: 'Responder Service Request',
+        icon: Icons.local_shipping,
+        accentColor: Color(0xFF4E6DBA),
       ),
     ),
     _ServiceAction(
-      'Police',
-      Icons.local_police,
+      'Scholarship',
+      Icons.card_giftcard,
       ResidentServiceCategoryRequestPage(
-        serviceCategory: 'Police',
-        serviceTitle: 'Police Request',
-        icon: Icons.local_police,
-        accentColor: Color(0xFF4E64B4),
-      ),
-    ),
-    _ServiceAction(
-      'Other Barangay',
-      Icons.travel_explore,
-      ResidentServiceCategoryRequestPage(
-        serviceCategory: 'Other Barangay',
-        serviceTitle: 'Other Barangay Request',
-        icon: Icons.travel_explore,
-        accentColor: Color(0xFF5362B9),
+        serviceCategory: 'Scholarship',
+        serviceTitle: 'Scholarship Request',
+        icon: Icons.card_giftcard,
+        accentColor: Color(0xFF7D5AA7),
       ),
     ),
     _ServiceAction(
@@ -2146,33 +2161,13 @@ class ResidentServicesPage extends StatelessWidget {
       ),
     ),
     _ServiceAction(
-      'Officials',
-      Icons.groups_2,
+      'Special Docs',
+      Icons.stars,
       ResidentServiceCategoryRequestPage(
-        serviceCategory: 'Officials',
-        serviceTitle: 'Officials Request',
-        icon: Icons.groups_2,
-        accentColor: Color(0xFF5D67AF),
-      ),
-    ),
-    _ServiceAction(
-      'Programs',
-      Icons.assignment,
-      ResidentServiceCategoryRequestPage(
-        serviceCategory: 'Programs',
-        serviceTitle: 'Programs Request',
-        icon: Icons.assignment,
-        accentColor: Color(0xFF4F6EC5),
-      ),
-    ),
-    _ServiceAction(
-      'Scholarship',
-      Icons.card_giftcard,
-      ResidentServiceCategoryRequestPage(
-        serviceCategory: 'Scholarship',
-        serviceTitle: 'Scholarship Request',
-        icon: Icons.card_giftcard,
-        accentColor: Color(0xFF7D5AA7),
+        serviceCategory: 'Special Docs',
+        serviceTitle: 'Special Docs Request',
+        icon: Icons.stars,
+        accentColor: Color(0xFF5F6AD6),
       ),
     ),
     _ServiceAction(
@@ -3677,6 +3672,39 @@ class _ResidentProfileApi {
       }
     }
     return fallback;
+  }
+}
+
+class _ResidentRequestStore {
+  static final ValueNotifier<int> refresh = ValueNotifier<int>(0);
+  static bool _loaded = false;
+  static bool _loading = false;
+  static List<_ResidentRequestEntry> _history = [];
+
+  static List<_ResidentRequestEntry> get history => _history;
+
+  static int get pendingCount =>
+      _history.where((e) => e.status == 'Pending').length;
+
+  static Future<void> ensureLoaded({bool force = false}) async {
+    if (_loading) return;
+    if (_loaded && !force) return;
+    _loading = true;
+    try {
+      final result = await _ServiceRequestApi.instance.fetchRequests();
+      if (result.success) {
+        _history = result.entries;
+        _loaded = true;
+        refresh.value++;
+      }
+    } finally {
+      _loading = false;
+    }
+  }
+
+  static void addRequest(_ResidentRequestEntry entry) {
+    _history.insert(0, entry);
+    refresh.value++;
   }
 }
 

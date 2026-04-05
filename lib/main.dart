@@ -35,6 +35,7 @@ part 'src/resident/resident_commerce.dart';
 part 'src/resident/resident_jobs.dart';
 part 'src/resident/resident_marketplace.dart';
 part 'src/resident/resident_seller_hub.dart';
+part 'src/resident/resident_seller_chat.dart';
 part 'src/resident/resident_services_account.dart';
 part 'src/resident/resident_account_pages.dart';
 part 'src/resident/resident_system_center.dart';

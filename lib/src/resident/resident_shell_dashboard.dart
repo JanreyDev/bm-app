@@ -693,9 +693,14 @@ class _ResidentProductData {
   });
 }
 
-class ResidentDashboardPage extends StatelessWidget {
+class ResidentDashboardPage extends StatefulWidget {
   const ResidentDashboardPage({super.key});
 
+  @override
+  State<ResidentDashboardPage> createState() => _ResidentDashboardPageState();
+}
+
+class _ResidentDashboardPageState extends State<ResidentDashboardPage> {
   static const _communityHighlights = [
     _ResidentHighlightData(
       title: 'Connect Instagram',
@@ -771,6 +776,13 @@ class ResidentDashboardPage extends StatelessWidget {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    unawaited(_ResidentProfileStore.ensureLoaded());
+    unawaited(_ResidentRequestStore.ensureLoaded());
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
@@ -821,28 +833,42 @@ class ResidentDashboardPage extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _metricCard(
-                  label: 'Pending Requests',
-                  value: '02',
-                  icon: Icons.pending_actions,
-                  start: const Color(0xFFE2DEFF),
-                  end: const Color(0xFFF4F2FF),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _metricCard(
-                  label: 'Profile Score',
-                  value: '78%',
-                  icon: Icons.verified_user,
-                  start: const Color(0xFFFFE0D7),
-                  end: const Color(0xFFFFF1EC),
-                ),
-              ),
-            ],
+          ValueListenableBuilder<int>(
+            valueListenable: _ResidentRequestStore.refresh,
+            builder: (context, _, __) {
+              return ValueListenableBuilder<int>(
+                valueListenable: _ResidentProfileStore.refresh,
+                builder: (context, _, __) {
+                  final pending = _ResidentRequestStore.pendingCount;
+                  final score =
+                    (_ResidentProfileStore.profile.profileCompletion * 100)
+                        .round();
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: _metricCard(
+                          label: 'Pending Requests',
+                          value: pending.toString().padLeft(2, '0'),
+                          icon: Icons.pending_actions,
+                          start: const Color(0xFFE2DEFF),
+                          end: const Color(0xFFF4F2FF),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _metricCard(
+                          label: 'Profile Score',
+                          value: '$score%',
+                          icon: Icons.verified_user,
+                          start: const Color(0xFFFFE0D7),
+                          end: const Color(0xFFFFF1EC),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
           ),
           const SizedBox(height: 14),
           _sectionHeader(

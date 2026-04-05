@@ -1663,6 +1663,14 @@ const _brgyServices = [
     ),
   ),
   _ServiceAction(
+    'Community',
+    Icons.forum,
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Community',
+      pageTitle: 'Community Requests',
+    ),
+  ),
+  _ServiceAction(
     'Council',
     Icons.groups,
     OfficialRequestsInboxPage(
@@ -1687,14 +1695,6 @@ const _brgyServices = [
     ),
   ),
   _ServiceAction(
-    'Provincial Govt',
-    Icons.apartment_rounded,
-    OfficialRequestsInboxPage(
-      serviceCategory: 'Provincial Gov',
-      pageTitle: 'Provincial Gov Requests',
-    ),
-  ),
-  _ServiceAction(
     'Gov Agencies',
     Icons.account_balance,
     OfficialGovAgenciesPage(),
@@ -1707,13 +1707,11 @@ const _brgyServices = [
       pageTitle: 'Health Requests',
     ),
   ),
+
   _ServiceAction(
-    'Lupon',
-    Icons.gavel_rounded,
-    OfficialRequestsInboxPage(
-      serviceCategory: 'Council',
-      pageTitle: 'Lupon Requests',
-    ),
+    'Merchant',
+    Icons.store_rounded,
+    OfficialMerchantVerificationPage(),
   ),
   _ServiceAction(
     'Other Barangay',
@@ -1729,6 +1727,14 @@ const _brgyServices = [
     OfficialRequestsInboxPage(
       serviceCategory: 'Police',
       pageTitle: 'Police Requests',
+    ),
+  ),
+  _ServiceAction(
+    'Provincial Govt',
+    Icons.apartment_rounded,
+    OfficialRequestsInboxPage(
+      serviceCategory: 'Provincial Gov',
+      pageTitle: 'Provincial Gov Requests',
     ),
   ),
   _ServiceAction(
@@ -1762,19 +1768,6 @@ const _brgyServices = [
       serviceCategory: 'Special Docs',
       pageTitle: 'Special Docs Requests',
     ),
-  ),
-  _ServiceAction(
-    'Community',
-    Icons.forum,
-    OfficialRequestsInboxPage(
-      serviceCategory: 'Community',
-      pageTitle: 'Community Requests',
-    ),
-  ),
-  _ServiceAction(
-    'Merchant',
-    Icons.store_rounded,
-    OfficialMerchantVerificationPage(),
   ),
 ];
 

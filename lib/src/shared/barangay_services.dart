@@ -135,6 +135,7 @@ Map<String, String> _emergencyScopePayload() {
 
 String _pathWithScopeQuery(String path) {
   final scope = _emergencyScopePayload();
+  debugPrint('API Scope request: $scope');
   if (scope.isEmpty) return path;
   final normalized = path.startsWith('/') ? path.substring(1) : path;
   final parsed = Uri.parse(normalized);
@@ -487,6 +488,7 @@ Future<void> _syncEmergencySharedLocationFeed({bool force = false}) async {
   _emergencySharedFeedLoading = true;
   try {
     final result = await _EmergencyLiveLocationApi.instance.fetchFeed(limit: 30);
+    debugPrint('fetchFeed result: success=${result.success}, msg=${result.message}, locations=${result.locations.length}');
     if (result.success) {
       _emergencyOpsStore.setSharedLocationFeed(result.locations);
       _emergencySharedFeedLoaded = true;
@@ -3616,7 +3618,9 @@ class BpatPatrolPage extends StatefulWidget {
 
 class _BpatPatrolPageState extends State<BpatPatrolPage> {
   final _formKey = GlobalKey<FormState>();
-  final _locationController = TextEditingController();
+  late final _locationController = TextEditingController(
+    text: _currentResidentProfile?.locationSummary ?? '',
+  );
   final _reasonController = TextEditingController();
   final _notesController = TextEditingController();
   DateTime _scheduledAt = DateTime.now().add(const Duration(hours: 4));
