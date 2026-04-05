@@ -48,6 +48,82 @@ class _MarketProductSubmitResult {
   });
 }
 
+class _SellerOrdersFetchResult {
+  final bool success;
+  final String message;
+  final List<_SellerOrderEntry> orders;
+
+  const _SellerOrdersFetchResult({
+    required this.success,
+    required this.message,
+    this.orders = const <_SellerOrderEntry>[],
+  });
+}
+
+class _SellerOrderStatusUpdateResult {
+  final bool success;
+  final String message;
+  final _SellerOrderEntry? order;
+
+  const _SellerOrderStatusUpdateResult({
+    required this.success,
+    required this.message,
+    this.order,
+  });
+}
+
+class _SellerOrderItem {
+  final String title;
+  final String seller;
+  final double price;
+  final int qty;
+  final String fulfillment;
+  final String deliveryZone;
+  final String deliveryPurok;
+  final double deliveryFee;
+
+  const _SellerOrderItem({
+    required this.title,
+    required this.seller,
+    required this.price,
+    required this.qty,
+    required this.fulfillment,
+    required this.deliveryZone,
+    required this.deliveryPurok,
+    required this.deliveryFee,
+  });
+}
+
+class _SellerOrderEntry {
+  final String orderCode;
+  final String status;
+  final String payerName;
+  final String payerMobile;
+  final String payerAddress;
+  final String paymentProvider;
+  final String paymentLink;
+  final double subtotal;
+  final double deliveryFee;
+  final double total;
+  final DateTime createdAt;
+  final List<_SellerOrderItem> items;
+
+  const _SellerOrderEntry({
+    required this.orderCode,
+    required this.status,
+    required this.payerName,
+    required this.payerMobile,
+    required this.payerAddress,
+    required this.paymentProvider,
+    required this.paymentLink,
+    required this.subtotal,
+    required this.deliveryFee,
+    required this.total,
+    required this.createdAt,
+    required this.items,
+  });
+}
+
 class _SellerApi {
   _SellerApi._();
   static final _SellerApi instance = _SellerApi._();
@@ -443,6 +519,199 @@ class _SellerApi {
     );
   }
 
+  Future<_SellerOrdersFetchResult> fetchSellerOrders({
+    required String sellerName,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _SellerOrdersFetchResult(
+        success: false,
+        message: 'Please log in again to load seller orders.',
+      );
+    }
+
+    final cleanSeller = sellerName.trim();
+    if (cleanSeller.isEmpty) {
+      return const _SellerOrdersFetchResult(
+        success: false,
+        message: 'Seller name is missing.',
+      );
+    }
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    for (final endpoint in _AuthApi.instance._endpointCandidates('market/seller/orders')) {
+      final uri = endpoint.replace(queryParameters: {
+        ...endpoint.queryParameters,
+        'seller_name': cleanSeller,
+      });
+      try {
+        final response = await http
+            .get(
+              uri,
+              headers: {
+                'Accept': 'application/json',
+                'Authorization': 'Bearer $_authToken',
+              },
+            )
+            .timeout(_requestTimeout);
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        final body = decoded is Map<String, dynamic>
+            ? decoded
+            : const <String, dynamic>{};
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final rawOrders = body['orders'] ?? body['data'];
+          if (rawOrders is! List) {
+            return const _SellerOrdersFetchResult(
+              success: false,
+              message: 'Seller orders payload is invalid.',
+            );
+          }
+          final out = <_SellerOrderEntry>[];
+          for (final raw in rawOrders) {
+            if (raw is! Map<String, dynamic>) {
+              continue;
+            }
+            final mapped = _mapSellerOrder(raw);
+            if (mapped != null) {
+              out.add(mapped);
+            }
+          }
+          return _SellerOrdersFetchResult(
+            success: true,
+            message: _extractApiMessage(body, fallback: 'Seller orders loaded.'),
+            orders: out,
+          );
+        }
+        return _SellerOrdersFetchResult(
+          success: false,
+          message: _extractApiMessage(
+            body,
+            fallback: 'Unable to load seller orders.',
+          ),
+        );
+      } on TimeoutException {
+        sawTimeout = true;
+      } catch (_) {
+        sawConnectionError = true;
+      }
+    }
+
+    if (sawTimeout) {
+      return const _SellerOrdersFetchResult(
+        success: false,
+        message: 'Loading seller orders timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _SellerOrdersFetchResult(
+        success: false,
+        message: 'Cannot connect to server to load seller orders.',
+      );
+    }
+    return const _SellerOrdersFetchResult(
+      success: false,
+      message: 'Seller orders endpoint is not available yet.',
+    );
+  }
+
+  Future<_SellerOrderStatusUpdateResult> updateSellerOrderStatus({
+    required String orderCode,
+    required String status,
+    required String sellerName,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _SellerOrderStatusUpdateResult(
+        success: false,
+        message: 'Please log in again before updating order status.',
+      );
+    }
+
+    final cleanOrderCode = orderCode.trim();
+    final cleanStatus = status.trim();
+    final cleanSeller = sellerName.trim();
+    if (cleanOrderCode.isEmpty || cleanStatus.isEmpty || cleanSeller.isEmpty) {
+      return const _SellerOrderStatusUpdateResult(
+        success: false,
+        message: 'Order code, status, and seller name are required.',
+      );
+    }
+
+    final payload = jsonEncode({
+      'status': cleanStatus,
+      'seller_name': cleanSeller,
+    });
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    for (final endpoint in _AuthApi.instance._endpointCandidates(
+      'market/seller/orders/$cleanOrderCode/status',
+    )) {
+      try {
+        final response = await http
+            .patch(
+              endpoint,
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': 'Bearer $_authToken',
+              },
+              body: payload,
+            )
+            .timeout(_requestTimeout);
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        final body = decoded is Map<String, dynamic>
+            ? decoded
+            : const <String, dynamic>{};
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final raw = body['order'] ?? body['data'];
+          final mapped = raw is Map<String, dynamic> ? _mapSellerOrder(raw) : null;
+          return _SellerOrderStatusUpdateResult(
+            success: true,
+            message: _extractApiMessage(
+              body,
+              fallback: 'Order status updated.',
+            ),
+            order: mapped,
+          );
+        }
+        return _SellerOrderStatusUpdateResult(
+          success: false,
+          message: _extractApiMessage(
+            body,
+            fallback: 'Unable to update order status.',
+          ),
+        );
+      } on TimeoutException {
+        sawTimeout = true;
+      } catch (_) {
+        sawConnectionError = true;
+      }
+    }
+
+    if (sawTimeout) {
+      return const _SellerOrderStatusUpdateResult(
+        success: false,
+        message: 'Updating order status timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _SellerOrderStatusUpdateResult(
+        success: false,
+        message: 'Cannot connect to server to update order status.',
+      );
+    }
+    return const _SellerOrderStatusUpdateResult(
+      success: false,
+      message: 'Seller order status endpoint is not available yet.',
+    );
+  }
+
   _ResidentProductData? _mapProduct(Map<String, dynamic> raw) {
     String read(String key, {String fallback = ''}) {
       final value = raw[key];
@@ -523,6 +792,85 @@ class _SellerApi {
     );
   }
 
+  _SellerOrderEntry? _mapSellerOrder(Map<String, dynamic> raw) {
+    String read(String key, {String fallback = ''}) {
+      final value = raw[key];
+      if (value is String && value.trim().isNotEmpty) {
+        return value.trim();
+      }
+      if (value != null) {
+        final asString = value.toString().trim();
+        if (asString.isNotEmpty) {
+          return asString;
+        }
+      }
+      return fallback;
+    }
+
+    double readDouble(String key, {double fallback = 0}) {
+      final value = raw[key];
+      if (value is num) {
+        return value.toDouble();
+      }
+      if (value is String) {
+        return double.tryParse(value.trim()) ?? fallback;
+      }
+      return fallback;
+    }
+
+    final code = read('order_code', fallback: read('id'));
+    if (code.isEmpty) {
+      return null;
+    }
+
+    final rawItems = raw['items'];
+    final items = <_SellerOrderItem>[];
+    if (rawItems is List) {
+      for (final entry in rawItems) {
+        if (entry is! Map<String, dynamic>) {
+          continue;
+        }
+        final title = (entry['title'] as String? ?? '').trim();
+        if (title.isEmpty) {
+          continue;
+        }
+        items.add(
+          _SellerOrderItem(
+            title: title,
+            seller: (entry['seller'] as String? ?? '').trim(),
+            price: (entry['price'] as num?)?.toDouble() ?? 0,
+            qty: (entry['qty'] as num?)?.toInt() ?? 1,
+            fulfillment:
+                (entry['fulfillment'] as String? ?? 'Pickup at Brgy Hall').trim(),
+            deliveryZone:
+                (entry['delivery_zone'] as String? ?? _marketDeliveryZones.first)
+                    .trim(),
+            deliveryPurok:
+                (entry['delivery_purok'] as String? ?? _marketDeliveryPuroks.first)
+                    .trim(),
+            deliveryFee: (entry['delivery_fee'] as num?)?.toDouble() ?? 0,
+          ),
+        );
+      }
+    }
+
+    return _SellerOrderEntry(
+      orderCode: code,
+      status: read('status', fallback: 'Pending'),
+      payerName: read('payer_name', fallback: 'Buyer'),
+      payerMobile: read('payer_mobile'),
+      payerAddress: read('payer_address'),
+      paymentProvider: read('payment_provider', fallback: 'GCash'),
+      paymentLink: read('payment_link'),
+      subtotal: readDouble('seller_subtotal', fallback: readDouble('subtotal')),
+      deliveryFee:
+          readDouble('seller_delivery_fee', fallback: readDouble('delivery_fee')),
+      total: readDouble('seller_total', fallback: readDouble('total')),
+      createdAt: DateTime.tryParse(read('created_at')) ?? DateTime.now(),
+      items: items,
+    );
+  }
+
   _ResidentCommercialRegistrationData mapRegistration(Map<String, dynamic> raw) {
     String read(String key, {String fallback = ''}) {
       final value = raw[key];
@@ -585,6 +933,28 @@ class _SellerApi {
   }
 }
 
+class _MerchantSellerOrderHub {
+  static final ValueNotifier<int> refresh = ValueNotifier<int>(0);
+  static final List<_SellerOrderEntry> orders = <_SellerOrderEntry>[];
+
+  static void replaceOrders(List<_SellerOrderEntry> next) {
+    orders
+      ..clear()
+      ..addAll(next);
+    refresh.value++;
+  }
+
+  static void upsertOrder(_SellerOrderEntry entry) {
+    final index = orders.indexWhere((item) => item.orderCode == entry.orderCode);
+    if (index < 0) {
+      orders.insert(0, entry);
+    } else {
+      orders[index] = entry;
+    }
+    refresh.value++;
+  }
+}
+
 class ResidentSellHubPage extends StatefulWidget {
   final int initialTab;
   const ResidentSellHubPage({super.key, this.initialTab = 0});
@@ -601,6 +971,7 @@ class _ResidentSellHubPageState extends State<ResidentSellHubPage> {
     super.initState();
     selected = widget.initialTab;
     unawaited(_syncMerchantRegistrationFromApi());
+    unawaited(_syncSellerOrdersFromApi());
   }
 
   Future<void> _syncMerchantRegistrationFromApi() async {
@@ -609,6 +980,22 @@ class _ResidentSellHubPageState extends State<ResidentSellHubPage> {
       return;
     }
     _ResidentCommercialSellerHub.replaceBusinessRegistration(result.registration);
+    unawaited(_syncSellerOrdersFromApi());
+  }
+
+  Future<void> _syncSellerOrdersFromApi() async {
+    final sellerName =
+        _ResidentCommercialSellerHub.registration?.businessName.trim() ?? '';
+    if (sellerName.isEmpty) {
+      return;
+    }
+    final result = await _SellerApi.instance.fetchSellerOrders(
+      sellerName: sellerName,
+    );
+    if (!mounted || !result.success) {
+      return;
+    }
+    _MerchantSellerOrderHub.replaceOrders(result.orders);
   }
 
   @override
@@ -757,29 +1144,32 @@ class ResidentCommercialPage extends StatelessWidget {
         return ValueListenableBuilder<int>(
           valueListenable: _ResidentCommercialSellerHub.refresh,
           builder: (_, ___, ____) {
-            final registration = _ResidentCommercialSellerHub.registration;
-            final canAccessCommercial = verified || registration?.merchantVerified == true;
-            final sellerName = registration?.businessName ?? 'Commercial Seller';
-            final inventory = _ResidentCommercialSellerHub.inventoryProducts
-                .where((p) => p.seller == sellerName)
-                .toList();
-            final salesCount = _ResidentCommercialSellerHub.salesCountForSeller(
-              sellerName,
-            );
-            final salesValue = _ResidentCommercialSellerHub.salesValueForSeller(
-              sellerName,
-            );
-            final orderCount = _ResidentCommercialSellerHub.orderCountForSeller(
-              sellerName,
-            );
-            final sellerRating = _ResidentCommercialSellerHub.ratingForSeller(
-              sellerName,
-            );
-            final quoteCount = _ResidentCommercialSellerHub.bidRequests
-                .where((item) => item.sellerName == sellerName)
-                .length;
-            return Column(
-              children: [
+            return ValueListenableBuilder<int>(
+              valueListenable: _MerchantSellerOrderHub.refresh,
+              builder: (_, ____, _____) {
+                final registration = _ResidentCommercialSellerHub.registration;
+                final canAccessCommercial =
+                    verified || registration?.merchantVerified == true;
+                final sellerName = registration?.businessName ?? 'Commercial Seller';
+                final inventory = _ResidentCommercialSellerHub.inventoryProducts
+                    .where((p) => p.seller == sellerName)
+                    .toList();
+                final salesCount = _ResidentCommercialSellerHub.salesCountForSeller(
+                  sellerName,
+                );
+                final salesValue = _ResidentCommercialSellerHub.salesValueForSeller(
+                  sellerName,
+                );
+                final sellerOrders = _MerchantSellerOrderHub.orders;
+                final orderCount = sellerOrders.length;
+                final sellerRating = _ResidentCommercialSellerHub.ratingForSeller(
+                  sellerName,
+                );
+                final quoteCount = _ResidentCommercialSellerHub.bidRequests
+                    .where((item) => item.sellerName == sellerName)
+                    .length;
+                return Column(
+                  children: [
                 if (registration != null)
                   Card(
                     child: ListTile(
@@ -1011,6 +1401,48 @@ class ResidentCommercialPage extends StatelessWidget {
                           ),
                         ),
                       const SizedBox(height: 8),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Recent Buyer Orders'),
+                        subtitle: Text(
+                          sellerOrders.isEmpty
+                              ? 'No buyer orders yet.'
+                              : '$orderCount order(s) from buyers.',
+                        ),
+                        trailing: IconButton(
+                          tooltip: 'Refresh orders',
+                          onPressed: () async {
+                            final result = await _SellerApi.instance
+                                .fetchSellerOrders(sellerName: sellerName);
+                            if (!context.mounted) {
+                              return;
+                            }
+                            if (!result.success) {
+                              _showFeature(context, result.message);
+                              return;
+                            }
+                            _MerchantSellerOrderHub.replaceOrders(result.orders);
+                          },
+                          icon: const Icon(Icons.refresh_rounded),
+                        ),
+                      ),
+                      if (sellerOrders.isEmpty)
+                        const Card(
+                          child: ListTile(
+                            leading: Icon(Icons.receipt_long_outlined),
+                            title: Text('No orders yet'),
+                            subtitle: Text('Buyer orders will appear here.'),
+                          ),
+                        )
+                      else
+                        ...sellerOrders.take(4).map(
+                          (order) => _sellerOrderCard(
+                            context: context,
+                            sellerName: sellerName,
+                            order: order,
+                          ),
+                        ),
+                      const SizedBox(height: 8),
                       Row(
                         children: [
                           Expanded(
@@ -1053,7 +1485,9 @@ class ResidentCommercialPage extends StatelessWidget {
                       ),
                     ],
                   ),
-              ],
+                  ],
+                );
+              },
             );
           },
         );
@@ -1090,6 +1524,146 @@ Widget _summaryChip({
   );
 }
 
+Widget _sellerOrderCard({
+  required BuildContext context,
+  required String sellerName,
+  required _SellerOrderEntry order,
+}) {
+  String currency(double value) => 'PHP ${value.toStringAsFixed(2)}';
+  final created = '${order.createdAt.month}/${order.createdAt.day}/${order.createdAt.year}';
+  return Container(
+    margin: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: const Color(0xFFE4E7F3)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                order.orderCode,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF2F344A),
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: _sellerOrderStatusColor(order.status).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                order.status,
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: _sellerOrderStatusColor(order.status),
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${order.payerName} | ${order.payerMobile} | $created',
+          style: const TextStyle(
+            color: Color(0xFF69728C),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        if (order.payerAddress.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              order.payerAddress,
+              style: const TextStyle(
+                color: Color(0xFF6D7691),
+                fontWeight: FontWeight.w500,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        const SizedBox(height: 6),
+        ...order.items.take(3).map(
+          (item) => Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Text(
+              '${item.qty}x ${item.title} (${currency(item.price * item.qty)})',
+              style: const TextStyle(
+                color: Color(0xFF4F5875),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Subtotal ${currency(order.subtotal)} | Delivery ${currency(order.deliveryFee)} | Total ${currency(order.total)}',
+          style: const TextStyle(
+            color: Color(0xFF3C4564),
+            fontWeight: FontWeight.w800,
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: ['Pending', 'Paid', 'Fulfilled']
+              .map(
+                (status) => OutlinedButton(
+                  onPressed: order.status == status
+                      ? null
+                      : () async {
+                          final result = await _SellerApi.instance
+                              .updateSellerOrderStatus(
+                                orderCode: order.orderCode,
+                                status: status,
+                                sellerName: sellerName,
+                              );
+                          if (!context.mounted) {
+                            return;
+                          }
+                          if (!result.success) {
+                            _showFeature(context, result.message);
+                            return;
+                          }
+                          if (result.order != null) {
+                            _MerchantSellerOrderHub.upsertOrder(result.order!);
+                          }
+                          _showFeature(context, 'Order set to $status.');
+                        },
+                  child: Text(status),
+                ),
+              )
+              .toList(),
+        ),
+      ],
+    ),
+  );
+}
+
+Color _sellerOrderStatusColor(String status) {
+  switch (status.trim()) {
+    case 'Processing':
+    case 'Paid':
+      return const Color(0xFF3A63CC);
+    case 'Completed':
+    case 'Fulfilled':
+      return const Color(0xFF1F8A4D);
+    case 'Cancelled':
+      return const Color(0xFFB0403A);
+    default:
+      return const Color(0xFFB86919);
+  }
+}
 Future<void> _openMerchantCategoryManager(BuildContext context) async {
   final controller = TextEditingController();
   await showModalBottomSheet<void>(
@@ -1664,24 +2238,25 @@ class ResidentMerchantInventoryPage extends StatelessWidget {
       body: ValueListenableBuilder<int>(
         valueListenable: _ResidentCommercialSellerHub.refresh,
         builder: (_, __, ___) {
-          final registration = _ResidentCommercialSellerHub.registration;
-          final sellerName = registration?.businessName ?? 'Commercial Seller';
-          final items = _ResidentCommercialSellerHub.inventoryProducts
-              .where((p) => p.seller == sellerName)
-              .toList();
-          final salesValue = _ResidentCommercialSellerHub.salesValueForSeller(
-            sellerName,
-          );
-          final salesCount = _ResidentCommercialSellerHub.salesCountForSeller(
-            sellerName,
-          );
-          final orderCount = _ResidentCommercialSellerHub.orderCountForSeller(
-            sellerName,
-          );
-          final quoteCount = _ResidentCommercialSellerHub.bidRequests
-              .where((item) => item.sellerName == sellerName)
-              .length;
-          return ListView(
+          return ValueListenableBuilder<int>(
+            valueListenable: _MerchantSellerOrderHub.refresh,
+            builder: (_, ____, _____) {
+              final registration = _ResidentCommercialSellerHub.registration;
+              final sellerName = registration?.businessName ?? 'Commercial Seller';
+              final items = _ResidentCommercialSellerHub.inventoryProducts
+                  .where((p) => p.seller == sellerName)
+                  .toList();
+              final salesValue = _ResidentCommercialSellerHub.salesValueForSeller(
+                sellerName,
+              );
+              final salesCount = _ResidentCommercialSellerHub.salesCountForSeller(
+                sellerName,
+              );
+              final orderCount = _MerchantSellerOrderHub.orders.length;
+              final quoteCount = _ResidentCommercialSellerHub.bidRequests
+                  .where((item) => item.sellerName == sellerName)
+                  .length;
+              return ListView(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
             children: [
               Container(
@@ -1827,6 +2402,8 @@ class ResidentMerchantInventoryPage extends StatelessWidget {
                   );
                 }),
             ],
+          );
+            },
           );
         },
       ),
@@ -3501,3 +4078,4 @@ class _GovStep extends StatelessWidget {
     );
   }
 }
+

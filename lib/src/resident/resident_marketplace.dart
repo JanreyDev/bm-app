@@ -670,7 +670,7 @@ class _ResidentMarketPageState extends State<ResidentMarketPage> {
                 Builder(
                   builder: (context) {
                     final textScale = MediaQuery.textScalerOf(context).scale(1);
-                    final itemHeight = textScale > 1.05 ? 360.0 : 340.0;
+                    final itemHeight = textScale > 1.05 ? 344.0 : 322.0;
                     return GridView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
@@ -875,7 +875,7 @@ class _ResidentMarketPageState extends State<ResidentMarketPage> {
               ],
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -957,7 +957,7 @@ class _ResidentMarketPageState extends State<ResidentMarketPage> {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 2),
                   Row(
                     children: [
                       Expanded(
@@ -1023,6 +1023,14 @@ class _ResidentProductPreviewPageState
   String _selectedFulfillment = 'Pickup at Brgy Hall';
   String _selectedZone = _marketDeliveryZones.first;
   String _selectedPurok = _marketDeliveryPuroks.first;
+  bool _loadingOwnerOrders = false;
+  List<_SellerOrderEntry> _ownerOrders = const <_SellerOrderEntry>[];
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_prepareOwnerView());
+  }
 
   String _currency(double amount) => 'PHP ${amount.toStringAsFixed(2)}';
 
@@ -1031,6 +1039,82 @@ class _ResidentProductPreviewPageState
     _selectedZone,
     _selectedPurok,
   );
+
+  Future<void> _prepareOwnerView() async {
+    final existing = _ResidentCommercialSellerHub.registration;
+    if (existing == null) {
+      final fetched = await _SellerApi.instance.fetchMerchantRegistration();
+      if (fetched.success) {
+        _ResidentCommercialSellerHub.replaceBusinessRegistration(fetched.registration);
+      }
+    }
+    if (!mounted) {
+      return;
+    }
+    final registration = _ResidentCommercialSellerHub.registration;
+    if (registration == null) {
+      return;
+    }
+    if (!_sameText(registration.businessName, widget.item.seller)) {
+      return;
+    }
+    await _loadOwnerOrders();
+  }
+
+  Future<void> _loadOwnerOrders() async {
+    if (_loadingOwnerOrders) {
+      return;
+    }
+    setState(() => _loadingOwnerOrders = true);
+    final result = await _SellerApi.instance.fetchSellerOrders(
+      sellerName: widget.item.seller,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (!result.success) {
+      setState(() => _loadingOwnerOrders = false);
+      return;
+    }
+    setState(() {
+      _ownerOrders = result.orders.where(_isOrderForCurrentProduct).toList();
+      _loadingOwnerOrders = false;
+    });
+  }
+
+  bool _sameText(String left, String right) {
+    return left.trim().toLowerCase() == right.trim().toLowerCase();
+  }
+
+  bool _isOrderForCurrentProduct(_SellerOrderEntry entry) {
+    return entry.items.any(
+      (item) =>
+          _sameText(item.seller, widget.item.seller) &&
+          _sameText(item.title, widget.item.title),
+    );
+  }
+
+  int _productQtyInOrder(_SellerOrderEntry entry) {
+    var total = 0;
+    for (final item in entry.items) {
+      if (_sameText(item.seller, widget.item.seller) &&
+          _sameText(item.title, widget.item.title)) {
+        total += item.qty;
+      }
+    }
+    return total;
+  }
+
+  double _productSalesInOrder(_SellerOrderEntry entry) {
+    var total = 0.0;
+    for (final item in entry.items) {
+      if (_sameText(item.seller, widget.item.seller) &&
+          _sameText(item.title, widget.item.title)) {
+        total += item.price * item.qty;
+      }
+    }
+    return total;
+  }
 
   void _addToCart({bool openCart = false}) {
     _ResidentCartHub.addProduct(
@@ -1065,8 +1149,10 @@ class _ResidentProductPreviewPageState
       fallback: item.reviews,
     );
     final registration = _ResidentCommercialSellerHub.registration;
+    final isOwner =
+        registration != null && _sameText(registration.businessName, item.seller);
     final merchantVerified =
-        registration != null && registration.businessName == item.seller
+        registration != null && _sameText(registration.businessName, item.seller)
             ? registration.merchantVerified
             : item.verified;
 
@@ -1235,217 +1321,358 @@ class _ResidentProductPreviewPageState
                     ],
                   ),
                 ),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedFulfillment,
-                  decoration: InputDecoration(
-                    labelText: 'Fulfillment option',
-                    filled: true,
-                    fillColor: const Color(0xFFF7F9FF),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFDDE3F3)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFDDE3F3)),
-                    ),
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'Pickup at Brgy Hall',
-                      child: Text('Pickup at Brgy Hall'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'Seller Meetup',
-                      child: Text('Seller Meetup'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value == null) {
-                      return;
-                    }
-                    setState(() => _selectedFulfillment = value);
-                  },
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: _selectedZone,
-                        decoration: const InputDecoration(
-                          labelText: 'Delivery zone',
-                        ),
-                        items: _marketDeliveryZones
-                            .map(
-                              (item) => DropdownMenuItem<String>(
-                                value: item,
-                                child: Text(item),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: _selectedFulfillment == 'Pickup at Brgy Hall'
-                            ? null
-                            : (value) {
-                                if (value == null) {
-                                  return;
-                                }
-                                setState(() => _selectedZone = value);
-                              },
+                if (!isOwner) ...[
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedFulfillment,
+                    decoration: InputDecoration(
+                      labelText: 'Fulfillment option',
+                      filled: true,
+                      fillColor: const Color(0xFFF7F9FF),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFDDE3F3)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFDDE3F3)),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: _selectedPurok,
-                        decoration: const InputDecoration(
-                          labelText: 'Purok',
-                        ),
-                        items: _marketDeliveryPuroks
-                            .map(
-                              (item) => DropdownMenuItem<String>(
-                                value: item,
-                                child: Text(item),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: _selectedFulfillment == 'Pickup at Brgy Hall'
-                            ? null
-                            : (value) {
-                                if (value == null) {
-                                  return;
-                                }
-                                setState(() => _selectedPurok = value);
-                              },
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'Pickup at Brgy Hall',
+                        child: Text('Pickup at Brgy Hall'),
                       ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  height: 48,
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF6F8FF),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFDDE2F2)),
+                      DropdownMenuItem(
+                        value: 'Seller Meetup',
+                        child: Text('Seller Meetup'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) {
+                        return;
+                      }
+                      setState(() => _selectedFulfillment = value);
+                    },
                   ),
-                  child: Row(
+                  const SizedBox(height: 10),
+                  Row(
                     children: [
-                      IconButton(
-                        onPressed: _quantity > 1
-                            ? () => setState(() => _quantity--)
-                            : null,
-                        icon: const Icon(Icons.remove_circle_outline_rounded),
-                        visualDensity: VisualDensity.compact,
-                      ),
                       Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _selectedZone,
+                          decoration: const InputDecoration(
+                            labelText: 'Delivery zone',
+                          ),
+                          items: _marketDeliveryZones
+                              .map(
+                                (item) => DropdownMenuItem<String>(
+                                  value: item,
+                                  child: Text(item),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: _selectedFulfillment == 'Pickup at Brgy Hall'
+                              ? null
+                              : (value) {
+                                  if (value == null) {
+                                    return;
+                                  }
+                                  setState(() => _selectedZone = value);
+                                },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _selectedPurok,
+                          decoration: const InputDecoration(
+                            labelText: 'Purok',
+                          ),
+                          items: _marketDeliveryPuroks
+                              .map(
+                                (item) => DropdownMenuItem<String>(
+                                  value: item,
+                                  child: Text(item),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: _selectedFulfillment == 'Pickup at Brgy Hall'
+                              ? null
+                              : (value) {
+                                  if (value == null) {
+                                    return;
+                                  }
+                                  setState(() => _selectedPurok = value);
+                                },
+                        ),
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      const Expanded(
                         child: Text(
-                          '$_quantity',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          'Product Orders',
+                          style: TextStyle(
                             fontWeight: FontWeight.w900,
                             fontSize: 16,
+                            color: Color(0xFF2F344E),
                           ),
                         ),
                       ),
                       IconButton(
-                        onPressed: _quantity < item.stock
-                            ? () => setState(() => _quantity++)
-                            : null,
-                        icon: const Icon(Icons.add_circle_outline_rounded),
-                        visualDensity: VisualDensity.compact,
+                        onPressed: _loadingOwnerOrders ? null : _loadOwnerOrders,
+                        icon: const Icon(Icons.refresh_rounded),
                       ),
                     ],
                   ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ResidentChatSellerPage(
-                        sellerName: item.seller,
-                        productTitle: item.title,
+                  if (_loadingOwnerOrders)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: LinearProgressIndicator(minHeight: 3),
+                    )
+                  else if (_ownerOrders.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF7F9FF),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFDDE3F3)),
                       ),
-                    ),
-                  ),
-                  child: const Text('Chat'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _showMerchantRatingSheet(context, item.seller),
-                  icon: const Icon(Icons.star_rate_rounded),
-                  label: const Text('Rate Merchant'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: item.allowBarangayBid
-                      ? () => Navigator.push(
+                      child: const Text(
+                        'No orders yet for this product.',
+                        style: TextStyle(
+                          color: Color(0xFF5D6582),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    )
+                  else
+                    ..._ownerOrders.take(5).map(
+                      (entry) => GestureDetector(
+                        onTap: () async {
+                          final updated = await Navigator.push<_SellerOrderEntry>(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ResidentMerchantBidPage(item: item),
+                              builder: (_) => _ResidentSellerOrderDetailPage(
+                                sellerName: item.seller,
+                                order: entry,
+                                productTitle: item.title,
+                              ),
                             ),
-                          )
-                      : null,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFEF6B3E),
+                          );
+                          if (!mounted || updated == null) {
+                            return;
+                          }
+                          setState(() {
+                            final index = _ownerOrders.indexWhere(
+                              (order) => order.orderCode == updated.orderCode,
+                            );
+                            if (index >= 0) {
+                              _ownerOrders[index] = updated;
+                            }
+                          });
+                        },
+                        child: Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFF),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFDDE3F3)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    entry.orderCode,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF2F344E),
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFF1E1),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    entry.status,
+                                    style: const TextStyle(
+                                      color: Color(0xFFB86919),
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Icon(
+                                  Icons.chevron_right_rounded,
+                                  color: Color(0xFF8A92AD),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${entry.payerName} | ${entry.payerMobile}',
+                              style: const TextStyle(
+                                color: Color(0xFF5D6582),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'Qty ${_productQtyInOrder(entry)} | Sales ${_currency(_productSalesInOrder(entry))}',
+                              style: const TextStyle(
+                                color: Color(0xFF4D5675),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+          if (!isOwner) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF6F8FF),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFDDE2F2)),
+                    ),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          onPressed: _quantity > 1
+                              ? () => setState(() => _quantity--)
+                              : null,
+                          icon: const Icon(Icons.remove_circle_outline_rounded),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        Expanded(
+                          child: Text(
+                            '$_quantity',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: _quantity < item.stock
+                              ? () => setState(() => _quantity++)
+                              : null,
+                          icon: const Icon(Icons.add_circle_outline_rounded),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ],
+                    ),
                   ),
-                  icon: const Icon(Icons.gavel_rounded),
-                  label: const Text('Bid / Quote'),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _previewBillRow('Item price', _currency(item.price)),
-          _previewBillRow('Quantity', 'x$_quantity'),
-          _previewBillRow('Fulfillment', _selectedFulfillment),
-          _previewBillRow('Delivery Fee', _currency(_deliveryFee)),
-          _previewBillRow(
-            'Subtotal',
-            _currency(subtotal + _deliveryFee),
-            bold: true,
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _addToCart(),
-                  icon: const Icon(Icons.add_shopping_cart_rounded),
-                  label: const Text('Add to Cart'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: FilledButton(
-                  onPressed: () => _addToCart(openCart: true),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF2E35D3),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ResidentChatSellerPage(
+                          sellerName: item.seller,
+                          productTitle: item.title,
+                        ),
+                      ),
+                    ),
+                    child: const Text('Chat'),
                   ),
-                  child: const Text('Buy Now'),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showMerchantRatingSheet(context, item.seller),
+                    icon: const Icon(Icons.star_rate_rounded),
+                    label: const Text('Rate Merchant'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: item.allowBarangayBid
+                        ? () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    ResidentMerchantBidPage(item: item),
+                              ),
+                            )
+                        : null,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFEF6B3E),
+                    ),
+                    icon: const Icon(Icons.gavel_rounded),
+                    label: const Text('Bid / Quote'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _previewBillRow('Item price', _currency(item.price)),
+            _previewBillRow('Quantity', 'x$_quantity'),
+            _previewBillRow('Fulfillment', _selectedFulfillment),
+            _previewBillRow('Delivery Fee', _currency(_deliveryFee)),
+            _previewBillRow(
+              'Subtotal',
+              _currency(subtotal + _deliveryFee),
+              bold: true,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _addToCart(),
+                    icon: const Icon(Icons.add_shopping_cart_rounded),
+                    label: const Text('Add to Cart'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => _addToCart(openCart: true),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF2E35D3),
+                    ),
+                    child: const Text('Buy Now'),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -2232,6 +2459,284 @@ class ResidentAddToCartDonePage extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ResidentSellerOrderDetailPage extends StatefulWidget {
+  final String sellerName;
+  final String productTitle;
+  final _SellerOrderEntry order;
+
+  const _ResidentSellerOrderDetailPage({
+    required this.sellerName,
+    required this.productTitle,
+    required this.order,
+  });
+
+  @override
+  State<_ResidentSellerOrderDetailPage> createState() =>
+      _ResidentSellerOrderDetailPageState();
+}
+
+class _ResidentSellerOrderDetailPageState
+    extends State<_ResidentSellerOrderDetailPage> {
+  static const _flow = <String>['Pending', 'Processing', 'Completed'];
+  late _SellerOrderEntry _order;
+  bool _updating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _order = widget.order;
+  }
+
+  String _currency(double value) => 'PHP ${value.toStringAsFixed(2)}';
+
+  bool _sameText(String left, String right) {
+    return left.trim().toLowerCase() == right.trim().toLowerCase();
+  }
+
+  int _productQty() {
+    var total = 0;
+    for (final item in _order.items) {
+      if (_sameText(item.seller, widget.sellerName) &&
+          _sameText(item.title, widget.productTitle)) {
+        total += item.qty;
+      }
+    }
+    return total;
+  }
+
+  double _productSales() {
+    var total = 0.0;
+    for (final item in _order.items) {
+      if (_sameText(item.seller, widget.sellerName) &&
+          _sameText(item.title, widget.productTitle)) {
+        total += item.price * item.qty;
+      }
+    }
+    return total;
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'Completed':
+      case 'Fulfilled':
+        return const Color(0xFF1F8A4D);
+      case 'Processing':
+      case 'Paid':
+        return const Color(0xFF3A63CC);
+      case 'Cancelled':
+        return const Color(0xFFB0403A);
+      default:
+        return const Color(0xFFB86919);
+    }
+  }
+
+  Future<void> _updateStatus(String next) async {
+    if (_updating || _order.status == next) {
+      return;
+    }
+    setState(() => _updating = true);
+    final result = await _SellerApi.instance.updateSellerOrderStatus(
+      orderCode: _order.orderCode,
+      status: next,
+      sellerName: widget.sellerName,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() => _updating = false);
+    if (!result.success || result.order == null) {
+      _showFeature(context, result.message);
+      return;
+    }
+    setState(() => _order = result.order!);
+    _showFeature(context, 'Order status updated to $next.');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final created =
+        '${_order.createdAt.month}/${_order.createdAt.day}/${_order.createdAt.year}';
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Order Detail'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE3E7F4)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _order.orderCode,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 18,
+                          color: Color(0xFF2F344A),
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _statusColor(_order.status).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        _order.status,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: _statusColor(_order.status),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${_order.payerName} | ${_order.payerMobile}',
+                  style: const TextStyle(
+                    color: Color(0xFF5E6783),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  _order.payerAddress,
+                  style: const TextStyle(
+                    color: Color(0xFF6A7390),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Date: $created',
+                  style: const TextStyle(
+                    color: Color(0xFF717A96),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE3E7F4)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.productTitle,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF2F344A),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Qty ${_productQty()} | Product Sales ${_currency(_productSales())}',
+                  style: const TextStyle(
+                    color: Color(0xFF4D5775),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ..._order.items
+                    .where(
+                      (item) =>
+                          _sameText(item.seller, widget.sellerName) &&
+                          _sameText(item.title, widget.productTitle),
+                    )
+                    .map(
+                      (item) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          '${item.qty}x ${item.title} - ${_currency(item.price * item.qty)}',
+                          style: const TextStyle(
+                            color: Color(0xFF5A6380),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE3E7F4)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Order Progress',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF2F344A),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _flow.map((status) {
+                    final active = _order.status == status;
+                    return ChoiceChip(
+                      label: Text(status),
+                      selected: active,
+                      onSelected: _updating ? null : (_) => _updateStatus(status),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: _updating ? null : () => _updateStatus('Cancelled'),
+                  child: const Text('Cancel Order'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          child: FilledButton(
+            onPressed: () => Navigator.pop(context, _order),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF2E35D3),
+            ),
+            child: const Text('Done'),
+          ),
         ),
       ),
     );

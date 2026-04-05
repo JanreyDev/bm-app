@@ -3887,8 +3887,42 @@ class _ResidentCartHub {
 
   static void _emit() => refresh.value++;
 
+  static String _normalizeForKey(String value) {
+    return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  static String _productKeyFromData(_ResidentProductData product) {
+    return '${_normalizeForKey(product.title)}|${_normalizeForKey(product.seller)}|${product.price.toStringAsFixed(2)}';
+  }
+
+  static String _productKeyFromFields(
+    String title,
+    String seller,
+    double price,
+  ) {
+    return '${_normalizeForKey(title)}|${_normalizeForKey(seller)}|${price.toStringAsFixed(2)}';
+  }
+
+  static String _newCartItemId(String productKey) {
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final seed = '$productKey|$now';
+    return 'CART-${seed.hashCode.abs()}-$now';
+  }
+
   static List<_CartLineItem> _defaultItems() => [
     _CartLineItem(
+      itemId: _newCartItemId(
+        _productKeyFromFields(
+          'Lenovo IdeaPad 15.6"',
+          'L. Nadong Electronics',
+          14999,
+        ),
+      ),
+      productKey: _productKeyFromFields(
+        'Lenovo IdeaPad 15.6"',
+        'L. Nadong Electronics',
+        14999,
+      ),
       title: 'Lenovo IdeaPad 15.6"',
       seller: 'L. Nadong Electronics',
       price: 14999,
@@ -3901,6 +3935,18 @@ class _ResidentCartHub {
       deliveryFee: 0,
     ),
     _CartLineItem(
+      itemId: _newCartItemId(
+        _productKeyFromFields(
+          'Epson EcoTank L3210',
+          'Cabalan Office Depot',
+          8290,
+        ),
+      ),
+      productKey: _productKeyFromFields(
+        'Epson EcoTank L3210',
+        'Cabalan Office Depot',
+        8290,
+      ),
       title: 'Epson EcoTank L3210',
       seller: 'Cabalan Office Depot',
       price: 8290,
@@ -3974,13 +4020,18 @@ class _ResidentCartHub {
     String deliveryPurok = 'Purok 1',
   }) {
     final safeQty = qty < 1 ? 1 : qty;
+    final productKey = _productKeyFromData(product);
     final deliveryFee = _marketDeliveryFeeFor(
       fulfillment,
       deliveryZone,
       deliveryPurok,
     );
     final index = items.indexWhere(
-      (item) => item.title == product.title && item.seller == product.seller,
+      (item) =>
+          item.productKey == productKey &&
+          item.fulfillment == fulfillment &&
+          item.deliveryZone == deliveryZone &&
+          item.deliveryPurok == deliveryPurok,
     );
 
     if (index >= 0) {
@@ -3997,6 +4048,8 @@ class _ResidentCartHub {
     items.insert(
       0,
       _CartLineItem(
+        itemId: _newCartItemId(productKey),
+        productKey: productKey,
         title: product.title,
         seller: product.seller,
         price: product.price,
@@ -4071,6 +4124,25 @@ class _ResidentCartHub {
     _emit();
   }
 
+  static void upsertOrder(_OrderHistoryEntry order) {
+    final index = orders.indexWhere((entry) => entry.id == order.id);
+    if (index < 0) {
+      orders.insert(0, order);
+    } else {
+      orders[index] = order;
+    }
+    unawaited(_saveState());
+    _emit();
+  }
+
+  static void replaceOrders(List<_OrderHistoryEntry> next) {
+    orders
+      ..clear()
+      ..addAll(next);
+    unawaited(_saveState());
+    _emit();
+  }
+
   static void updateOrderStatus(String orderId, String status) {
     final index = orders.indexWhere((order) => order.id == orderId);
     if (index < 0) {
@@ -4084,12 +4156,14 @@ class _ResidentCartHub {
 
 class _ResidentCartPageState extends State<ResidentCartPage>
     with SingleTickerProviderStateMixin {
+  static const _legacyPayerName = 'Shamira Balandra';
+  static const _legacyPayerMobile = '09123456789';
+  static const _legacyPayerAddress = '1953 Purok 7, Old Cabalan, Olongapo City, PH';
+
   late final TabController _tabController;
-  final _payerNameController = TextEditingController(text: 'Shamira Balandra');
-  final _mobileController = TextEditingController(text: '09123456789');
-  final _addressController = TextEditingController(
-    text: '1953 Purok 7, Old Cabalan, Olongapo City, PH',
-  );
+  final _payerNameController = TextEditingController();
+  final _mobileController = TextEditingController();
+  final _addressController = TextEditingController();
   String _paymentProvider = 'GCash';
 
   bool _placingOrder = false;
@@ -4108,7 +4182,7 @@ class _ResidentCartPageState extends State<ResidentCartPage>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _ResidentCartHub.refresh.addListener(_onCartUpdated);
-    _ResidentCartHub.ensureLoaded();
+    unawaited(_initializeCartAndOrders());
   }
 
   @override
@@ -4121,12 +4195,72 @@ class _ResidentCartPageState extends State<ResidentCartPage>
     super.dispose();
   }
 
+  Future<void> _initializeCartAndOrders() async {
+    await _hydratePayerDetailsFromProfile();
+    await _ResidentCartHub.ensureLoaded();
+    await _syncOrdersFromApi(silent: true);
+  }
+
+  Future<void> _hydratePayerDetailsFromProfile() async {
+    await _ResidentProfileStore.ensureLoaded();
+
+    final profile = _ResidentProfileStore.profile;
+    final session = _currentResidentProfile;
+    final name = profile.name.trim().isNotEmpty
+        ? profile.name.trim()
+        : (session?.displayName ?? '').trim();
+    final mobile = profile.mobile.trim().isNotEmpty
+        ? profile.mobile.trim()
+        : (session?.mobile ?? '').trim();
+
+    final addressParts = <String>[
+      profile.barangay.trim(),
+      profile.cityMunicipality.trim(),
+      profile.province.trim(),
+    ].where((part) => part.isNotEmpty).toList();
+    final sessionAddress = (session?.locationSummary ?? '').trim();
+    final address = addressParts.isNotEmpty ? addressParts.join(', ') : sessionAddress;
+
+    final currentName = _payerNameController.text.trim();
+    if (name.isNotEmpty &&
+        (currentName.isEmpty || currentName == _legacyPayerName)) {
+      _payerNameController.text = name;
+    }
+
+    final currentMobile = _mobileController.text.trim();
+    if (mobile.isNotEmpty &&
+        (currentMobile.isEmpty || currentMobile == _legacyPayerMobile)) {
+      _mobileController.text = mobile;
+    }
+
+    final currentAddress = _addressController.text.trim();
+    if (address.isNotEmpty &&
+        (currentAddress.isEmpty || currentAddress == _legacyPayerAddress)) {
+      _addressController.text = address;
+    }
+  }
+
+  Future<void> _syncOrdersFromApi({bool silent = false}) async {
+    final result = await _MarketOrderApi.instance.fetchOrders();
+    if (!mounted) {
+      return;
+    }
+    if (result.success) {
+      _ResidentCartHub.replaceOrders(result.orders);
+      return;
+    }
+    if (!silent) {
+      _showFeature(context, result.message);
+    }
+  }
+
   double get _subtotal =>
       _cartItems.fold(0, (sum, item) => sum + (item.price * item.qty));
+  int get _totalCartQty =>
+      _cartItems.fold(0, (sum, item) => sum + item.qty);
   double get _deliveryFee =>
       _cartItems.fold(0, (sum, item) => sum + item.deliveryFee);
-  double get _serviceFee => _cartItems.isEmpty ? 0 : 35;
-  double get _grandTotal => _subtotal + _deliveryFee + _serviceFee;
+  double get _grandTotal => _subtotal + _deliveryFee;
 
   String _currency(double amount) => 'PHP ${amount.toStringAsFixed(2)}';
 
@@ -4162,6 +4296,8 @@ class _ResidentCartPageState extends State<ResidentCartPage>
     final orderItems = List<_CartLineItem>.from(
       _cartItems.map(
         (e) => _CartLineItem(
+          itemId: e.itemId,
+          productKey: e.productKey,
           title: e.title,
           seller: e.seller,
           price: e.price,
@@ -4188,10 +4324,28 @@ class _ResidentCartPageState extends State<ResidentCartPage>
       deliveryFee: _deliveryFee,
     );
     _ResidentCartHub.addOrder(order);
+    final remote = await _MarketOrderApi.instance.submitOrder(
+      order: order,
+      payerName: _payerNameController.text.trim(),
+      payerMobile: _mobileController.text.trim(),
+      payerAddress: _addressController.text.trim(),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (remote.success && remote.order != null) {
+      _ResidentCartHub.upsertOrder(remote.order!);
+    }
     _ResidentCartHub.clearItems();
     setState(() => _placingOrder = false);
     _tabController.animateTo(1);
-    _showFeature(context, 'Order placed. Pay via $_paymentProvider link.');
+    _showFeature(
+      context,
+      remote.success
+          ? 'Order placed and saved to server.'
+          : 'Order placed locally. ${remote.message}',
+    );
+    unawaited(_syncOrdersFromApi(silent: true));
   }
 
   @override
@@ -4271,7 +4425,7 @@ class _ResidentCartPageState extends State<ResidentCartPage>
                               ),
                             ),
                             Text(
-                              '${_cartItems.length} item(s) | Total ${_currency(_grandTotal)}',
+                              '$_totalCartQty ${_totalCartQty == 1 ? 'item' : 'items'} | Total ${_currency(_grandTotal)}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -4299,7 +4453,6 @@ class _ResidentCartPageState extends State<ResidentCartPage>
                 const SizedBox(height: 10),
                 _billRow('Subtotal', _currency(_subtotal)),
                 _billRow('Delivery Fee', _currency(_deliveryFee)),
-                _billRow('Service Fee', _currency(_serviceFee)),
                 const Divider(),
                 _billRow('Grand Total', _currency(_grandTotal), bold: true),
                 const SizedBox(height: 12),
@@ -4543,7 +4696,6 @@ class _ResidentCartPageState extends State<ResidentCartPage>
                 const SizedBox(height: 10),
                 _billRow('Subtotal', _currency(_subtotal)),
                 _billRow('Delivery Fee', _currency(_deliveryFee)),
-                _billRow('Service Fee', _currency(_serviceFee)),
                 const Divider(),
                 _billRow('Payable Amount', _currency(_grandTotal), bold: true),
                 const SizedBox(height: 10),
@@ -4868,6 +5020,8 @@ class _ResidentCartPageState extends State<ResidentCartPage>
 }
 
 class _CartLineItem {
+  final String itemId;
+  final String productKey;
   final String title;
   final String seller;
   final double price;
@@ -4880,6 +5034,8 @@ class _CartLineItem {
   int qty;
 
   _CartLineItem({
+    this.itemId = '',
+    this.productKey = '',
     required this.title,
     required this.seller,
     required this.price,
@@ -4893,6 +5049,8 @@ class _CartLineItem {
   });
 
   Map<String, dynamic> toJson() => {
+    'itemId': itemId,
+    'productKey': productKey,
     'title': title,
     'seller': seller,
     'price': price,
@@ -4908,10 +5066,24 @@ class _CartLineItem {
   };
 
   factory _CartLineItem.fromJson(Map<String, dynamic> json) {
+    final title = json['title'] as String? ?? 'Marketplace Item';
+    final seller = json['seller'] as String? ?? 'Barangay Seller';
+    final price = (json['price'] as num?)?.toDouble() ?? 0;
+    final productKey =
+        (json['productKey'] as String? ?? '').trim().isNotEmpty
+            ? (json['productKey'] as String).trim()
+            : _ResidentCartHub._productKeyFromFields(title, seller, price);
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final itemId =
+        (json['itemId'] as String? ?? '').trim().isNotEmpty
+            ? (json['itemId'] as String).trim()
+            : _ResidentCartHub._newCartItemId('$productKey|$now');
     return _CartLineItem(
-      title: json['title'] as String? ?? 'Marketplace Item',
-      seller: json['seller'] as String? ?? 'Barangay Seller',
-      price: (json['price'] as num?)?.toDouble() ?? 0,
+      itemId: itemId,
+      productKey: productKey,
+      title: title,
+      seller: seller,
+      price: price,
       qty: (json['qty'] as num?)?.toInt() ?? 1,
       icon: IconData(
         (json['iconCodePoint'] as num?)?.toInt() ?? Icons.storefront.codePoint,
@@ -4997,6 +5169,329 @@ class _OrderHistoryEntry {
           .map((item) => _CartLineItem.fromJson(item as Map<String, dynamic>))
           .toList(),
     );
+  }
+}
+
+class _MarketOrderFetchResult {
+  final bool success;
+  final String message;
+  final List<_OrderHistoryEntry> orders;
+
+  const _MarketOrderFetchResult({
+    required this.success,
+    required this.message,
+    this.orders = const <_OrderHistoryEntry>[],
+  });
+}
+
+class _MarketOrderSubmitResult {
+  final bool success;
+  final String message;
+  final _OrderHistoryEntry? order;
+
+  const _MarketOrderSubmitResult({
+    required this.success,
+    required this.message,
+    this.order,
+  });
+}
+
+class _MarketOrderApi {
+  _MarketOrderApi._();
+  static final _MarketOrderApi instance = _MarketOrderApi._();
+  static const Duration _requestTimeout = Duration(seconds: 8);
+
+  Future<_MarketOrderFetchResult> fetchOrders() async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _MarketOrderFetchResult(
+        success: false,
+        message: 'Please log in again to load orders.',
+      );
+    }
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    const paths = <String>['market/orders', 'orders'];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http
+              .get(
+                endpoint,
+                headers: {
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $_authToken',
+                },
+              )
+              .timeout(_requestTimeout);
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          final body = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final rawList = body['orders'] ?? body['data'];
+            if (rawList is! List) {
+              return const _MarketOrderFetchResult(
+                success: false,
+                message: 'Marketplace orders payload is invalid.',
+              );
+            }
+            final out = <_OrderHistoryEntry>[];
+            for (final raw in rawList) {
+              if (raw is! Map<String, dynamic>) {
+                continue;
+              }
+              out.add(_mapOrder(raw));
+            }
+            return _MarketOrderFetchResult(
+              success: true,
+              message: _extractApiMessage(body, fallback: 'Orders loaded.'),
+              orders: out,
+            );
+          }
+          return _MarketOrderFetchResult(
+            success: false,
+            message: _extractApiMessage(
+              body,
+              fallback: 'Unable to load marketplace orders.',
+            ),
+          );
+        } on TimeoutException {
+          sawTimeout = true;
+        } catch (_) {
+          sawConnectionError = true;
+        }
+      }
+    }
+
+    if (sawTimeout) {
+      return const _MarketOrderFetchResult(
+        success: false,
+        message: 'Loading orders timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _MarketOrderFetchResult(
+        success: false,
+        message: 'Cannot connect to server to load orders.',
+      );
+    }
+    return const _MarketOrderFetchResult(
+      success: false,
+      message: 'Orders endpoint is not available yet.',
+    );
+  }
+
+  Future<_MarketOrderSubmitResult> submitOrder({
+    required _OrderHistoryEntry order,
+    required String payerName,
+    required String payerMobile,
+    required String payerAddress,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _MarketOrderSubmitResult(
+        success: false,
+        message: 'Please log in again before placing order.',
+      );
+    }
+
+    final subtotal = order.total - order.deliveryFee;
+    final payload = jsonEncode({
+      'order_code': order.id.trim(),
+      'status': order.status.trim(),
+      'payer_name': payerName.trim(),
+      'payer_mobile': payerMobile.trim(),
+      if (payerAddress.trim().isNotEmpty) 'payer_address': payerAddress.trim(),
+      'payment_provider': order.paymentProvider.trim(),
+      if (order.paymentLink.trim().isNotEmpty) 'payment_link': order.paymentLink.trim(),
+      'subtotal': subtotal < 0 ? 0 : subtotal,
+      'delivery_fee': order.deliveryFee,
+      'total': order.total,
+      'items': order.items
+          .map(
+            (item) => {
+              'item_id': item.itemId,
+              'product_key': item.productKey,
+              'title': item.title,
+              'seller': item.seller,
+              'price': item.price,
+              'qty': item.qty,
+              'fulfillment': item.fulfillment,
+              'delivery_zone': item.deliveryZone,
+              'delivery_purok': item.deliveryPurok,
+              'delivery_fee': item.deliveryFee,
+            },
+          )
+          .toList(),
+    });
+
+    var sawTimeout = false;
+    var sawConnectionError = false;
+    const paths = <String>['market/orders', 'orders'];
+    for (final path in paths) {
+      for (final endpoint in _AuthApi.instance._endpointCandidates(path)) {
+        try {
+          final response = await http
+              .post(
+                endpoint,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                  'Authorization': 'Bearer $_authToken',
+                },
+                body: payload,
+              )
+              .timeout(_requestTimeout);
+          final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+          final body = decoded is Map<String, dynamic>
+              ? decoded
+              : const <String, dynamic>{};
+          if (response.statusCode == 404) {
+            continue;
+          }
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final raw = body['order'] ?? body['data'];
+            final mapped = raw is Map<String, dynamic> ? _mapOrder(raw) : null;
+            return _MarketOrderSubmitResult(
+              success: true,
+              message: _extractApiMessage(
+                body,
+                fallback: 'Marketplace order saved.',
+              ),
+              order: mapped,
+            );
+          }
+          return _MarketOrderSubmitResult(
+            success: false,
+            message: _extractApiMessage(
+              body,
+              fallback: 'Unable to save marketplace order.',
+            ),
+          );
+        } on TimeoutException {
+          sawTimeout = true;
+        } catch (_) {
+          sawConnectionError = true;
+        }
+      }
+    }
+
+    if (sawTimeout) {
+      return const _MarketOrderSubmitResult(
+        success: false,
+        message: 'Saving order timed out.',
+      );
+    }
+    if (sawConnectionError) {
+      return const _MarketOrderSubmitResult(
+        success: false,
+        message: 'Cannot connect to server to save order.',
+      );
+    }
+    return const _MarketOrderSubmitResult(
+      success: false,
+      message: 'Orders endpoint is not available yet.',
+    );
+  }
+
+  _OrderHistoryEntry _mapOrder(Map<String, dynamic> raw) {
+    String read(String key, {String fallback = ''}) {
+      final value = raw[key];
+      if (value is String && value.trim().isNotEmpty) {
+        return value.trim();
+      }
+      if (value != null) {
+        final asString = value.toString().trim();
+        if (asString.isNotEmpty) {
+          return asString;
+        }
+      }
+      return fallback;
+    }
+
+    final rawItems = raw['items'];
+    final items = <_CartLineItem>[];
+    if (rawItems is List) {
+      for (final entry in rawItems) {
+        if (entry is! Map<String, dynamic>) {
+          continue;
+        }
+        final title = (entry['title'] as String? ?? 'Marketplace Item').trim();
+        final seller = (entry['seller'] as String? ?? 'Barangay Seller').trim();
+        final price = (entry['price'] as num?)?.toDouble() ?? 0;
+        final productKey =
+            (entry['product_key'] as String? ?? '').trim().isNotEmpty
+                ? (entry['product_key'] as String).trim()
+                : _ResidentCartHub._productKeyFromFields(title, seller, price);
+        items.add(
+          _CartLineItem(
+            itemId:
+                (entry['item_id'] as String? ?? '').trim().isNotEmpty
+                    ? (entry['item_id'] as String).trim()
+                    : _ResidentCartHub._newCartItemId(productKey),
+            productKey: productKey,
+            title: title,
+            seller: seller,
+            price: price,
+            qty: (entry['qty'] as num?)?.toInt() ?? 1,
+            icon: Icons.storefront,
+            imageAsset: null,
+            fulfillment:
+                (entry['fulfillment'] as String? ?? 'Pickup at Brgy Hall').trim(),
+            deliveryZone:
+                (entry['delivery_zone'] as String? ?? _marketDeliveryZones.first)
+                    .trim(),
+            deliveryPurok:
+                (entry['delivery_purok'] as String? ?? _marketDeliveryPuroks.first)
+                    .trim(),
+            deliveryFee: (entry['delivery_fee'] as num?)?.toDouble() ?? 0,
+          ),
+        );
+      }
+    }
+
+    final createdAt = read('created_at');
+    final createdDate = DateTime.tryParse(createdAt);
+    return _OrderHistoryEntry(
+      id: read('order_code', fallback: read('id', fallback: 'ORD-00000')),
+      date: createdDate == null
+          ? read('date')
+          : '${createdDate.month}/${createdDate.day}/${createdDate.year}',
+      status: read('status', fallback: 'Pending'),
+      total: (raw['total'] as num?)?.toDouble() ?? 0,
+      deliveryFee: (raw['delivery_fee'] as num?)?.toDouble() ?? 0,
+      paymentProvider: read('payment_provider', fallback: 'GCash'),
+      paymentLink: read('payment_link'),
+      items: items,
+    );
+  }
+
+  String _extractApiMessage(
+    Map<String, dynamic> body, {
+    required String fallback,
+  }) {
+    final message = body['message'];
+    if (message is String && message.trim().isNotEmpty) {
+      return message.trim();
+    }
+    final errors = body['errors'];
+    if (errors is Map<String, dynamic>) {
+      for (final value in errors.values) {
+        if (value is List && value.isNotEmpty) {
+          final first = value.first;
+          if (first is String && first.trim().isNotEmpty) {
+            return first.trim();
+          }
+        }
+        if (value is String && value.trim().isNotEmpty) {
+          return value.trim();
+        }
+      }
+    }
+    return fallback;
   }
 }
 
