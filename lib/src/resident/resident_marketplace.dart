@@ -1,4 +1,1854 @@
-part of barangaymo_app;\n\nconst _residentMarketplaceProducts = [\n  _ResidentProductData(\n    title: 'Lenovo IdeaPad 15.6"',\n    seller: 'L. Nadong Electronics',\n    price: 14999,\n    originalPrice: 16999,\n    icon: Icons.laptop_mac,\n    imageAsset: 'public/item-laptop.jpg',\n    description:\n        'Reliable laptop for school, online work, and barangay office tasks. Includes charger and 6-month local warranty.',\n    category: 'Electronics',\n    rating: 4.8,\n    reviews: 214,\n    sold: 430,\n    stock: 7,\n    eta: 'Same-day in Old Cabalan',\n    verified: true,\n  ),\n  _ResidentProductData(\n    title: 'Epson EcoTank L3210',\n    seller: 'Cabalan Office Depot',\n    price: 8290,\n    originalPrice: 8990,\n    icon: Icons.print,\n    imageAsset: 'public/item-printer.jpg',\n    description:\n        'High-yield printer ideal for document printing and certificate forms. Compatible with refill ink bottles.',\n    category: 'Electronics',\n    rating: 4.7,\n    reviews: 168,\n    sold: 292,\n    stock: 12,\n    eta: 'Ships within 24 hours',\n    verified: true,\n  ),\n  _ResidentProductData(\n    title: 'Foldable Study Table',\n    seller: 'R. Dela Cruz Furnitures',\n    price: 2499,\n    originalPrice: 2999,\n    icon: Icons.table_restaurant,\n    imageAsset: 'public/item-table.jpg',\n    description:\n        'Space-saving foldable table for home study and small work areas with powder-coated steel frame.',\n    category: 'Furniture',\n    rating: 4.6,\n    reviews: 96,\n    sold: 205,\n    stock: 18,\n    eta: 'Pickup or 1-2 days delivery',\n  ),\n  _ResidentProductData(\n    title: 'Emergency Go Bag',\n    seller: 'Barangay Safety Co-op',\n    price: 1250,\n    originalPrice: 1450,\n    icon: Icons.backpack,\n    imageAsset: 'public/item-gobag.jpg',\n    description:\n        'Preparedness bag with first aid basics, flashlight, whistle, and waterproof storage pouches.',\n    category: 'Emergency',\n    rating: 4.9,\n    reviews: 302,\n    sold: 920,\n    stock: 30,\n    eta: 'Ready to deliver today',\n  ),\n];\n\nbool _isHttpImageSource(String source) {\n  return source.startsWith('http://') || source.startsWith('https://');\n}\n\nUint8List? _decodeDataImageSource(String source) {\n  if (!source.startsWith('data:image')) {\n    return null;\n  }\n  final comma = source.indexOf(',');\n  if (comma < 0 || comma >= source.length - 1) {\n    return null;\n  }\n  try {\n    return base64Decode(source.substring(comma + 1));\n  } catch (_) {\n    return null;\n  }\n}\n\nWidget _buildMarketProductImage({\n  required String source,\n  required IconData fallbackIcon,\n  required BoxFit fit,\n  Widget Function()? fallbackBuilder,\n}) {\n  final fallback =\n      fallbackBuilder?.call() ??\n      Center(\n        child: Icon(\n          fallbackIcon,\n          size: 48,\n          color: const Color(0xFF4650B4),\n        ),\n      );\n  if (source.trim().isEmpty) {\n    return fallback;\n  }\n  if (_isHttpImageSource(source)) {\n    return Image.network(\n      source,\n      width: double.infinity,\n      fit: fit,\n      errorBuilder: (_, __, ___) => fallback,\n    );\n  }\n  final dataBytes = _decodeDataImageSource(source);\n  if (dataBytes != null) {\n    return Image.memory(\n      dataBytes,\n      width: double.infinity,\n      fit: fit,\n      errorBuilder: (_, __, ___) => fallback,\n    );\n  }\n  return Image.asset(\n    source,\n    width: double.infinity,\n    fit: fit,\n    errorBuilder: (_, __, ___) => fallback,\n  );\n}\n\nclass ResidentMarketPage extends StatefulWidget {\n  const ResidentMarketPage({super.key});\n\n  @override\n  State<ResidentMarketPage> createState() => _ResidentMarketPageState();\n}\n\nclass _ResidentMarketPageState extends State<ResidentMarketPage> {\n  static const _sortOptions = [\n    'Popular',\n    'Top Rated',\n    'Price: Low to High',\n    'Price: High to Low',\n  ];\n\n  final TextEditingController _searchController = TextEditingController();\n  String _selectedCategory = 'All';\n  String _selectedSort = _sortOptions.first;\n  bool _apiCatalogReady = false;\n  bool _apiSyncWarned = false;\n\n  @override\n  void initState() {\n    super.initState();\n    _searchController.addListener(_onSearchChanged);\n    unawaited(_syncMarketProductsFromApi());\n  }\n\n  @override\n  void dispose() {\n    _searchController\n      ..removeListener(_onSearchChanged)\n      ..dispose();\n    super.dispose();\n  }\n\n  void _onSearchChanged() => setState(() {});\n\n  Future<void> _syncMarketProductsFromApi() async {\n    final result = await _SellerApi.instance.fetchMarketProducts();\n    if (!mounted) {\n      return;\n    }\n    if (!result.success) {\n      if (!_apiSyncWarned) {\n        _apiSyncWarned = true;\n        _showFeature(\n          context,\n          'Marketplace backend sync unavailable: ${result.message}',\n          tone: _ToastTone.warning,\n        );\n      }\n      return;\n    }\n    _ResidentCommercialSellerHub.replaceInventoryProducts(result.products);\n    if (mounted) {\n      setState(() => _apiCatalogReady = true);\n    }\n  }\n\n  List<String> get _categories {\n    final values = <String>{'All'};\n    values.addAll(_ResidentCommercialSellerHub.managedCategories);\n    for (final item in _marketplaceCatalog) {\n      values.add(item.category);\n    }\n    return values.toList();\n  }\n\n  List<_ResidentProductData> get _marketplaceCatalog {\n    final dynamicProducts = _ResidentCommercialSellerHub.inventoryProducts;\n    return dynamicProducts;\n  }\n\n  List<_ResidentProductData> get _visibleProducts {\n    final query = _searchController.text.trim().toLowerCase();\n    final filtered = _marketplaceCatalog.where((item) {\n      final matchesCategory =\n          _selectedCategory == 'All' || item.category == _selectedCategory;\n      final haystack =\n          '${item.title} ${item.seller} ${item.description} ${item.category}'\n              .toLowerCase();\n      final matchesQuery = query.isEmpty || haystack.contains(query);\n      return matchesCategory && matchesQuery;\n    }).toList();\n\n    filtered.sort((a, b) {\n      if (_selectedSort == 'Top Rated') {\n        return b.rating.compareTo(a.rating);\n      }\n      if (_selectedSort == 'Price: Low to High') {\n        return a.price.compareTo(b.price);\n      }\n      if (_selectedSort == 'Price: High to Low') {\n        return b.price.compareTo(a.price);\n      }\n      return b.sold.compareTo(a.sold);\n    });\n    return filtered;\n  }\n\n  List<String> get _searchSuggestions {\n    final query = _searchController.text.trim().toLowerCase();\n    if (query.isEmpty) {\n      return const <String>[];\n    }\n    final values = <String>{};\n    for (final item in _marketplaceCatalog) {\n      final candidates = <String>[\n        item.title,\n        item.seller,\n        item.category,\n      ];\n      for (final candidate in candidates) {\n        if (candidate.toLowerCase().contains(query)) {\n          values.add(candidate);\n        }\n      }\n    }\n    return values.take(6).toList();\n  }\n\n  String _currency(double amount) => 'PHP ${amount.toStringAsFixed(2)}';\n\n  double _merchantRating(_ResidentProductData item) =>\n      _ResidentCommercialSellerHub.ratingForSeller(\n        item.seller,\n        fallback: item.rating,\n      );\n\n  int _merchantReviewCount(_ResidentProductData item) =>\n      _ResidentCommercialSellerHub.feedbackCountForSeller(\n        item.seller,\n        fallback: item.reviews,\n      );\n\n  bool _merchantVerified(_ResidentProductData item) {\n    final registration = _ResidentCommercialSellerHub.registration;\n    if (registration != null && registration.businessName == item.seller) {\n      return registration.merchantVerified;\n    }\n    return item.verified;\n  }\n\n  String _compactCount(int value) {\n    if (value >= 1000) {\n      final formatted = value >= 10000\n          ? (value / 1000).toStringAsFixed(0)\n          : (value / 1000).toStringAsFixed(1);\n      return '${formatted}k';\n    }\n    return '$value';\n  }\n\n  int _discountPercent(_ResidentProductData item) {\n    final original = item.originalPrice;\n    if (original == null || original <= item.price) {\n      return 0;\n    }\n    final discount = ((original - item.price) / original * 100).round();\n    return discount < 1 ? 1 : discount;\n  }\n\n  @override\n  Widget build(BuildContext context) {\n    return ValueListenableBuilder<int>(\n      valueListenable: _ResidentCommercialSellerHub.refresh,\n      builder: (_, __, ___) {\n        final products = _visibleProducts;\n        final suggestions = _searchSuggestions;\n        final banners = _ResidentCommercialSellerHub.banners;\n        return Material(\n          color: Colors.transparent,\n          child: Stack(\n            children: [\n              Container(\n                decoration: const BoxDecoration(\n                  gradient: LinearGradient(\n                    begin: Alignment.topCenter,\n                    end: Alignment.bottomCenter,\n                    colors: [Color(0xFFF3F7FF), Color(0xFFF8F2EE)],\n                  ),\n                ),\n              ),\n              Positioned(\n                top: -64,\n                right: -38,\n                child: Container(\n                  width: 170,\n                  height: 170,\n                  decoration: const BoxDecoration(\n                    shape: BoxShape.circle,\n                    gradient: LinearGradient(\n                      colors: [Color(0xFFE6EEFF), Color(0x00E6EEFF)],\n                      begin: Alignment.topCenter,\n                      end: Alignment.bottomCenter,\n                    ),\n                  ),\n                ),\n              ),\n              Positioned(\n                top: 210,\n                left: -58,\n                child: Container(\n                  width: 150,\n                  height: 150,\n                  decoration: const BoxDecoration(\n                    shape: BoxShape.circle,\n                    gradient: LinearGradient(\n                      colors: [Color(0xFFFFE8DE), Color(0x00FFE8DE)],\n                      begin: Alignment.topCenter,\n                      end: Alignment.bottomCenter,\n                    ),\n                  ),\n                ),\n              ),\n              ListView(\n                padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),\n                children: [\n              Row(\n                children: [\n                  const Expanded(\n                    child: Column(\n                      crossAxisAlignment: CrossAxisAlignment.start,\n                      children: [\n                        Text(\n                          'Marketplace',\n                          style: TextStyle(\n                            fontSize: 27,\n                            fontWeight: FontWeight.w900,\n                            color: Color(0xFF2A2E44),\n                          ),\n                        ),\n                        Text(\n                          'Trusted local products and services',\n                          style: TextStyle(\n                            color: Color(0xFF646A86),\n                            fontWeight: FontWeight.w600,\n                          ),\n                        ),\n                      ],\n                    ),\n                  ),\n                  _topIconButton(\n                    icon: Icons.notifications_none_rounded,\n                    onTap: () => Navigator.push(\n                      context,\n                      MaterialPageRoute(\n                        builder: (_) => const ResidentNotificationsPage(),\n                      ),\n                    ),\n                  ),\n                  const SizedBox(width: 8),\n                  ValueListenableBuilder<int>(\n                    valueListenable: _ResidentCartHub.refresh,\n                    builder: (_, __, ___) {\n                      return _topIconButton(\n                        icon: Icons.shopping_cart_rounded,\n                        badgeCount: _ResidentCartHub.items.length,\n                        onTap: () => Navigator.push(\n                          context,\n                          MaterialPageRoute(\n                            builder: (_) => const ResidentCartPage(),\n                          ),\n                        ),\n                      );\n                    },\n                  ),\n                ],\n              ),\n              const SizedBox(height: 12),\n              Container(\n                padding: const EdgeInsets.symmetric(\n                  horizontal: 12,\n                  vertical: 5,\n                ),\n                decoration: BoxDecoration(\n                  color: Colors.white.withValues(alpha: 0.95),\n                  borderRadius: BorderRadius.circular(16),\n                  border: Border.all(color: const Color(0xFFE6E9F5)),\n                  boxShadow: const [\n                    BoxShadow(\n                      color: Color(0x12000000),\n                      blurRadius: 10,\n                      offset: Offset(0, 4),\n                    ),\n                  ],\n                ),\n               child: TextField(\n                  controller: _searchController,\n                  decoration: InputDecoration(\n                    border: InputBorder.none,\n                    prefixIcon: const Icon(Icons.search_rounded),\n                    suffixIcon: _searchController.text.isEmpty\n                        ? null\n                        : IconButton(\n                            onPressed: () => _searchController.clear(),\n                            icon: const Icon(Icons.close_rounded),\n                          ),\n                    hintText: 'Search products, sellers, or categories',\n                  ),\n                ),\n              ),\n              if (suggestions.isNotEmpty) ...[\n                const SizedBox(height: 8),\n                Wrap(\n                  spacing: 8,\n                  runSpacing: 8,\n                  children: suggestions\n                      .map(\n                        (suggestion) => ActionChip(\n                          label: Text(suggestion),\n                          avatar: const Icon(Icons.search_rounded, size: 16),\n                          onPressed: () {\n                            _searchController.text = suggestion;\n                            _searchController.selection = TextSelection.collapsed(\n                              offset: suggestion.length,\n                            );\n                          },\n                        ),\n                      )\n                      .toList(),\n                ),\n              ],\n              const SizedBox(height: 12),\n              SizedBox(\n                height: 148,\n                child: ListView.separated(\n                  scrollDirection: Axis.horizontal,\n                  itemCount: banners.length,\n                  separatorBuilder: (_, __) => const SizedBox(width: 10),\n                  itemBuilder: (_, index) {\n                    final banner = banners[index];\n                    return Container(\n                      width: math\n                          .max(MediaQuery.sizeOf(context).width - 24, 260)\n                          .toDouble(),\n                      padding: const EdgeInsets.all(15),\n                      decoration: BoxDecoration(\n                        borderRadius: BorderRadius.circular(22),\n                        gradient: LinearGradient(\n                          begin: Alignment.topLeft,\n                          end: Alignment.bottomRight,\n                          colors: [banner.start, banner.end],\n                        ),\n                        boxShadow: const [\n                          BoxShadow(\n                            color: Color(0x2B2E35D3),\n                            blurRadius: 16,\n                            offset: Offset(0, 8),\n                          ),\n                        ],\n                      ),\n                      child: Stack(\n                        children: [\n                          Positioned(\n                            top: -20,\n                            right: -16,\n                            child: Container(\n                              width: 90,\n                              height: 90,\n                              decoration: BoxDecoration(\n                                shape: BoxShape.circle,\n                                color: Colors.white.withValues(alpha: 0.12),\n                              ),\n                            ),\n                          ),\n                          Row(\n                            children: [\n                              Expanded(\n                                child: Column(\n                                  crossAxisAlignment: CrossAxisAlignment.start,\n                                  children: [\n                                    Text(\n                                      banner.title,\n                                      style: const TextStyle(\n                                        color: Colors.white,\n                                        fontSize: 20,\n                                        fontWeight: FontWeight.w900,\n                                      ),\n                                    ),\n                                    const SizedBox(height: 4),\n                                    Text(\n                                      banner.subtitle,\n                                      style: const TextStyle(\n                                        color: Color(0xFFDDE3FF),\n                                        fontWeight: FontWeight.w600,\n                                      ),\n                                    ),\n                                    if (banner.attachmentName != null) ...[\n                                      const SizedBox(height: 8),\n                                      Text(\n                                        'Asset: ${banner.attachmentName}',\n                                        style: const TextStyle(\n                                          color: Colors.white,\n                                          fontWeight: FontWeight.w700,\n                                          fontSize: 12,\n                                        ),\n                                      ),\n                                    ],\n                                  ],\n                                ),\n                              ),\n                              const SizedBox(width: 10),\n                              FilledButton(\n                                onPressed: () => Navigator.push(\n                                  context,\n                                  MaterialPageRoute(\n                                    builder: (_) => const ResidentSellHubPage(),\n                                  ),\n                                ),\n                                style: FilledButton.styleFrom(\n                                  backgroundColor: Colors.white,\n                                  foregroundColor: banner.start,\n                                ),\n                                child: const Text('Start Selling'),\n                              ),\n                            ],\n                          ),\n                        ],\n                      ),\n                    );\n                  },\n                ),\n              ),\n              const SizedBox(height: 10),\n              Wrap(\n                spacing: 8,\n                runSpacing: 8,\n                children: _categories.map((category) {\n                  return ChoiceChip(\n                    label: Text(category),\n                    selected: _selectedCategory == category,\n                    onSelected: (_) =>\n                        setState(() => _selectedCategory = category),\n                    side: BorderSide(\n                      color: _selectedCategory == category\n                          ? const Color(0xFF4257D3)\n                          : const Color(0xFFD8DEEF),\n                    ),\n                    selectedColor: const Color(0xFFE8EEFF),\n                    backgroundColor: Colors.white,\n                    labelStyle: TextStyle(\n                      color: _selectedCategory == category\n                          ? const Color(0xFF2E3A8B)\n                          : const Color(0xFF585E79),\n                      fontWeight: FontWeight.w700,\n                    ),\n                  );\n                }).toList(),\n              ),\n              const SizedBox(height: 8),\n              Row(\n                children: [\n                  Text(\n                    '${products.length} item(s) found',\n                    style: const TextStyle(\n                      color: Color(0xFF5F6582),\n                      fontWeight: FontWeight.w700,\n                    ),\n                  ),\n                  const Spacer(),\n                  PopupMenuButton<String>(\n                    initialValue: _selectedSort,\n                    onSelected: (value) =>\n                        setState(() => _selectedSort = value),\n                    shape: RoundedRectangleBorder(\n                      borderRadius: BorderRadius.circular(14),\n                    ),\n                    itemBuilder: (_) => _sortOptions\n                        .map(\n                          (option) => PopupMenuItem<String>(\n                            value: option,\n                            child: Text(option),\n                          ),\n                        )\n                        .toList(),\n                    child: Container(\n                      padding: const EdgeInsets.symmetric(\n                        horizontal: 10,\n                        vertical: 7,\n                      ),\n                      decoration: BoxDecoration(\n                        color: Colors.white,\n                        borderRadius: BorderRadius.circular(12),\n                        border: Border.all(color: const Color(0xFFDDE2F0)),\n                      ),\n                      child: Row(\n                        children: [\n                          const Icon(\n                            Icons.sort_rounded,\n                            size: 17,\n                            color: Color(0xFF4F5675),\n                          ),\n                          const SizedBox(width: 6),\n                          Text(\n                            _selectedSort,\n                            style: const TextStyle(\n                              color: Color(0xFF4F5675),\n                              fontWeight: FontWeight.w700,\n                            ),\n                          ),\n                        ],\n                      ),\n                    ),\n                  ),\n                ],\n              ),\n              const SizedBox(height: 10),\n              if (products.isEmpty)\n                Container(\n                  padding: const EdgeInsets.all(18),\n                  decoration: BoxDecoration(\n                    color: Colors.white,\n                    borderRadius: BorderRadius.circular(16),\n                    border: Border.all(color: const Color(0xFFE2E6F2)),\n                  ),\n                  child: const Column(\n                    children: [\n                      Icon(\n                        Icons.search_off_rounded,\n                        size: 42,\n                        color: Color(0xFF7A809B),\n                      ),\n                      SizedBox(height: 8),\n                      Text(\n                        'No products matched your filters.',\n                        style: TextStyle(\n                          color: Color(0xFF505670),\n                          fontWeight: FontWeight.w700,\n                        ),\n                      ),\n                    ],\n                  ),\n                )\n              else\n                Builder(\n                  builder: (context) {\n                    final textScale = MediaQuery.textScalerOf(context).scale(1);\n                    final itemHeight = textScale > 1.05 ? 360.0 : 340.0;\n                    return GridView.builder(\n                      shrinkWrap: true,\n                      physics: const NeverScrollableScrollPhysics(),\n                      itemCount: products.length,\n                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(\n                        crossAxisCount: 2,\n                        mainAxisExtent: itemHeight,\n                        crossAxisSpacing: 9,\n                        mainAxisSpacing: 10,\n                      ),\n                      itemBuilder: (_, i) => _marketTile(context, products[i]),\n                    );\n                  },\n                ),\n                ],\n              ),\n            ],\n          ),\n        );\n      },\n    );\n  }\n\n  Widget _topIconButton({\n    required IconData icon,\n    required VoidCallback onTap,\n    int badgeCount = 0,\n  }) {\n    return Stack(\n      clipBehavior: Clip.none,\n      children: [\n        InkWell(\n          onTap: onTap,\n          borderRadius: BorderRadius.circular(14),\n          child: Container(\n            width: 44,\n            height: 44,\n            decoration: BoxDecoration(\n              borderRadius: BorderRadius.circular(14),\n              color: Colors.white,\n              border: Border.all(color: const Color(0xFFE4E7F2)),\n              boxShadow: const [\n                BoxShadow(\n                  color: Color(0x14000000),\n                  blurRadius: 8,\n                  offset: Offset(0, 3),\n                ),\n              ],\n            ),\n            child: Icon(icon, color: const Color(0xFF48507A)),\n          ),\n        ),\n        if (badgeCount > 0)\n          Positioned(\n            top: -4,\n            right: -4,\n            child: Container(\n              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),\n              decoration: BoxDecoration(\n                color: const Color(0xFFE3483A),\n                borderRadius: BorderRadius.circular(999),\n                border: Border.all(color: Colors.white, width: 1.2),\n              ),\n              child: Text(\n                badgeCount > 99 ? '99+' : '$badgeCount',\n                style: const TextStyle(\n                  color: Colors.white,\n                  fontSize: 10,\n                  fontWeight: FontWeight.w800,\n                ),\n              ),\n            ),\n          ),\n      ],\n    );\n  }\n\n  Widget _statPill({\n    required IconData icon,\n    required String text,\n    required Color color,\n  }) {\n    return Container(\n      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),\n      decoration: BoxDecoration(\n        color: color.withValues(alpha: 0.12),\n        borderRadius: BorderRadius.circular(999),\n      ),\n      child: Row(\n        mainAxisSize: MainAxisSize.min,\n        children: [\n          Icon(icon, size: 13, color: color),\n          const SizedBox(width: 4),\n          Text(\n            text,\n            style: TextStyle(\n              color: color,\n              fontWeight: FontWeight.w800,\n              fontSize: 11,\n            ),\n          ),\n        ],\n      ),\n    );\n  }\n\n  Widget _marketTile(BuildContext context, _ResidentProductData item) {\n    final merchantRating = _merchantRating(item);\n    final merchantReviews = _merchantReviewCount(item);\n    final merchantVerified = _merchantVerified(item);\n    return InkWell(\n      borderRadius: BorderRadius.circular(18),\n      onTap: () => Navigator.push(\n        context,\n        MaterialPageRoute(\n          builder: (_) => _ResidentProductPreviewPage(item: item),\n        ),\n      ),\n      child: Container(\n        decoration: BoxDecoration(\n          color: Colors.white,\n          borderRadius: BorderRadius.circular(18),\n          border: Border.all(color: const Color(0xFFE6E7F1)),\n          boxShadow: const [\n            BoxShadow(\n              color: Color(0x12000000),\n              blurRadius: 9,\n              offset: Offset(0, 4),\n            ),\n          ],\n        ),\n        child: Column(\n          crossAxisAlignment: CrossAxisAlignment.start,\n          children: [\n            Stack(\n              children: [\n                Container(\n                  height: 112,\n                  margin: const EdgeInsets.all(8),\n                  decoration: BoxDecoration(\n                    borderRadius: BorderRadius.circular(13),\n                    gradient: const LinearGradient(\n                      begin: Alignment.topLeft,\n                      end: Alignment.bottomRight,\n                      colors: [Color(0xFFE8EAFF), Color(0xFFF3F4FF)],\n                    ),\n                  ),\n                  child: ClipRRect(\n                    borderRadius: BorderRadius.circular(13),\n                    child: _buildMarketProductImage(\n                      source: item.imageAsset,\n                      fallbackIcon: item.icon,\n                      fit: BoxFit.cover,\n                    ),\n                  ),\n                ),\n                Positioned(\n                  left: 14,\n                  bottom: 14,\n                  child: Container(\n                    padding: const EdgeInsets.symmetric(\n                      horizontal: 6,\n                      vertical: 3,\n                    ),\n                    decoration: BoxDecoration(\n                      color: Colors.black.withValues(alpha: 0.44),\n                      borderRadius: BorderRadius.circular(999),\n                    ),\n                    child: Text(\n                      item.eta,\n                      style: const TextStyle(\n                        color: Colors.white,\n                        fontSize: 10,\n                        fontWeight: FontWeight.w700,\n                      ),\n                    ),\n                  ),\n                ),\n                if (_discountPercent(item) > 0)\n                  Positioned(\n                    top: 14,\n                    right: 14,\n                    child: Container(\n                      padding: const EdgeInsets.symmetric(\n                        horizontal: 6,\n                        vertical: 3,\n                      ),\n                      decoration: BoxDecoration(\n                        color: const Color(0xFFE3483A),\n                        borderRadius: BorderRadius.circular(999),\n                      ),\n                      child: Text(\n                        '-${_discountPercent(item)}%',\n                        style: const TextStyle(\n                          color: Colors.white,\n                          fontWeight: FontWeight.w800,\n                          fontSize: 10,\n                        ),\n                      ),\n                    ),\n                  ),\n              ],\n            ),\n            Padding(\n              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),\n              child: Column(\n                crossAxisAlignment: CrossAxisAlignment.start,\n                children: [\n                  Text(\n                    item.title,\n                    maxLines: 2,\n                    overflow: TextOverflow.ellipsis,\n                    style: const TextStyle(\n                      fontSize: 14,\n                      fontWeight: FontWeight.w800,\n                      color: Color(0xFF2F3146),\n                    ),\n                  ),\n                  const SizedBox(height: 2),\n                  Row(\n                    children: [\n                      Expanded(\n                        child: Text(\n                          item.seller,\n                          maxLines: 1,\n                          overflow: TextOverflow.ellipsis,\n                          style: const TextStyle(\n                            color: Color(0xFF676B84),\n                            fontSize: 12,\n                            fontWeight: FontWeight.w600,\n                          ),\n                        ),\n                      ),\n                      if (merchantVerified)\n                        const Icon(\n                          Icons.verified_rounded,\n                          size: 14,\n                          color: Color(0xFF3C78E3),\n                        ),\n                    ],\n                  ),\n                  const SizedBox(height: 4),\n                  Text(\n                    _currency(item.price),\n                    style: const TextStyle(\n                      color: Color(0xFF3340B6),\n                      fontWeight: FontWeight.w900,\n                      fontSize: 14,\n                    ),\n                  ),\n                  if (item.originalPrice != null)\n                    Text(\n                      _currency(item.originalPrice!),\n                      style: const TextStyle(\n                        color: Color(0xFF8B90A8),\n                        decoration: TextDecoration.lineThrough,\n                        fontSize: 11,\n                        fontWeight: FontWeight.w600,\n                      ),\n                    ),\n                  const SizedBox(height: 6),\n                  Wrap(\n                    spacing: 6,\n                    runSpacing: 4,\n                    children: [\n                      _statPill(\n                        icon: Icons.star_rounded,\n                        text: merchantRating.toStringAsFixed(1),\n                        color: const Color(0xFFF2A93B),\n                      ),\n                      _statPill(\n                        icon: Icons.local_fire_department_rounded,\n                        text: '${_compactCount(item.sold)} sold',\n                        color: const Color(0xFF3A63CC),\n                      ),\n                    ],\n                  ),\n                  const SizedBox(height: 4),\n                  Text(\n                    '$merchantReviews feedback entr${merchantReviews == 1 ? 'y' : 'ies'}',\n                    style: const TextStyle(\n                      color: Color(0xFF8087A0),\n                      fontSize: 11,\n                      fontWeight: FontWeight.w700,\n                    ),\n                  ),\n                  const SizedBox(height: 6),\n                  Row(\n                    children: [\n                      Expanded(\n                        child: Text(\n                          'Stock ${item.stock}',\n                          style: const TextStyle(\n                            color: Color(0xFF666E8A),\n                            fontSize: 11,\n                            fontWeight: FontWeight.w700,\n                          ),\n                        ),\n                      ),\n                      InkWell(\n                        borderRadius: BorderRadius.circular(10),\n                        onTap: () {\n                          _ResidentCartHub.addProduct(\n                            item,\n                            qty: 1,\n                            deliveryZone: item.sellerZone,\n                            deliveryPurok: item.sellerPurok,\n                          );\n                          _showFeature(context, '${item.title} added to cart.');\n                          setState(() {});\n                        },\n                        child: Ink(\n                          width: 30,\n                          height: 30,\n                          decoration: BoxDecoration(\n                            color: const Color(0xFFE8EEFF),\n                            borderRadius: BorderRadius.circular(10),\n                          ),\n                          child: const Icon(\n                            Icons.add_shopping_cart_rounded,\n                            size: 17,\n                            color: Color(0xFF3C54C5),\n                          ),\n                        ),\n                      ),\n                    ],\n                  ),\n                ],\n              ),\n            ),\n          ],\n        ),\n      ),\n    );\n  }\n}\n\nclass _ResidentProductPreviewPage extends StatefulWidget {\n  final _ResidentProductData item;\n  const _ResidentProductPreviewPage({required this.item});\n\n  @override\n  State<_ResidentProductPreviewPage> createState() =>\n      _ResidentProductPreviewPageState();\n}\n\nclass _ResidentProductPreviewPageState\n    extends State<_ResidentProductPreviewPage> {\n  int _quantity = 1;\n  String _selectedFulfillment = 'Pickup at Brgy Hall';\n  String _selectedZone = _marketDeliveryZones.first;\n  String _selectedPurok = _marketDeliveryPuroks.first;\n\n  String _currency(double amount) => 'PHP ${amount.toStringAsFixed(2)}';\n\n  double get _deliveryFee => _marketDeliveryFeeFor(\n    _selectedFulfillment,\n    _selectedZone,\n    _selectedPurok,\n  );\n\n  void _addToCart({bool openCart = false}) {\n    _ResidentCartHub.addProduct(\n      widget.item,\n      qty: _quantity,\n      fulfillment: _selectedFulfillment,\n      deliveryZone: _selectedZone,\n      deliveryPurok: _selectedPurok,\n    );\n    _showFeature(\n      context,\n      '$_quantity x ${widget.item.title} added to cart via $_selectedFulfillment.',\n    );\n    if (openCart) {\n      Navigator.push(\n        context,\n        MaterialPageRoute(builder: (_) => const ResidentCartPage()),\n      );\n    }\n  }\n\n  @override\n  Widget build(BuildContext context) {\n    final item = widget.item;\n    final subtotal = item.price * _quantity;\n    final merchantRating = _ResidentCommercialSellerHub.ratingForSeller(\n      item.seller,\n      fallback: item.rating,\n    );\n    final merchantReviews = _ResidentCommercialSellerHub.feedbackCountForSeller(\n      item.seller,\n      fallback: item.reviews,\n    );\n    final registration = _ResidentCommercialSellerHub.registration;\n    final merchantVerified =\n        registration != null && registration.businessName == item.seller\n            ? registration.merchantVerified\n            : item.verified;\n\n    return Scaffold(\n      appBar: AppBar(\n        title: const Text('Product Detail'),\n        actions: [\n          IconButton(\n            onPressed: () => Navigator.push(\n              context,\n              MaterialPageRoute(builder: (_) => const ResidentCartPage()),\n            ),\n            icon: const Icon(Icons.shopping_cart_rounded),\n          ),\n        ],\n      ),\n      body: ListView(\n        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),\n        children: [\n          Stack(\n            children: [\n              ClipRRect(\n                borderRadius: BorderRadius.circular(20),\n                child: SizedBox(\n                  height: 230,\n                  child: _buildMarketProductImage(\n                    source: item.imageAsset,\n                    fallbackIcon: item.icon,\n                    fit: BoxFit.cover,\n                    fallbackBuilder: () => Container(\n                      color: Colors.grey.shade300,\n                      child: Icon(\n                        item.icon,\n                        size: 72,\n                        color: Colors.grey.shade700,\n                      ),\n                    ),\n                  ),\n                ),\n              ),\n              Positioned(\n                left: 12,\n                bottom: 12,\n                child: Container(\n                  padding: const EdgeInsets.symmetric(\n                    horizontal: 9,\n                    vertical: 5,\n                  ),\n                  decoration: BoxDecoration(\n                    color: Colors.black.withValues(alpha: 0.45),\n                    borderRadius: BorderRadius.circular(999),\n                  ),\n                  child: Text(\n                    item.eta,\n                    style: const TextStyle(\n                      color: Colors.white,\n                      fontWeight: FontWeight.w700,\n                    ),\n                  ),\n                ),\n              ),\n            ],\n          ),\n          const SizedBox(height: 10),\n          Container(\n            padding: const EdgeInsets.all(14),\n            decoration: BoxDecoration(\n              color: Colors.white,\n              borderRadius: BorderRadius.circular(18),\n              border: Border.all(color: const Color(0xFFE4E8F3)),\n            ),\n            child: Column(\n              crossAxisAlignment: CrossAxisAlignment.start,\n              children: [\n                Text(\n                  item.title,\n                  style: const TextStyle(\n                    fontSize: 22,\n                    fontWeight: FontWeight.w900,\n                    color: Color(0xFF2D3046),\n                  ),\n                ),\n                const SizedBox(height: 6),\n                Row(\n                  children: [\n                    Text(\n                      _currency(item.price),\n                      style: const TextStyle(\n                        fontSize: 24,\n                        fontWeight: FontWeight.w900,\n                        color: Color(0xFF2E35D3),\n                      ),\n                    ),\n                    const SizedBox(width: 8),\n                    if (item.originalPrice != null)\n                      Text(\n                        _currency(item.originalPrice!),\n                        style: const TextStyle(\n                          color: Color(0xFF8187A1),\n                          decoration: TextDecoration.lineThrough,\n                          fontWeight: FontWeight.w700,\n                        ),\n                      ),\n                  ],\n                ),\n                const SizedBox(height: 8),\n                Wrap(\n                  spacing: 8,\n                  runSpacing: 8,\n                  children: [\n                    _previewTag(\n                      icon: Icons.star_rounded,\n                      text: '${merchantRating.toStringAsFixed(1)} ($merchantReviews reviews)',\n                      color: const Color(0xFFF2A93B),\n                    ),\n                    _previewTag(\n                      icon: Icons.inventory_2_rounded,\n                      text: '${item.stock} in stock',\n                      color: const Color(0xFF3E66C7),\n                    ),\n                    _previewTag(\n                      icon: Icons.local_fire_department_rounded,\n                      text: '${item.sold} sold',\n                      color: const Color(0xFF4A54B8),\n                    ),\n                  ],\n                ),\n                const SizedBox(height: 10),\n                Text(\n                  item.description,\n                  style: const TextStyle(\n                    color: Color(0xFF5A607D),\n                    fontWeight: FontWeight.w600,\n                  ),\n                ),\n                const SizedBox(height: 10),\n                Container(\n                  padding: const EdgeInsets.all(10),\n                  decoration: BoxDecoration(\n                    color: const Color(0xFFF7F9FF),\n                    borderRadius: BorderRadius.circular(12),\n                    border: Border.all(color: const Color(0xFFDDE3F3)),\n                  ),\n                  child: Row(\n                    children: [\n                      const Icon(\n                        Icons.storefront_rounded,\n                        color: Color(0xFF4C57BB),\n                      ),\n                      const SizedBox(width: 8),\n                      Expanded(\n                        child: Text(\n                          'Sold by ${item.seller}',\n                          style: const TextStyle(\n                            color: Color(0xFF2F344E),\n                            fontWeight: FontWeight.w800,\n                          ),\n                        ),\n                      ),\n                      if (merchantVerified)\n                        const Icon(\n                          Icons.verified_rounded,\n                          size: 18,\n                          color: Color(0xFF3A7BE5),\n                        ),\n                    ],\n                  ),\n                ),\n                const SizedBox(height: 10),\n                DropdownButtonFormField<String>(\n                  initialValue: _selectedFulfillment,\n                  decoration: InputDecoration(\n                    labelText: 'Fulfillment option',\n                    filled: true,\n                    fillColor: const Color(0xFFF7F9FF),\n                    border: OutlineInputBorder(\n                      borderRadius: BorderRadius.circular(12),\n                      borderSide: const BorderSide(color: Color(0xFFDDE3F3)),\n                    ),\n                    enabledBorder: OutlineInputBorder(\n                      borderRadius: BorderRadius.circular(12),\n                      borderSide: const BorderSide(color: Color(0xFFDDE3F3)),\n                    ),\n                  ),\n                  items: const [\n                    DropdownMenuItem(\n                      value: 'Pickup at Brgy Hall',\n                      child: Text('Pickup at Brgy Hall'),\n                    ),\n                    DropdownMenuItem(\n                      value: 'Seller Meetup',\n                      child: Text('Seller Meetup'),\n                    ),\n                  ],\n                  onChanged: (value) {\n                    if (value == null) {\n                      return;\n                    }\n                    setState(() => _selectedFulfillment = value);\n                  },\n                ),\n                const SizedBox(height: 10),\n                Row(\n                  children: [\n                    Expanded(\n                      child: DropdownButtonFormField<String>(\n                        initialValue: _selectedZone,\n                        decoration: const InputDecoration(\n                          labelText: 'Delivery zone',\n                        ),\n                        items: _marketDeliveryZones\n                            .map(\n                              (item) => DropdownMenuItem<String>(\n                                value: item,\n                                child: Text(item),\n                              ),\n                            )\n                            .toList(),\n                        onChanged: _selectedFulfillment == 'Pickup at Brgy Hall'\n                            ? null\n                            : (value) {\n                                if (value == null) {\n                                  return;\n                                }\n                                setState(() => _selectedZone = value);\n                              },\n                      ),\n                    ),\n                    const SizedBox(width: 8),\n                    Expanded(\n                      child: DropdownButtonFormField<String>(\n                        initialValue: _selectedPurok,\n                        decoration: const InputDecoration(\n                          labelText: 'Purok',\n                        ),\n                        items: _marketDeliveryPuroks\n                            .map(\n                              (item) => DropdownMenuItem<String>(\n                                value: item,\n                                child: Text(item),\n                              ),\n                            )\n                            .toList(),\n                        onChanged: _selectedFulfillment == 'Pickup at Brgy Hall'\n                            ? null\n                            : (value) {\n                                if (value == null) {\n                                  return;\n                                }\n                                setState(() => _selectedPurok = value);\n                              },\n                      ),\n                    ),\n                  ],\n                ),\n              ],\n            ),\n          ),\n          const SizedBox(height: 16),\n          Row(\n            children: [\n              Expanded(\n                child: Container(\n                  height: 48,\n                  padding: const EdgeInsets.symmetric(horizontal: 6),\n                  decoration: BoxDecoration(\n                    color: const Color(0xFFF6F8FF),\n                    borderRadius: BorderRadius.circular(12),\n                    border: Border.all(color: const Color(0xFFDDE2F2)),\n                  ),\n                  child: Row(\n                    children: [\n                      IconButton(\n                        onPressed: _quantity > 1\n                            ? () => setState(() => _quantity--)\n                            : null,\n                        icon: const Icon(Icons.remove_circle_outline_rounded),\n                        visualDensity: VisualDensity.compact,\n                      ),\n                      Expanded(\n                        child: Text(\n                          '$_quantity',\n                          textAlign: TextAlign.center,\n                          style: const TextStyle(\n                            fontWeight: FontWeight.w900,\n                            fontSize: 16,\n                          ),\n                        ),\n                      ),\n                      IconButton(\n                        onPressed: _quantity < item.stock\n                            ? () => setState(() => _quantity++)\n                            : null,\n                        icon: const Icon(Icons.add_circle_outline_rounded),\n                        visualDensity: VisualDensity.compact,\n                      ),\n                    ],\n                  ),\n                ),\n              ),\n              const SizedBox(width: 8),\n              Expanded(\n                child: OutlinedButton(\n                  onPressed: () => Navigator.push(\n                    context,\n                    MaterialPageRoute(\n                      builder: (_) => ResidentChatSellerPage(\n                        sellerName: item.seller,\n                        productTitle: item.title,\n                      ),\n                    ),\n                  ),\n                  child: const Text('Chat'),\n                ),\n              ),\n            ],\n          ),\n          const SizedBox(height: 8),\n          Row(\n            children: [\n              Expanded(\n                child: OutlinedButton.icon(\n                  onPressed: () => _showMerchantRatingSheet(context, item.seller),\n                  icon: const Icon(Icons.star_rate_rounded),\n                  label: const Text('Rate Merchant'),\n                ),\n              ),\n              const SizedBox(width: 8),\n              Expanded(\n                child: FilledButton.icon(\n                  onPressed: item.allowBarangayBid\n                      ? () => Navigator.push(\n                            context,\n                            MaterialPageRoute(\n                              builder: (_) => ResidentMerchantBidPage(item: item),\n                            ),\n                          )\n                      : null,\n                  style: FilledButton.styleFrom(\n                    backgroundColor: const Color(0xFFEF6B3E),\n                  ),\n                  icon: const Icon(Icons.gavel_rounded),\n                  label: const Text('Bid / Quote'),\n                ),\n              ),\n            ],\n          ),\n          const SizedBox(height: 10),\n          _previewBillRow('Item price', _currency(item.price)),\n          _previewBillRow('Quantity', 'x$_quantity'),\n          _previewBillRow('Fulfillment', _selectedFulfillment),\n          _previewBillRow('Delivery Fee', _currency(_deliveryFee)),\n          _previewBillRow(\n            'Subtotal',\n            _currency(subtotal + _deliveryFee),\n            bold: true,\n          ),\n          const SizedBox(height: 12),\n          Row(\n            children: [\n              Expanded(\n                child: OutlinedButton.icon(\n                  onPressed: () => _addToCart(),\n                  icon: const Icon(Icons.add_shopping_cart_rounded),\n                  label: const Text('Add to Cart'),\n                ),\n              ),\n              const SizedBox(width: 8),\n              Expanded(\n                child: FilledButton(\n                  onPressed: () => _addToCart(openCart: true),\n                  style: FilledButton.styleFrom(\n                    backgroundColor: const Color(0xFF2E35D3),\n                  ),\n                  child: const Text('Buy Now'),\n                ),\n              ),\n            ],\n          ),\n        ],\n      ),\n    );\n  }\n\n  Widget _previewTag({\n    required IconData icon,\n    required String text,\n    required Color color,\n  }) {\n    return Container(\n      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),\n      decoration: BoxDecoration(\n        color: color.withValues(alpha: 0.14),\n        borderRadius: BorderRadius.circular(999),\n      ),\n      child: Row(\n        mainAxisSize: MainAxisSize.min,\n        children: [\n          Icon(icon, size: 14, color: color),\n          const SizedBox(width: 4),\n          Text(\n            text,\n            style: TextStyle(\n              color: color,\n              fontWeight: FontWeight.w800,\n              fontSize: 12,\n            ),\n          ),\n        ],\n      ),\n    );\n  }\n\n  Widget _previewBillRow(String label, String value, {bool bold = false}) {\n    return Padding(\n      padding: const EdgeInsets.only(bottom: 5),\n      child: Row(\n        children: [\n          Text(\n            label,\n            style: TextStyle(\n              color: bold ? const Color(0xFF2E3046) : const Color(0xFF666D88),\n              fontWeight: bold ? FontWeight.w800 : FontWeight.w600,\n            ),\n          ),\n          const Spacer(),\n          Text(\n            value,\n            style: TextStyle(\n              color: bold ? const Color(0xFF2E35D3) : const Color(0xFF4C5370),\n              fontWeight: FontWeight.w800,\n            ),\n          ),\n        ],\n      ),\n    );\n  }\n\n}\n\nFuture<void> _showMerchantRatingSheet(\n  BuildContext context,\n  String sellerName,\n) async {\n  final commentController = TextEditingController();\n  var stars = 5;\n  final submitted = await showModalBottomSheet<bool>(\n    context: context,\n    isScrollControlled: true,\n    builder: (sheetContext) {\n      return Padding(\n        padding: EdgeInsets.fromLTRB(\n          16,\n          16,\n          16,\n          MediaQuery.of(sheetContext).viewInsets.bottom + 16,\n        ),\n        child: StatefulBuilder(\n          builder: (context, setSheetState) {\n            return Column(\n              mainAxisSize: MainAxisSize.min,\n              crossAxisAlignment: CrossAxisAlignment.start,\n              children: [\n                Text(\n                  'Rate $sellerName',\n                  style: const TextStyle(\n                    fontSize: 18,\n                    fontWeight: FontWeight.w900,\n                  ),\n                ),\n                const SizedBox(height: 10),\n                Row(\n                  children: List.generate(5, (index) {\n                    final active = index < stars;\n                    return IconButton(\n                      onPressed: () => setSheetState(() => stars = index + 1),\n                      icon: Icon(\n                        active ? Icons.star_rounded : Icons.star_border_rounded,\n                        color: const Color(0xFFF2A93B),\n                      ),\n                    );\n                  }),\n                ),\n                TextField(\n                  controller: commentController,\n                  maxLines: 3,\n                  decoration: const InputDecoration(\n                    labelText: 'Feedback',\n                    hintText: 'Share your experience with the merchant',\n                  ),\n                ),\n                const SizedBox(height: 12),\n                SizedBox(\n                  width: double.infinity,\n                  child: FilledButton(\n                    onPressed: () => Navigator.pop(sheetContext, true),\n                    child: const Text('Submit Rating'),\n                  ),\n                ),\n              ],\n            );\n          },\n        ),\n      );\n    },\n  );\n  if (submitted != true) {\n    commentController.dispose();\n    return;\n  }\n  _ResidentCommercialSellerHub.addFeedback(\n    _ResidentMerchantFeedbackData(\n      sellerName: sellerName,\n      authorName: 'Resident Buyer',\n      stars: stars,\n      comment: commentController.text.trim().isEmpty\n          ? 'Merchant rating submitted.'\n          : commentController.text.trim(),\n      createdAt: DateTime.now(),\n    ),\n  );\n  commentController.dispose();\n  _showFeature(context, 'Merchant rating submitted.');\n}\n\nclass ResidentChatSellerPage extends StatefulWidget {
+part of barangaymo_app;
+
+const _residentMarketplaceProducts = [
+  _ResidentProductData(
+    title: 'Lenovo IdeaPad 15.6"',
+    seller: 'L. Nadong Electronics',
+    price: 14999,
+    originalPrice: 16999,
+    icon: Icons.laptop_mac,
+    imageAsset: 'public/item-laptop.jpg',
+    description:
+        'Reliable laptop for school, online work, and barangay office tasks. Includes charger and 6-month local warranty.',
+    category: 'Electronics',
+    rating: 4.8,
+    reviews: 214,
+    sold: 430,
+    stock: 7,
+    eta: 'Same-day in Old Cabalan',
+    verified: true,
+  ),
+  _ResidentProductData(
+    title: 'Epson EcoTank L3210',
+    seller: 'Cabalan Office Depot',
+    price: 8290,
+    originalPrice: 8990,
+    icon: Icons.print,
+    imageAsset: 'public/item-printer.jpg',
+    description:
+        'High-yield printer ideal for document printing and certificate forms. Compatible with refill ink bottles.',
+    category: 'Electronics',
+    rating: 4.7,
+    reviews: 168,
+    sold: 292,
+    stock: 12,
+    eta: 'Ships within 24 hours',
+    verified: true,
+  ),
+  _ResidentProductData(
+    title: 'Foldable Study Table',
+    seller: 'R. Dela Cruz Furnitures',
+    price: 2499,
+    originalPrice: 2999,
+    icon: Icons.table_restaurant,
+    imageAsset: 'public/item-table.jpg',
+    description:
+        'Space-saving foldable table for home study and small work areas with powder-coated steel frame.',
+    category: 'Furniture',
+    rating: 4.6,
+    reviews: 96,
+    sold: 205,
+    stock: 18,
+    eta: 'Pickup or 1-2 days delivery',
+  ),
+  _ResidentProductData(
+    title: 'Emergency Go Bag',
+    seller: 'Barangay Safety Co-op',
+    price: 1250,
+    originalPrice: 1450,
+    icon: Icons.backpack,
+    imageAsset: 'public/item-gobag.jpg',
+    description:
+        'Preparedness bag with first aid basics, flashlight, whistle, and waterproof storage pouches.',
+    category: 'Emergency',
+    rating: 4.9,
+    reviews: 302,
+    sold: 920,
+    stock: 30,
+    eta: 'Ready to deliver today',
+  ),
+];
+
+bool _isHttpImageSource(String source) {
+  return source.startsWith('http://') || source.startsWith('https://');
+}
+
+Uint8List? _decodeDataImageSource(String source) {
+  if (!source.startsWith('data:image')) {
+    return null;
+  }
+  final comma = source.indexOf(',');
+  if (comma < 0 || comma >= source.length - 1) {
+    return null;
+  }
+  try {
+    return base64Decode(source.substring(comma + 1));
+  } catch (_) {
+    return null;
+  }
+}
+
+Widget _buildMarketProductImage({
+  required String source,
+  required IconData fallbackIcon,
+  required BoxFit fit,
+  Widget Function()? fallbackBuilder,
+}) {
+  final fallback =
+      fallbackBuilder?.call() ??
+      Center(
+        child: Icon(
+          fallbackIcon,
+          size: 48,
+          color: const Color(0xFF4650B4),
+        ),
+      );
+  if (source.trim().isEmpty) {
+    return fallback;
+  }
+  if (_isHttpImageSource(source)) {
+    return Image.network(
+      source,
+      width: double.infinity,
+      fit: fit,
+      errorBuilder: (_, __, ___) => fallback,
+    );
+  }
+  final dataBytes = _decodeDataImageSource(source);
+  if (dataBytes != null) {
+    return Image.memory(
+      dataBytes,
+      width: double.infinity,
+      fit: fit,
+      errorBuilder: (_, __, ___) => fallback,
+    );
+  }
+  return Image.asset(
+    source,
+    width: double.infinity,
+    fit: fit,
+    errorBuilder: (_, __, ___) => fallback,
+  );
+}
+
+class ResidentMarketPage extends StatefulWidget {
+  const ResidentMarketPage({super.key});
+
+  @override
+  State<ResidentMarketPage> createState() => _ResidentMarketPageState();
+}
+
+class _ResidentMarketPageState extends State<ResidentMarketPage> {
+  static const _sortOptions = [
+    'Popular',
+    'Top Rated',
+    'Price: Low to High',
+    'Price: High to Low',
+  ];
+
+  final TextEditingController _searchController = TextEditingController();
+  String _selectedCategory = 'All';
+  String _selectedSort = _sortOptions.first;
+  bool _apiCatalogReady = false;
+  bool _apiSyncWarned = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(_onSearchChanged);
+    unawaited(_syncMarketProductsFromApi());
+  }
+
+  @override
+  void dispose() {
+    _searchController
+      ..removeListener(_onSearchChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() => setState(() {});
+
+  Future<void> _syncMarketProductsFromApi() async {
+    final result = await _SellerApi.instance.fetchMarketProducts();
+    if (!mounted) {
+      return;
+    }
+    if (!result.success) {
+      if (!_apiSyncWarned) {
+        _apiSyncWarned = true;
+        _showFeature(
+          context,
+          'Marketplace backend sync unavailable: ${result.message}',
+          tone: _ToastTone.warning,
+        );
+      }
+      return;
+    }
+    _ResidentCommercialSellerHub.replaceInventoryProducts(result.products);
+    if (mounted) {
+      setState(() => _apiCatalogReady = true);
+    }
+  }
+
+  List<String> get _categories {
+    final values = <String>{'All'};
+    values.addAll(_ResidentCommercialSellerHub.managedCategories);
+    for (final item in _marketplaceCatalog) {
+      values.add(item.category);
+    }
+    return values.toList();
+  }
+
+  List<_ResidentProductData> get _marketplaceCatalog {
+    final dynamicProducts = _ResidentCommercialSellerHub.inventoryProducts;
+    return dynamicProducts;
+  }
+
+  List<_ResidentProductData> get _visibleProducts {
+    final query = _searchController.text.trim().toLowerCase();
+    final filtered = _marketplaceCatalog.where((item) {
+      final matchesCategory =
+          _selectedCategory == 'All' || item.category == _selectedCategory;
+      final haystack =
+          '${item.title} ${item.seller} ${item.description} ${item.category}'
+              .toLowerCase();
+      final matchesQuery = query.isEmpty || haystack.contains(query);
+      return matchesCategory && matchesQuery;
+    }).toList();
+
+    filtered.sort((a, b) {
+      if (_selectedSort == 'Top Rated') {
+        return b.rating.compareTo(a.rating);
+      }
+      if (_selectedSort == 'Price: Low to High') {
+        return a.price.compareTo(b.price);
+      }
+      if (_selectedSort == 'Price: High to Low') {
+        return b.price.compareTo(a.price);
+      }
+      return b.sold.compareTo(a.sold);
+    });
+    return filtered;
+  }
+
+  List<String> get _searchSuggestions {
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      return const <String>[];
+    }
+    final values = <String>{};
+    for (final item in _marketplaceCatalog) {
+      final candidates = <String>[
+        item.title,
+        item.seller,
+        item.category,
+      ];
+      for (final candidate in candidates) {
+        if (candidate.toLowerCase().contains(query)) {
+          values.add(candidate);
+        }
+      }
+    }
+    return values.take(6).toList();
+  }
+
+  String _currency(double amount) => 'PHP ${amount.toStringAsFixed(2)}';
+
+  double _merchantRating(_ResidentProductData item) =>
+      _ResidentCommercialSellerHub.ratingForSeller(
+        item.seller,
+        fallback: item.rating,
+      );
+
+  int _merchantReviewCount(_ResidentProductData item) =>
+      _ResidentCommercialSellerHub.feedbackCountForSeller(
+        item.seller,
+        fallback: item.reviews,
+      );
+
+  bool _merchantVerified(_ResidentProductData item) {
+    final registration = _ResidentCommercialSellerHub.registration;
+    if (registration != null && registration.businessName == item.seller) {
+      return registration.merchantVerified;
+    }
+    return item.verified;
+  }
+
+  String _compactCount(int value) {
+    if (value >= 1000) {
+      final formatted = value >= 10000
+          ? (value / 1000).toStringAsFixed(0)
+          : (value / 1000).toStringAsFixed(1);
+      return '${formatted}k';
+    }
+    return '$value';
+  }
+
+  int _discountPercent(_ResidentProductData item) {
+    final original = item.originalPrice;
+    if (original == null || original <= item.price) {
+      return 0;
+    }
+    final discount = ((original - item.price) / original * 100).round();
+    return discount < 1 ? 1 : discount;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: _ResidentCommercialSellerHub.refresh,
+      builder: (_, __, ___) {
+        final products = _visibleProducts;
+        final suggestions = _searchSuggestions;
+        final banners = _ResidentCommercialSellerHub.banners;
+        return Material(
+          color: Colors.transparent,
+          child: Stack(
+            children: [
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFFF3F7FF), Color(0xFFF8F2EE)],
+                  ),
+                ),
+              ),
+              Positioned(
+                top: -64,
+                right: -38,
+                child: Container(
+                  width: 170,
+                  height: 170,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [Color(0xFFE6EEFF), Color(0x00E6EEFF)],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 210,
+                left: -58,
+                child: Container(
+                  width: 150,
+                  height: 150,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [Color(0xFFFFE8DE), Color(0x00FFE8DE)],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                  ),
+                ),
+              ),
+              ListView(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
+                children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Marketplace',
+                          style: TextStyle(
+                            fontSize: 27,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF2A2E44),
+                          ),
+                        ),
+                        Text(
+                          'Trusted local products and services',
+                          style: TextStyle(
+                            color: Color(0xFF646A86),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _topIconButton(
+                    icon: Icons.notifications_none_rounded,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ResidentNotificationsPage(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ValueListenableBuilder<int>(
+                    valueListenable: _ResidentCartHub.refresh,
+                    builder: (_, __, ___) {
+                      return _topIconButton(
+                        icon: Icons.shopping_cart_rounded,
+                        badgeCount: _ResidentCartHub.items.length,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ResidentCartPage(),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE6E9F5)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x12000000),
+                      blurRadius: 10,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+               child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: _searchController.text.isEmpty
+                        ? null
+                        : IconButton(
+                            onPressed: () => _searchController.clear(),
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                    hintText: 'Search products, sellers, or categories',
+                  ),
+                ),
+              ),
+              if (suggestions.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: suggestions
+                      .map(
+                        (suggestion) => ActionChip(
+                          label: Text(suggestion),
+                          avatar: const Icon(Icons.search_rounded, size: 16),
+                          onPressed: () {
+                            _searchController.text = suggestion;
+                            _searchController.selection = TextSelection.collapsed(
+                              offset: suggestion.length,
+                            );
+                          },
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 148,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: banners.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  itemBuilder: (_, index) {
+                    final banner = banners[index];
+                    return Container(
+                      width: math
+                          .max(MediaQuery.sizeOf(context).width - 24, 260)
+                          .toDouble(),
+                      padding: const EdgeInsets.all(15),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(22),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [banner.start, banner.end],
+                        ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x2B2E35D3),
+                            blurRadius: 16,
+                            offset: Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            top: -20,
+                            right: -16,
+                            child: Container(
+                              width: 90,
+                              height: 90,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withValues(alpha: 0.12),
+                              ),
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      banner.title,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      banner.subtitle,
+                                      style: const TextStyle(
+                                        color: Color(0xFFDDE3FF),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    if (banner.attachmentName != null) ...[
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Asset: ${banner.attachmentName}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              FilledButton(
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const ResidentSellHubPage(),
+                                  ),
+                                ),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: banner.start,
+                                ),
+                                child: const Text('Start Selling'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _categories.map((category) {
+                  return ChoiceChip(
+                    label: Text(category),
+                    selected: _selectedCategory == category,
+                    onSelected: (_) =>
+                        setState(() => _selectedCategory = category),
+                    side: BorderSide(
+                      color: _selectedCategory == category
+                          ? const Color(0xFF4257D3)
+                          : const Color(0xFFD8DEEF),
+                    ),
+                    selectedColor: const Color(0xFFE8EEFF),
+                    backgroundColor: Colors.white,
+                    labelStyle: TextStyle(
+                      color: _selectedCategory == category
+                          ? const Color(0xFF2E3A8B)
+                          : const Color(0xFF585E79),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Text(
+                    '${products.length} item(s) found',
+                    style: const TextStyle(
+                      color: Color(0xFF5F6582),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  PopupMenuButton<String>(
+                    initialValue: _selectedSort,
+                    onSelected: (value) =>
+                        setState(() => _selectedSort = value),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    itemBuilder: (_) => _sortOptions
+                        .map(
+                          (option) => PopupMenuItem<String>(
+                            value: option,
+                            child: Text(option),
+                          ),
+                        )
+                        .toList(),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFDDE2F0)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.sort_rounded,
+                            size: 17,
+                            color: Color(0xFF4F5675),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _selectedSort,
+                            style: const TextStyle(
+                              color: Color(0xFF4F5675),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              if (products.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE2E6F2)),
+                  ),
+                  child: const Column(
+                    children: [
+                      Icon(
+                        Icons.search_off_rounded,
+                        size: 42,
+                        color: Color(0xFF7A809B),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'No products matched your filters.',
+                        style: TextStyle(
+                          color: Color(0xFF505670),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Builder(
+                  builder: (context) {
+                    final textScale = MediaQuery.textScalerOf(context).scale(1);
+                    final itemHeight = textScale > 1.05 ? 360.0 : 340.0;
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: products.length,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        mainAxisExtent: itemHeight,
+                        crossAxisSpacing: 9,
+                        mainAxisSpacing: 10,
+                      ),
+                      itemBuilder: (_, i) => _marketTile(context, products[i]),
+                    );
+                  },
+                ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _topIconButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    int badgeCount = 0,
+  }) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              color: Colors.white,
+              border: Border.all(color: const Color(0xFFE4E7F2)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x14000000),
+                  blurRadius: 8,
+                  offset: Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Icon(icon, color: const Color(0xFF48507A)),
+          ),
+        ),
+        if (badgeCount > 0)
+          Positioned(
+            top: -4,
+            right: -4,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE3483A),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: Colors.white, width: 1.2),
+              ),
+              child: Text(
+                badgeCount > 99 ? '99+' : '$badgeCount',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _statPill({
+    required IconData icon,
+    required String text,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w800,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _marketTile(BuildContext context, _ResidentProductData item) {
+    final merchantRating = _merchantRating(item);
+    final merchantReviews = _merchantReviewCount(item);
+    final merchantVerified = _merchantVerified(item);
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => _ResidentProductPreviewPage(item: item),
+        ),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE6E7F1)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x12000000),
+              blurRadius: 9,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              children: [
+                Container(
+                  height: 112,
+                  margin: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(13),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFFE8EAFF), Color(0xFFF3F4FF)],
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(13),
+                    child: _buildMarketProductImage(
+                      source: item.imageAsset,
+                      fallbackIcon: item.icon,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 14,
+                  bottom: 14,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.44),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      item.eta,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                if (_discountPercent(item) > 0)
+                  Positioned(
+                    top: 14,
+                    right: 14,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE3483A),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '-${_discountPercent(item)}%',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF2F3146),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item.seller,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF676B84),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      if (merchantVerified)
+                        const Icon(
+                          Icons.verified_rounded,
+                          size: 14,
+                          color: Color(0xFF3C78E3),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _currency(item.price),
+                    style: const TextStyle(
+                      color: Color(0xFF3340B6),
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
+                    ),
+                  ),
+                  if (item.originalPrice != null)
+                    Text(
+                      _currency(item.originalPrice!),
+                      style: const TextStyle(
+                        color: Color(0xFF8B90A8),
+                        decoration: TextDecoration.lineThrough,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      _statPill(
+                        icon: Icons.star_rounded,
+                        text: merchantRating.toStringAsFixed(1),
+                        color: const Color(0xFFF2A93B),
+                      ),
+                      _statPill(
+                        icon: Icons.local_fire_department_rounded,
+                        text: '${_compactCount(item.sold)} sold',
+                        color: const Color(0xFF3A63CC),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$merchantReviews feedback entr${merchantReviews == 1 ? 'y' : 'ies'}',
+                    style: const TextStyle(
+                      color: Color(0xFF8087A0),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Stock ${item.stock}',
+                          style: const TextStyle(
+                            color: Color(0xFF666E8A),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: () {
+                          _ResidentCartHub.addProduct(
+                            item,
+                            qty: 1,
+                            deliveryZone: item.sellerZone,
+                            deliveryPurok: item.sellerPurok,
+                          );
+                          _showFeature(context, '${item.title} added to cart.');
+                          setState(() {});
+                        },
+                        child: Ink(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8EEFF),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.add_shopping_cart_rounded,
+                            size: 17,
+                            color: Color(0xFF3C54C5),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ResidentProductPreviewPage extends StatefulWidget {
+  final _ResidentProductData item;
+  const _ResidentProductPreviewPage({required this.item});
+
+  @override
+  State<_ResidentProductPreviewPage> createState() =>
+      _ResidentProductPreviewPageState();
+}
+
+class _ResidentProductPreviewPageState
+    extends State<_ResidentProductPreviewPage> {
+  int _quantity = 1;
+  String _selectedFulfillment = 'Pickup at Brgy Hall';
+  String _selectedZone = _marketDeliveryZones.first;
+  String _selectedPurok = _marketDeliveryPuroks.first;
+
+  String _currency(double amount) => 'PHP ${amount.toStringAsFixed(2)}';
+
+  double get _deliveryFee => _marketDeliveryFeeFor(
+    _selectedFulfillment,
+    _selectedZone,
+    _selectedPurok,
+  );
+
+  void _addToCart({bool openCart = false}) {
+    _ResidentCartHub.addProduct(
+      widget.item,
+      qty: _quantity,
+      fulfillment: _selectedFulfillment,
+      deliveryZone: _selectedZone,
+      deliveryPurok: _selectedPurok,
+    );
+    _showFeature(
+      context,
+      '$_quantity x ${widget.item.title} added to cart via $_selectedFulfillment.',
+    );
+    if (openCart) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ResidentCartPage()),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final subtotal = item.price * _quantity;
+    final merchantRating = _ResidentCommercialSellerHub.ratingForSeller(
+      item.seller,
+      fallback: item.rating,
+    );
+    final merchantReviews = _ResidentCommercialSellerHub.feedbackCountForSeller(
+      item.seller,
+      fallback: item.reviews,
+    );
+    final registration = _ResidentCommercialSellerHub.registration;
+    final merchantVerified =
+        registration != null && registration.businessName == item.seller
+            ? registration.merchantVerified
+            : item.verified;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Product Detail'),
+        actions: [
+          IconButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ResidentCartPage()),
+            ),
+            icon: const Icon(Icons.shopping_cart_rounded),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+        children: [
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: SizedBox(
+                  height: 230,
+                  child: _buildMarketProductImage(
+                    source: item.imageAsset,
+                    fallbackIcon: item.icon,
+                    fit: BoxFit.cover,
+                    fallbackBuilder: () => Container(
+                      color: Colors.grey.shade300,
+                      child: Icon(
+                        item.icon,
+                        size: 72,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 12,
+                bottom: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    item.eta,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE4E8F3)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.title,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF2D3046),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Text(
+                      _currency(item.price),
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF2E35D3),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (item.originalPrice != null)
+                      Text(
+                        _currency(item.originalPrice!),
+                        style: const TextStyle(
+                          color: Color(0xFF8187A1),
+                          decoration: TextDecoration.lineThrough,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _previewTag(
+                      icon: Icons.star_rounded,
+                      text: '${merchantRating.toStringAsFixed(1)} ($merchantReviews reviews)',
+                      color: const Color(0xFFF2A93B),
+                    ),
+                    _previewTag(
+                      icon: Icons.inventory_2_rounded,
+                      text: '${item.stock} in stock',
+                      color: const Color(0xFF3E66C7),
+                    ),
+                    _previewTag(
+                      icon: Icons.local_fire_department_rounded,
+                      text: '${item.sold} sold',
+                      color: const Color(0xFF4A54B8),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  item.description,
+                  style: const TextStyle(
+                    color: Color(0xFF5A607D),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F9FF),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFDDE3F3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.storefront_rounded,
+                        color: Color(0xFF4C57BB),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Sold by ${item.seller}',
+                          style: const TextStyle(
+                            color: Color(0xFF2F344E),
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (merchantVerified)
+                        const Icon(
+                          Icons.verified_rounded,
+                          size: 18,
+                          color: Color(0xFF3A7BE5),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedFulfillment,
+                  decoration: InputDecoration(
+                    labelText: 'Fulfillment option',
+                    filled: true,
+                    fillColor: const Color(0xFFF7F9FF),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFDDE3F3)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFDDE3F3)),
+                    ),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'Pickup at Brgy Hall',
+                      child: Text('Pickup at Brgy Hall'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Seller Meetup',
+                      child: Text('Seller Meetup'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) {
+                      return;
+                    }
+                    setState(() => _selectedFulfillment = value);
+                  },
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: _selectedZone,
+                        decoration: const InputDecoration(
+                          labelText: 'Delivery zone',
+                        ),
+                        items: _marketDeliveryZones
+                            .map(
+                              (item) => DropdownMenuItem<String>(
+                                value: item,
+                                child: Text(item),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: _selectedFulfillment == 'Pickup at Brgy Hall'
+                            ? null
+                            : (value) {
+                                if (value == null) {
+                                  return;
+                                }
+                                setState(() => _selectedZone = value);
+                              },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: _selectedPurok,
+                        decoration: const InputDecoration(
+                          labelText: 'Purok',
+                        ),
+                        items: _marketDeliveryPuroks
+                            .map(
+                              (item) => DropdownMenuItem<String>(
+                                value: item,
+                                child: Text(item),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: _selectedFulfillment == 'Pickup at Brgy Hall'
+                            ? null
+                            : (value) {
+                                if (value == null) {
+                                  return;
+                                }
+                                setState(() => _selectedPurok = value);
+                              },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 48,
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF6F8FF),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFDDE2F2)),
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        onPressed: _quantity > 1
+                            ? () => setState(() => _quantity--)
+                            : null,
+                        icon: const Icon(Icons.remove_circle_outline_rounded),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      Expanded(
+                        child: Text(
+                          '$_quantity',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: _quantity < item.stock
+                            ? () => setState(() => _quantity++)
+                            : null,
+                        icon: const Icon(Icons.add_circle_outline_rounded),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ResidentChatSellerPage(
+                        sellerName: item.seller,
+                        productTitle: item.title,
+                      ),
+                    ),
+                  ),
+                  child: const Text('Chat'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _showMerchantRatingSheet(context, item.seller),
+                  icon: const Icon(Icons.star_rate_rounded),
+                  label: const Text('Rate Merchant'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: item.allowBarangayBid
+                      ? () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ResidentMerchantBidPage(item: item),
+                            ),
+                          )
+                      : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFEF6B3E),
+                  ),
+                  icon: const Icon(Icons.gavel_rounded),
+                  label: const Text('Bid / Quote'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _previewBillRow('Item price', _currency(item.price)),
+          _previewBillRow('Quantity', 'x$_quantity'),
+          _previewBillRow('Fulfillment', _selectedFulfillment),
+          _previewBillRow('Delivery Fee', _currency(_deliveryFee)),
+          _previewBillRow(
+            'Subtotal',
+            _currency(subtotal + _deliveryFee),
+            bold: true,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _addToCart(),
+                  icon: const Icon(Icons.add_shopping_cart_rounded),
+                  label: const Text('Add to Cart'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => _addToCart(openCart: true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF2E35D3),
+                  ),
+                  child: const Text('Buy Now'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _previewTag({
+    required IconData icon,
+    required String text,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w800,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _previewBillRow(String label, String value, {bool bold = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: bold ? const Color(0xFF2E3046) : const Color(0xFF666D88),
+              fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            value,
+            style: TextStyle(
+              color: bold ? const Color(0xFF2E35D3) : const Color(0xFF4C5370),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+}
+
+Future<void> _showMerchantRatingSheet(
+  BuildContext context,
+  String sellerName,
+) async {
+  final commentController = TextEditingController();
+  var stars = 5;
+  final submitted = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    builder: (sheetContext) {
+      return Padding(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+        ),
+        child: StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Rate $sellerName',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: List.generate(5, (index) {
+                    final active = index < stars;
+                    return IconButton(
+                      onPressed: () => setSheetState(() => stars = index + 1),
+                      icon: Icon(
+                        active ? Icons.star_rounded : Icons.star_border_rounded,
+                        color: const Color(0xFFF2A93B),
+                      ),
+                    );
+                  }),
+                ),
+                TextField(
+                  controller: commentController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Feedback',
+                    hintText: 'Share your experience with the merchant',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(sheetContext, true),
+                    child: const Text('Submit Rating'),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    },
+  );
+  if (submitted != true) {
+    commentController.dispose();
+    return;
+  }
+  _ResidentCommercialSellerHub.addFeedback(
+    _ResidentMerchantFeedbackData(
+      sellerName: sellerName,
+      authorName: 'Resident Buyer',
+      stars: stars,
+      comment: commentController.text.trim().isEmpty
+          ? 'Merchant rating submitted.'
+          : commentController.text.trim(),
+      createdAt: DateTime.now(),
+    ),
+  );
+  commentController.dispose();
+  _showFeature(context, 'Merchant rating submitted.');
+}
+
+class _MarketChatFetchResult {
+  final bool success;
+  final String message;
+  final List<_ResidentMarketChatMessage> messages;
+
+  const _MarketChatFetchResult({
+    required this.success,
+    required this.message,
+    this.messages = const <_ResidentMarketChatMessage>[],
+  });
+}
+
+class _MarketChatSendResult {
+  final bool success;
+  final String message;
+  final _ResidentMarketChatMessage? chatMessage;
+
+  const _MarketChatSendResult({
+    required this.success,
+    required this.message,
+    this.chatMessage,
+  });
+}
+
+class _MarketChatApi {
+  _MarketChatApi._();
+  static final _MarketChatApi instance = _MarketChatApi._();
+  static const Duration _timeout = Duration(seconds: 8);
+
+  Future<_MarketChatFetchResult> fetchMessages({
+    required String sellerName,
+    required String productTitle,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _MarketChatFetchResult(
+        success: false,
+        message: 'Please log in again to load marketplace chat.',
+      );
+    }
+
+    final cleanSeller = sellerName.trim();
+    final cleanProduct = productTitle.trim();
+    if (cleanSeller.isEmpty || cleanProduct.isEmpty) {
+      return const _MarketChatFetchResult(
+        success: false,
+        message: 'Missing chat thread identity.',
+      );
+    }
+
+    var sawTimeout = false;
+    var sawConnection = false;
+    for (final endpoint in _AuthApi.instance._endpointCandidates('market/chat/messages')) {
+      final uri = endpoint.replace(queryParameters: {
+        'seller_name': cleanSeller,
+        'product_title': cleanProduct,
+      });
+      try {
+        final response = await http
+            .get(
+              uri,
+              headers: {
+                'Accept': 'application/json',
+                'Authorization': 'Bearer $_authToken',
+              },
+            )
+            .timeout(_timeout);
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        final body = decoded is Map<String, dynamic>
+            ? decoded
+            : const <String, dynamic>{};
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final rawList = body['messages'];
+          if (rawList is! List) {
+            return const _MarketChatFetchResult(
+              success: false,
+              message: 'Marketplace chat payload is invalid.',
+            );
+          }
+          final out = <_ResidentMarketChatMessage>[];
+          for (final item in rawList) {
+            if (item is! Map<String, dynamic>) continue;
+            final mapped = _mapChatMessage(item);
+            if (mapped != null) out.add(mapped);
+          }
+          return _MarketChatFetchResult(
+            success: true,
+            message: _extractApiMessage(body, fallback: 'Marketplace chat loaded.'),
+            messages: out,
+          );
+        }
+        return _MarketChatFetchResult(
+          success: false,
+          message: _extractApiMessage(body, fallback: 'Unable to load marketplace chat.'),
+        );
+      } on TimeoutException {
+        sawTimeout = true;
+      } catch (_) {
+        sawConnection = true;
+      }
+    }
+
+    if (sawTimeout) {
+      return const _MarketChatFetchResult(
+        success: false,
+        message: 'Loading marketplace chat timed out.',
+      );
+    }
+    if (sawConnection) {
+      return const _MarketChatFetchResult(
+        success: false,
+        message: 'Cannot connect to server to load marketplace chat.',
+      );
+    }
+    return const _MarketChatFetchResult(
+      success: false,
+      message: 'Marketplace chat endpoint is not available yet.',
+    );
+  }
+
+  Future<_MarketChatSendResult> sendMessage({
+    required String sellerName,
+    required String productTitle,
+    required String buyerMobile,
+    required String buyerName,
+    required String message,
+  }) async {
+    if (_authToken == null || _authToken!.isEmpty) {
+      return const _MarketChatSendResult(
+        success: false,
+        message: 'Please log in again before sending a marketplace message.',
+      );
+    }
+
+    final payload = jsonEncode({
+      'seller_name': sellerName.trim(),
+      'product_title': productTitle.trim(),
+      'buyer_mobile': buyerMobile.trim(),
+      'buyer_name': buyerName.trim(),
+      'message': message.trim(),
+    });
+
+    var sawTimeout = false;
+    var sawConnection = false;
+    for (final endpoint in _AuthApi.instance._endpointCandidates('market/chat/messages')) {
+      try {
+        final response = await http
+            .post(
+              endpoint,
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': 'Bearer $_authToken',
+              },
+              body: payload,
+            )
+            .timeout(_timeout);
+        final decoded = _AuthApi.instance._decodeDynamicJson(response.body);
+        final body = decoded is Map<String, dynamic>
+            ? decoded
+            : const <String, dynamic>{};
+        if (response.statusCode == 404) {
+          continue;
+        }
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final raw = body['chat_message'];
+          final mapped = raw is Map<String, dynamic> ? _mapChatMessage(raw) : null;
+          return _MarketChatSendResult(
+            success: true,
+            message: _extractApiMessage(body, fallback: 'Marketplace message sent.'),
+            chatMessage: mapped,
+          );
+        }
+        return _MarketChatSendResult(
+          success: false,
+          message: _extractApiMessage(body, fallback: 'Unable to send marketplace message.'),
+        );
+      } on TimeoutException {
+        sawTimeout = true;
+      } catch (_) {
+        sawConnection = true;
+      }
+    }
+
+    if (sawTimeout) {
+      return const _MarketChatSendResult(
+        success: false,
+        message: 'Sending marketplace message timed out.',
+      );
+    }
+    if (sawConnection) {
+      return const _MarketChatSendResult(
+        success: false,
+        message: 'Cannot connect to server to send marketplace message.',
+      );
+    }
+    return const _MarketChatSendResult(
+      success: false,
+      message: 'Marketplace chat endpoint is not available yet.',
+    );
+  }
+
+  _ResidentMarketChatMessage? _mapChatMessage(Map<String, dynamic> raw) {
+    String read(String key, {String fallback = ''}) {
+      final value = raw[key];
+      if (value == null) return fallback;
+      if (value is String) {
+        final trimmed = value.trim();
+        return trimmed.isEmpty ? fallback : trimmed;
+      }
+      final text = value.toString().trim();
+      return text.isEmpty ? fallback : text;
+    }
+
+    final text = read('message');
+    if (text.isEmpty) return null;
+    final senderId = read(
+      'buyer_mobile',
+      fallback: read('user_id', fallback: read('sender_name', fallback: 'unknown')),
+    );
+    final senderName = read('sender_name', fallback: 'Resident');
+    final timestamp =
+        DateTime.tryParse(read('created_at')) ?? DateTime.now();
+    return _ResidentMarketChatMessage(
+      senderId: senderId,
+      senderName: senderName,
+      text: text,
+      timestamp: timestamp,
+    );
+  }
+
+  String _extractApiMessage(
+    Map<String, dynamic> body, {
+    required String fallback,
+  }) {
+    final message = body['message'];
+    if (message is String && message.trim().isNotEmpty) {
+      return message.trim();
+    }
+    final errors = body['errors'];
+    if (errors is Map<String, dynamic>) {
+      for (final value in errors.values) {
+        if (value is List && value.isNotEmpty) {
+          final first = value.first;
+          if (first is String && first.trim().isNotEmpty) {
+            return first.trim();
+          }
+        }
+      }
+    }
+    return fallback;
+  }
+}
+
+class ResidentChatSellerPage extends StatefulWidget {
   final String sellerName;
   final String productTitle;
 
@@ -15,11 +1865,19 @@ part of barangaymo_app;\n\nconst _residentMarketplaceProducts = [\n  _ResidentPr
 class _ResidentChatSellerPageState extends State<ResidentChatSellerPage> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  late final String _buyerId;
+  late final String _buyerName;
+  List<_ResidentMarketChatMessage> _apiMessages = const <_ResidentMarketChatMessage>[];
+  bool _apiLoaded = false;
+  int _lastMessageCount = -1;
+  bool _ready = false;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_ResidentChatHub.ensureLoaded());
+    _buyerId = _resolveBuyerId();
+    _buyerName = _resolveBuyerName();
+    unawaited(_initializeChat());
   }
 
   @override
@@ -29,86 +1887,173 @@ class _ResidentChatSellerPageState extends State<ResidentChatSellerPage> {
     super.dispose();
   }
 
+  String _resolveBuyerId() {
+    final mobile = (_currentResidentProfile?.mobile ?? '').trim();
+    if (mobile.isNotEmpty) return mobile;
+
+    final name = (_currentResidentProfile?.displayName ?? '').trim();
+    if (name.isNotEmpty) {
+      return name.toLowerCase().replaceAll(RegExp(r'\s+'), '_');
+    }
+    return 'guest';
+  }
+
+  String _resolveBuyerName() {
+    final name = (_currentResidentProfile?.displayName ?? '').trim();
+    return name.isEmpty ? 'Resident Buyer' : name;
+  }
+
+  Future<void> _initializeChat() async {
+    try {
+      await _ResidentMarketChatHub.ensureLoaded();
+    } catch (_) {}
+    await _syncMessagesFromApi();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _ready = true);
+  }
+
+  Future<void> _syncMessagesFromApi() async {
+    final result = await _MarketChatApi.instance.fetchMessages(
+      sellerName: widget.sellerName,
+      productTitle: widget.productTitle,
+    );
+    if (!mounted || !result.success) {
+      return;
+    }
+    setState(() {
+      _apiMessages = result.messages;
+      _apiLoaded = true;
+    });
+  }
+
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
+        duration: const Duration(milliseconds: 220),
         curve: Curves.easeOut,
       );
     }
   }
 
-  void _sendMessage(String threadId, String senderId, String senderName) {
+  void _sendMessage(String threadId) {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
 
-    _ResidentChatHub.sendMessage(
+    _ResidentMarketChatHub.sendMessage(
       threadId: threadId,
-      senderId: senderId,
-      senderName: senderName,
+      senderId: _buyerId,
+      senderName: _buyerName,
       text: text,
     );
+    if (_apiLoaded) {
+      setState(() {
+        _apiMessages = [
+          ..._apiMessages,
+          _ResidentMarketChatMessage(
+            senderId: _buyerId,
+            senderName: _buyerName,
+            text: text,
+            timestamp: DateTime.now(),
+          ),
+        ];
+      });
+    }
     _messageController.clear();
-    Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    unawaited(_sendMessageToApi(text));
+  }
+
+  Future<void> _sendMessageToApi(String text) async {
+    final result = await _MarketChatApi.instance.sendMessage(
+      sellerName: widget.sellerName,
+      productTitle: widget.productTitle,
+      buyerMobile: _buyerId,
+      buyerName: _buyerName,
+      message: text,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (result.success) {
+      if (!_apiLoaded) {
+        setState(() {
+          _apiLoaded = true;
+        });
+      }
+      unawaited(_syncMessagesFromApi());
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final buyerId = _currentResidentProfile?.mobile ?? 'guest';
-    final buyerName = _currentResidentProfile?.displayName ?? 'Resident Buyer';
-
-    return ValueListenableBuilder<int>(
-      valueListenable: _ResidentChatHub.refresh,
-      builder: (context, _, __) {
-        final thread = _ResidentChatHub.getOrCreateThread(
-          buyerId: buyerId,
-          buyerName: buyerName,
-          sellerName: widget.sellerName,
-          productTitle: widget.productTitle,
-        );
-
-        return Scaffold(
-          backgroundColor: const Color(0xFFF6F8FB),
-          appBar: AppBar(
-            backgroundColor: Colors.white,
-            foregroundColor: const Color(0xFF2E3E5C),
-            elevation: 0.5,
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.sellerName,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  widget.productTitle,
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF7C8DB5)),
-                ),
-              ],
+    return Scaffold(
+      backgroundColor: const Color(0xFFF6F8FB),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF2E3E5C),
+        elevation: 0.5,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.sellerName,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
-          ),
-          body: Column(
-            children: [
-              Expanded(
-                child: thread.messages.isEmpty
-                    ? _buildEmptyState()
-                    : ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-                        itemCount: thread.messages.length,
-                        itemBuilder: (context, index) {
-                          final msg = thread.messages[index];
-                          final isMe = msg.senderId == buyerId;
-                          return _buildChatBubble(msg, isMe);
-                        },
-                      ),
-              ),
-              _buildInputArea(thread.id, buyerId, buyerName),
-            ],
-          ),
-        );
-      },
+            Text(
+              widget.productTitle,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF7C8DB5)),
+            ),
+          ],
+        ),
+      ),
+      body: !_ready
+          ? const Center(child: CircularProgressIndicator())
+          : ValueListenableBuilder<int>(
+              valueListenable: _ResidentMarketChatHub.refresh,
+              builder: (context, _, __) {
+                final thread = _ResidentMarketChatHub.getOrCreateThread(
+                  buyerId: _buyerId,
+                  buyerName: _buyerName,
+                  sellerName: widget.sellerName,
+                  productTitle: widget.productTitle,
+                );
+                final visibleMessages = _apiLoaded
+                    ? _apiMessages
+                    : thread.messages;
+                if (_lastMessageCount != visibleMessages.length) {
+                  _lastMessageCount = visibleMessages.length;
+                  WidgetsBinding.instance.addPostFrameCallback(
+                    (_) => _scrollToBottom(),
+                  );
+                }
+
+                return Column(
+                  children: [
+                    Expanded(
+                      child: visibleMessages.isEmpty
+                          ? _buildEmptyState()
+                          : ListView.builder(
+                              controller: _scrollController,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 20,
+                              ),
+                              itemCount: visibleMessages.length,
+                              itemBuilder: (context, index) {
+                                final msg = visibleMessages[index];
+                                final isMe = msg.senderId == _buyerId;
+                                return _buildChatBubble(msg, isMe);
+                              },
+                            ),
+                    ),
+                    _buildInputArea(thread.id),
+                  ],
+                );
+              },
+            ),
     );
   }
 
@@ -119,14 +2064,18 @@ class _ResidentChatSellerPageState extends State<ResidentChatSellerPage> {
         children: [
           Container(
             padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE8EEFF),
+            decoration: const BoxDecoration(
+              color: Color(0xFFE8EEFF),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.chat_bubble_outline_rounded, size: 40, color: Color(0xFF4A64FF)),
+            child: const Icon(
+              Icons.chat_bubble_outline_rounded,
+              size: 40,
+              color: Color(0xFF4A64FF),
+            ),
           ),
           const SizedBox(height: 16),
-          Text(
+          const Text(
             'Start a conversation',
             style: TextStyle(
               fontSize: 18,
@@ -138,9 +2087,9 @@ class _ResidentChatSellerPageState extends State<ResidentChatSellerPage> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 40),
             child: Text(
-              'Inquire about "' + widget.productTitle + '" from ' + widget.sellerName + '.',
+              'Inquire about "${widget.productTitle}" from ${widget.sellerName}.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xFF7C8DB5)),
+              style: const TextStyle(color: Color(0xFF7C8DB5)),
             ),
           ),
         ],
@@ -148,7 +2097,7 @@ class _ResidentChatSellerPageState extends State<ResidentChatSellerPage> {
     );
   }
 
-  Widget _buildChatBubble(_ResidentChatMessage msg, bool isMe) {
+  Widget _buildChatBubble(_ResidentMarketChatMessage msg, bool isMe) {
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Column(
@@ -167,15 +2116,13 @@ class _ResidentChatSellerPageState extends State<ResidentChatSellerPage> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 5,
                   offset: const Offset(0, 2),
                 ),
               ],
             ),
-            constraints: BoxConstraints(
-              maxWidth: 300,
-            ),
+            constraints: const BoxConstraints(maxWidth: 300),
             child: Text(
               msg.text,
               style: TextStyle(
@@ -194,14 +2141,14 @@ class _ResidentChatSellerPageState extends State<ResidentChatSellerPage> {
     );
   }
 
-  Widget _buildInputArea(String threadId, String buyerId, String buyerName) {
+  Widget _buildInputArea(String threadId) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
@@ -218,6 +2165,8 @@ class _ResidentChatSellerPageState extends State<ResidentChatSellerPage> {
               ),
               child: TextField(
                 controller: _messageController,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _sendMessage(threadId),
                 decoration: const InputDecoration(
                   hintText: 'Type a message...',
                   border: InputBorder.none,
@@ -232,7 +2181,7 @@ class _ResidentChatSellerPageState extends State<ResidentChatSellerPage> {
               shape: BoxShape.circle,
             ),
             child: IconButton(
-              onPressed: () => _sendMessage(threadId, buyerId, buyerName),
+              onPressed: () => _sendMessage(threadId),
               icon: const Icon(Icons.send_rounded, color: Colors.white),
             ),
           ),
@@ -248,4 +2197,43 @@ class _ResidentChatSellerPageState extends State<ResidentChatSellerPage> {
     return '$hour:$minute $period';
   }
 }
-\n\nclass ResidentAddToCartDonePage extends StatelessWidget {\n  const ResidentAddToCartDonePage({super.key});\n\n  @override\n  Widget build(BuildContext context) {\n    return Scaffold(\n      appBar: AppBar(),\n      body: Padding(\n        padding: const EdgeInsets.all(16),\n        child: Column(\n          children: [\n            const Spacer(),\n            const Icon(Icons.check_circle, color: Color(0xFF2E35D3), size: 86),\n            const SizedBox(height: 10),\n            const Text(\n              'Success!',\n              style: TextStyle(fontSize: 32, fontWeight: FontWeight.w700),\n            ),\n            const Text('Your order has been added to cart.'),\n            const Spacer(),\n            SizedBox(\n              width: double.infinity,\n              child: FilledButton(\n                onPressed: () => Navigator.pushReplacement(\n                  context,\n                  MaterialPageRoute(builder: (_) => const ResidentCartPage()),\n                ),\n                style: FilledButton.styleFrom(\n                  backgroundColor: const Color(0xFF2E35D3),\n                ),\n                child: const Text('Go to Cart'),\n              ),\n            ),\n          ],\n        ),\n      ),\n    );\n  }\n}\n
+
+class ResidentAddToCartDonePage extends StatelessWidget {
+  const ResidentAddToCartDonePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            const Spacer(),
+            const Icon(Icons.check_circle, color: Color(0xFF2E35D3), size: 86),
+            const SizedBox(height: 10),
+            const Text(
+              'Success!',
+              style: TextStyle(fontSize: 32, fontWeight: FontWeight.w700),
+            ),
+            const Text('Your order has been added to cart.'),
+            const Spacer(),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ResidentCartPage()),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF2E35D3),
+                ),
+                child: const Text('Go to Cart'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
